@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#7d2f26">
+<title>Penn Station departures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-view="departures">
+
+<header class="mast">
+  <div class="mast-in">
+    <h1>Penn Station</h1>
+    <p class="clock" aria-live="off"><span id="clock">--:--</span><span id="clock-ap"></span></p>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="controls" aria-label="Board controls">
+    <div class="seg" role="group" aria-label="Show">
+      <button type="button" data-view="departures" aria-pressed="true">Departures</button>
+      <button type="button" data-view="arrivals" aria-pressed="false">Arrivals</button>
+      <button type="button" data-view="subway" aria-pressed="false" class="only-narrow">Subway, PATH</button>
+    </div>
+    <div class="chips" role="group" aria-label="Railroad">
+      <button type="button" data-carrier="all" aria-pressed="true">All railroads</button>
+      <button type="button" data-carrier="lirr" aria-pressed="false">LIRR</button>
+      <button type="button" data-carrier="njt" aria-pressed="false">NJ Transit</button>
+      <button type="button" data-carrier="amtrak" aria-pressed="false">Amtrak</button>
+    </div>
+  </nav>
+
+  <div id="notices" class="notices"></div>
+
+  <div class="layout">
+    <section class="rail" aria-labelledby="rail-h">
+      <h2 id="rail-h" class="sr">Trains</h2>
+      <div class="cols" aria-hidden="true">
+        <span>Time</span><span></span><span id="col-place">To</span><span>Status</span><span class="col-track">Track</span>
+      </div>
+      <ol id="rows" class="rows"><li class="empty">Loading the board…</li></ol>
+    </section>
+
+    <aside class="subway" aria-labelledby="sub-h">
+      <h2 id="sub-h">Subway <span>34 St–Penn Station</span></h2>
+      <div id="subway"><p class="empty">Loading subway times…</p></div>
+
+      <h2 id="path-h" class="path-h">PATH <span>33 St station, Sixth Av at 32 St</span></h2>
+      <p class="walk">PATH doesn’t stop at Penn Station. Its 33 St station is one block east on Sixth Avenue, about a 5 minute walk at street level, and it takes its own fare.</p>
+      <div id="path"><p class="empty">Loading PATH times…</p></div>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    <p id="updated">Connecting…</p>
+    <p>LIRR and subway data was obtained from the MTA, NJ Transit data from NJ Transit, PATH data from the Port Authority, and Amtrak data from Amtraker. It is stored on and redistributed from this site’s own server, and may be late, incomplete or wrong. Confirm on the station screens.</p>
+    <p>An independent project, not affiliated with or licensed by the MTA, NJ Transit, the Port Authority or Amtrak.</p>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
