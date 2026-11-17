@@ -38,39 +38,79 @@ const STALE_AFTER_MS = 90 * 1000;
 const isStale = () => !lastGood || Date.now() - lastGood > STALE_AFTER_MS;
 const fromNjt = (r) => String(r.id).startsWith('njt-'); // NJ Transit text is shown as-is
 
-// How long a row stays on the board after its time, by what we last heard.
-function graceSeconds(r, kind) {
-  if (kind === 'arrivals') return 5 * 60;
-  if (r.tone === 'late') return 15 * 60; // its listed time may be the scheduled one
-  if (r.tone === 'stop') return 5 * 60;  // keep a cancellation visible for a while
-  return 60;
-}
-function visibleRows(rows, kind) {
+// A departed LIRR, NJ Transit or Amtrak train stays on the board marked
+// "Departed" for this long, then comes off. (Subway and PATH just drop off.)
+const DEPARTED_SHOWN_S = 2 * 60;
+const flaggedAt = new Map(); // train id -> when we first saw its feed call it departed
+const vanished = new Map();  // train id -> row for a train that left the feed as it was due out
+
+// When a train left, or null if it hasn't. Uses the feed's own word where it
+// has one (LIRR, Amtrak), else the departure time plus any delay.
+function departedAt(r) {
+  if (r.tone === 'stop') return null; // a cancelled train never left
   const nowS = Date.now() / 1000;
-  return rows.filter((r) => r.time > nowS - graceSeconds(r, kind));
+  if (r.departedAt) return r.departedAt;
+  if (r.departed) {
+    if (!flaggedAt.has(r.id)) flaggedAt.set(r.id, nowS);
+    return flaggedAt.get(r.id);
+  }
+  const leaves = r.leaves ?? r.time;
+  return leaves <= nowS ? leaves : null;
 }
 
-// Never show a train as boarding once its time has passed, or when the data
-// behind it is stale. NJ Transit's own wording is kept; only its colour changes.
+// Feeds sometimes drop a train the moment it leaves. Remember any that
+// disappear close to their time, so they still show as departed.
+function noteVanished(prev, next) {
+  const nowS = Date.now() / 1000;
+  const still = new Set(next.departures.map((r) => r.id));
+  for (const id of still) vanished.delete(id);
+  for (const r of prev ? prev.departures : []) {
+    if (still.has(r.id) || vanished.has(r.id) || r.tone === 'stop') continue;
+    if ((r.leaves ?? r.time) > nowS + 180) continue; // far from due: a feed glitch, not a departure
+    const at = departedAt(r) ?? nowS;
+    vanished.set(r.id, { ...r, departed: true, departedAt: Math.min(at, nowS) });
+  }
+  for (const [id, r] of vanished) if (nowS - r.departedAt > DEPARTED_SHOWN_S) vanished.delete(id);
+}
+
+function visibleRows(rows, kind) {
+  const nowS = Date.now() / 1000;
+  if (kind === 'arrivals') return rows.filter((r) => r.time > nowS - 5 * 60);
+  const all = [...rows, ...vanished.values()].sort((a, b) => a.time - b.time);
+  return all.filter((r) => {
+    if (r.tone === 'stop') return r.time > nowS - 5 * 60; // keep a cancellation up a while
+    const at = departedAt(r);
+    return at === null || nowS - at < DEPARTED_SHOWN_S;
+  });
+}
+
+// A train that has left says "Departed", whatever its last status was. Stale
+// data never keeps the green boarding highlight.
 function shownStatus(r, kind) {
-  const past = r.time <= Date.now() / 1000;
+  if (kind === 'departures' && departedAt(r) !== null) return { status: 'Departed', tone: 'departed' };
   if (r.tone !== 'go') return { status: r.status, tone: r.tone };
-  if (past && kind === 'departures') return { status: fromNjt(r) ? r.status : 'Departing', tone: 'quiet' };
-  if (past && kind === 'arrivals') return { status: r.status, tone: 'quiet' };
+  if (kind === 'arrivals' && r.time <= Date.now() / 1000) return { status: r.status, tone: 'quiet' };
   if (isStale()) return { status: r.status, tone: 'quiet' };
   return { status: r.status, tone: r.tone };
+}
+
+function agoText(epoch) {
+  const m = Math.floor((Date.now() / 1000 - epoch) / 60);
+  return m < 1 ? 'left just now' : `left ${m} min ago`;
 }
 
 function rowHtml(r) {
   const shown = shownStatus(r, view);
   r = { ...r, status: shown.status, tone: shown.tone };
   const t = clock(r.time);
-  const left = countdown(r.time);
+  const gone = r.tone === 'departed';
+  // A late train counts down to when it is now expected to leave.
+  const left = gone ? agoText(departedAt(r) ?? r.time) : countdown(r.tone === 'stop' ? r.time : (r.leaves ?? r.time));
   const sched = r.sched && Math.abs(r.sched - r.time) >= 120 ? `<small>scheduled ${clock(r.sched).hm}</small>` : '';
   const via = r.via && r.via.length
     ? `<details class="via" data-id="${esc(r.id)}"${openRows.has(r.id) ? ' open' : ''}><summary>${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stops</u></summary><p>${r.via.map(esc).join(', ')}</p></details>`
     : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}</div>`;
-  return `<li class="row ${r.tone}${left === 'gone' ? ' gone' : ''}">
+  return `<li class="row ${r.tone}${left === 'gone' && !gone ? ' gone' : ''}">
     <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
     <div class="dest"><div class="place">${esc(r.place)}</div>${via}</div>
@@ -189,7 +229,9 @@ async function refresh(force = false) {
   if (loading && !force) return loading;
   const run = (async () => {
     try {
-      board = await loadBoard(force);
+      const next = await loadBoard(force);
+      noteVanished(board, next);
+      board = next;
       lastGood = Date.now();
       failed = false;
     } catch { failed = true; }

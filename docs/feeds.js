@@ -184,7 +184,9 @@ const lirr = source('lirr', 20, async () => {
     const stops = (a.stops || []).filter((c) => c !== 'NYK');
     const lateMin = a.status && a.status.otp < 0 ? Math.round(-a.status.otp / 60) : 0;
     let status = 'On time', tone = 'ok';
+    const departed = a.stop_status === 'DEPARTED';
     if (a.status && a.status.canceled) { status = 'Cancelled'; tone = 'stop'; }
+    else if (leaving && departed) { status = 'Departed'; tone = 'quiet'; }
     else if (a.status && a.status.held) { status = 'Held'; tone = 'late'; }
     else if (lateMin >= 2) { status = `${lateMin} min late`; tone = 'late'; }
     else if (leaving && a.track) { status = 'Boarding'; tone = 'go'; }
@@ -200,6 +202,10 @@ const lirr = source('lirr', 20, async () => {
       track: a.track || '',
       trackLikely: a.track ? '' : (a.sched_track || ''),
       status, tone,
+      // Departures: LIRR says when a train has left; `leaves` is the clock
+      // fallback (its listed time may not include a delay, so add it).
+      departed: leaving && departed,
+      leaves: a.time + (lateMin >= 2 ? lateMin * 60 : 0),
       via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(stationName),
     });
   }
@@ -217,8 +223,17 @@ const amtrak = source('amtrak', 60, async () => {
     for (const tr of list) {
       if (tr.trainState === 'Completed') continue;
       const stop = (tr.stations || []).find((s) => s.code === 'NYP');
-      if (!stop || stop.status === 'Departed') continue;
+      if (!stop) continue;
       const base = { carrier: 'amtrak', line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '', via: [] };
+      if (stop.status === 'Departed') {
+        // Keep a train that has just left Penn, so the board can say so.
+        const left = epoch(stop.dep);
+        if (tr.destCode !== 'NYP' && left > t - 600) {
+          rows.departures.push({ ...base, id: `amtk-${tr.trainID}-departures`, time: left, sched: epoch(stop.schDep), place: tr.destName,
+            status: 'Departed', tone: 'quiet', departed: true, departedAt: left, leaves: left });
+        }
+        continue;
+      }
       const row = (kind, sched, est, place) => {
         if (!sched) return;
         const when = est || sched;
@@ -227,7 +242,7 @@ const amtrak = source('amtrak', 60, async () => {
         let status = 'On time', tone = 'ok';
         if (late >= 5) { status = `${late} min late`; tone = 'late'; }
         else if (stop.status === 'Station') { status = kind === 'departures' ? 'Boarding' : 'Arrived'; tone = 'go'; }
-        rows[kind].push({ ...base, id: `amtk-${tr.trainID}-${kind}`, time: when, sched, place, status, tone });
+        rows[kind].push({ ...base, id: `amtk-${tr.trainID}-${kind}`, time: when, sched, place, status, tone, leaves: when });
       };
       if (tr.destCode !== 'NYP') row('departures', epoch(stop.schDep), epoch(stop.dep), tr.destName);
       if (tr.origCode !== 'NYP') row('arrivals', epoch(stop.schArr), epoch(stop.arr), tr.origName);

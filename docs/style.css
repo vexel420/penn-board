@@ -79,6 +79,9 @@ h1 {
 .row.go { background: var(--enamel-2); border-left-color: var(--gold); }
 .row.stop .place, .row.stop .time b { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--dim); }
 .row.gone { opacity: .5; }
+.row.departed .place, .row.departed .time b { color: var(--dim); }
+.row.departed .track b { background: none; color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
+.status.departed { color: var(--dim); font-weight: 700; }
 
 .time b { display: block; font-size: 1.6rem; font-weight: 700; font-stretch: 85%; line-height: 1.05; }
 .time b small { font-size: .5em; font-weight: 500; margin-left: .2em; color: var(--dim); }

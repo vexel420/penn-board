@@ -23,11 +23,19 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   tab focus), and waits for it; the 20 s poll in between may show cached data.
   `source()` in `docs/feeds.js` honours a forced read at most every 10 s, so many
   open pages can't multiply feed requests (matters for NJ Transit's daily cap).
-- `visibleRows` / `shownStatus` in `docs/app.js`: a train is never shown as
-  boarding once its time has passed ("Departing" for LIRR/Amtrak; NJ Transit's
-  text kept as-is, colour dimmed), departures leave the board 1 min after their
-  time (late ones 15 min, cancelled 5 min, arrivals 5 min), and when the data is
-  over 90 s old no row keeps the green boarding highlight.
+- Departed trains (`departedAt`, `noteVanished`, `visibleRows`, `shownStatus` in
+  `docs/app.js`): an LIRR, NJ Transit or Amtrak departure shows "Departed" and
+  "left N min ago" for 2 minutes, then comes off. "Departed" comes from the feed
+  where it says so (LIRR `stop_status: DEPARTED`; Amtrak station status
+  `Departed`, kept for 10 min in `docs/feeds.js`), else from the clock using
+  `leaves` (departure time plus any delay; NJ Transit `SEC_LATE`). A train that
+  drops out of a feed within 3 min of its time is kept and shown as departed.
+  Late trains count down to `leaves`; cancelled trains stay 5 min; arrivals
+  5 min. Subway and PATH are untouched (they simply drop off). The owner chose
+  this to avoid anyone thinking a gone train can still be caught. Note: for NJ
+  Transit rows "Departed" replaces NJ Transit's own status text once the train
+  is due out (a judgment call against the as-is clause; see chat history).
+- When the data is over 90 s old no row keeps the green boarding highlight.
 
 ## What the owner wants
 
