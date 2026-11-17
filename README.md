@@ -42,5 +42,13 @@ This also fills in Amtrak track numbers, which NJ Transit's Penn Station feed ca
 | Amtrak | Amtraker (community feed; Amtrak has no public API) | From NJ Transit's feed when connected, otherwise once Amtrak posts it. |
 | Subway | MTA GTFS-realtime | Not applicable. |
 
+PATH: when live PATH times aren't available, the board shows scheduled times
+from `docs/path-schedule.json`. Rebuild it from PATH's latest timetable with:
+
+```bash
+curl -L -o path-gtfs.zip https://data.trilliumtransit.com/gtfs/path-nj-us/path-nj-us.zip
+python3 scripts/build-path-schedule.py path-gtfs.zip
+```
+
 To put it online, deploy this folder to any Node host (Render, Railway, Fly.io)
 and set `NJT_USERNAME` and `NJT_PASSWORD` as environment variables there.

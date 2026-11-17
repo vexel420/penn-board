@@ -17,6 +17,25 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
 - A Claude artifact cannot run the board: artifact pages are not allowed to fetch
   from other sites. Where the notes below say `public/`, read `docs/`.
 
+## PATH scheduled times (added 17 Nov)
+
+- The live PATH feed (`www.panynj.gov/bin/portauthority/ridepath.json`) has
+  returned no trains since at least 16 Nov, day and night. A community live
+  source, `path.api.razza.dev`, reset every connection on 17 Nov.
+- So the PATH panel shows scheduled times whenever live times are missing (and
+  always on GitHub Pages): `docs/path-schedule.json`, built by
+  `scripts/build-path-schedule.py` from PATH's GTFS timetable at
+  https://data.trilliumtransit.com/gtfs/path-nj-us/path-nj-us.zip . It uses only
+  the regular weekday, Saturday and Sunday timetables; holiday and construction
+  timetables are ignored, and the page says so.
+- That timetable was published May 2025 and covers service only to 1 June 2026.
+  It was the newest copy found; the page warns that times may have changed.
+  Rerun the script when PATH publishes a newer one (the page's warning goes
+  away by itself once `validUntil` is in the future).
+- This session ran in a personal cloud environment named `penn-board` that
+  allows the transit hosts, including `data.trilliumtransit.com` and
+  `path.api.razza.dev`.
+
 ## Freshness rules (added 17 Nov)
 
 - The page forces a fresh fetch of every feed just after each minute (and on

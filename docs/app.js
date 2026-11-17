@@ -171,14 +171,7 @@ function renderPath() {
     if (!byDest.has(x.dest)) byDest.set(x.dest, { colors: x.colors, mins: [] });
     byDest.get(x.dest).mins.push(m);
   }
-  if (!byDest.size) {
-    $('path').innerHTML = `<p class="empty">${board.sources.path.needsServer
-      ? 'Live PATH times aren’t available on this version of the site. Trains from 33 St run to Hoboken and Journal Square.'
-      : board.sources.path.error
-      ? 'PATH times didn’t load. Trying again shortly.'
-      : 'PATH isn’t reporting live times right now. Trains from 33 St run to Hoboken and Journal Square.'}</p>`;
-    return;
-  }
+  if (!byDest.size) { renderPathSchedule(); return; }
   $('path').innerHTML = [...byDest].map(([dest, g]) => {
     const mins = g.mins.slice(0, 3);
     const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
@@ -186,6 +179,65 @@ function renderPath() {
     const dots = (g.colors.length ? g.colors : ['']).map((c) => `<i${c ? ` style="background:#${c}"` : ''}></i>`).join('');
     return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}</span><span class="smins">${firstMin}${rest}</span></div>`;
   }).join('');
+}
+
+// ---------- PATH timetable, shown when live PATH times aren't available ----------
+// docs/path-schedule.json is built from PATH's published timetable by
+// scripts/build-path-schedule.py. Holidays and one-off construction
+// timetables aren't covered.
+
+let pathSchedule;          // undefined: not loaded yet; null: couldn't load
+let pathScheduleLoading = null;
+function loadPathSchedule() {
+  if (pathSchedule !== undefined || pathScheduleLoading) return;
+  pathScheduleLoading = fetch('path-schedule.json')
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .then((d) => { pathSchedule = d; pathScheduleLoading = null; renderPath(); });
+}
+
+const PATH_COLORS = { 'Journal Square via Hoboken': ['#ff9900', '#4d92fb'] };
+const nyParts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', weekday: 'short', hour: 'numeric', minute: 'numeric', year: 'numeric', month: '2-digit', day: '2-digit' });
+function nyNow(offsetDays = 0) {
+  const p = {};
+  nyParts.formatToParts(new Date(Date.now() + offsetDays * 86400000)).forEach((x) => { p[x.type] = x.value; });
+  const day = p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday';
+  return { day, mins: +p.hour * 60 + +p.minute, date: `${p.year}-${p.month}-${p.day}` };
+}
+const fmtMins = (t) => { const h = Math.floor(t / 60) % 24, m = t % 60; return `${h % 12 || 12}:${String(m).padStart(2, '0')}`; };
+
+// Scheduled departures in the next hour, today's and (near midnight) tomorrow's.
+function nextScheduledPath() {
+  const today = nyNow(), tomorrow = nyNow(1);
+  const list = [
+    ...(pathSchedule.days[today.day] || []).filter((d) => d.t >= today.mins),
+    ...(pathSchedule.days[tomorrow.day] || []).map((d) => ({ ...d, t: d.t + 1440 })),
+  ].filter((d) => d.t < today.mins + 60);
+  const byDest = new Map();
+  for (const d of list) {
+    if (!byDest.has(d.to)) byDest.set(d.to, { colors: PATH_COLORS[d.to] || [d.color], times: [] });
+    byDest.get(d.to).times.push(d.t);
+  }
+  return { byDest, today };
+}
+
+function renderPathSchedule() {
+  if (pathSchedule === undefined) { loadPathSchedule(); $('path').innerHTML = '<p class="empty">Loading PATH times…</p>'; return; }
+  if (!pathSchedule) {
+    $('path').innerHTML = '<p class="empty">PATH times aren’t available right now. Trains from 33 St run to Hoboken and Journal Square.</p>';
+    return;
+  }
+  const { byDest, today } = nextScheduledPath();
+  const outdated = pathSchedule.validUntil && today.date > pathSchedule.validUntil;
+  const note = `<p class="sched-note">Live PATH times aren’t available, so these are scheduled times from PATH’s timetable.${outdated
+    ? ' That timetable was last published for service up to ' + new Date(pathSchedule.validUntil + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ', so times may have changed.'
+    : ''} Holiday and weekend construction changes aren’t included.</p>`;
+  const lines = [...byDest].map(([dest, g]) => {
+    const [first, ...rest] = g.times.slice(0, 3).map(fmtMins);
+    const dots = g.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('');
+    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
+  }).join('');
+  $('path').innerHTML = note + (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>');
 }
 
 function renderNotices() {
