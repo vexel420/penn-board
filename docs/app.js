@@ -34,7 +34,36 @@ function trackCell(r) {
   return '<div class="track none" aria-label="Track not posted"><b>–</b></div>';
 }
 
+const STALE_AFTER_MS = 90 * 1000;
+const isStale = () => !lastGood || Date.now() - lastGood > STALE_AFTER_MS;
+const fromNjt = (r) => String(r.id).startsWith('njt-'); // NJ Transit text is shown as-is
+
+// How long a row stays on the board after its time, by what we last heard.
+function graceSeconds(r, kind) {
+  if (kind === 'arrivals') return 5 * 60;
+  if (r.tone === 'late') return 15 * 60; // its listed time may be the scheduled one
+  if (r.tone === 'stop') return 5 * 60;  // keep a cancellation visible for a while
+  return 60;
+}
+function visibleRows(rows, kind) {
+  const nowS = Date.now() / 1000;
+  return rows.filter((r) => r.time > nowS - graceSeconds(r, kind));
+}
+
+// Never show a train as boarding once its time has passed, or when the data
+// behind it is stale. NJ Transit's own wording is kept; only its colour changes.
+function shownStatus(r, kind) {
+  const past = r.time <= Date.now() / 1000;
+  if (r.tone !== 'go') return { status: r.status, tone: r.tone };
+  if (past && kind === 'departures') return { status: fromNjt(r) ? r.status : 'Departing', tone: 'quiet' };
+  if (past && kind === 'arrivals') return { status: r.status, tone: 'quiet' };
+  if (isStale()) return { status: r.status, tone: 'quiet' };
+  return { status: r.status, tone: r.tone };
+}
+
 function rowHtml(r) {
+  const shown = shownStatus(r, view);
+  r = { ...r, status: shown.status, tone: shown.tone };
   const t = clock(r.time);
   const left = countdown(r.time);
   const sched = r.sched && Math.abs(r.sched - r.time) >= 120 ? `<small>scheduled ${clock(r.sched).hm}</small>` : '';
@@ -64,7 +93,7 @@ function emptyMessage() {
 
 function renderRail() {
   if (!board || view === 'subway') return;
-  const rows = board[view].filter((r) => carrier === 'all' || r.carrier === carrier);
+  const rows = visibleRows(board[view], view).filter((r) => carrier === 'all' || r.carrier === carrier);
   $('col-place').textContent = view === 'arrivals' ? 'From' : 'To';
   $('rows').innerHTML = rows.length ? rows.map(rowHtml).join('') : `<li class="empty">${esc(emptyMessage())}</li>`;
   for (const r of rows) seenTracks.set(r.id, r.track);
@@ -145,23 +174,38 @@ function render() { renderRail(); renderSubway(); renderPath(); renderNotices();
 // With server.js running, the server gathers everything. On static hosting
 // (GitHub Pages) there is no server, so the page reads the feeds itself.
 let direct = location.hostname.endsWith('github.io');
-async function loadBoard() {
+async function loadBoard(force) {
   if (!direct) {
-    const res = await fetch('api/board', { cache: 'no-store' }).catch(() => null);
+    const res = await fetch(force ? 'api/board?force=1' : 'api/board', { cache: 'no-store' }).catch(() => null);
     if (res && res.ok) return res.json();
     if (res && res.status !== 404) throw new Error(res.status);
     direct = true;
   }
-  return PennFeeds.board();
+  return PennFeeds.board({ force });
 }
 
-async function refresh() {
-  try {
-    board = await loadBoard();
-    lastGood = Date.now();
-    failed = false;
-  } catch { failed = true; }
-  render();
+let loading = null;
+async function refresh(force = false) {
+  if (loading && !force) return loading;
+  const run = (async () => {
+    try {
+      board = await loadBoard(force);
+      lastGood = Date.now();
+      failed = false;
+    } catch { failed = true; }
+    render();
+  })();
+  loading = run;
+  run.finally(() => { if (loading === run) loading = null; });
+  return run;
+}
+
+// Departure times fall on the minute, so at each minute: redraw at once (a
+// train whose time has just passed stops showing as boarding), then fetch
+// fresh data from every feed and redraw again.
+function everyMinute() {
+  const wait = 60000 - (Date.now() % 60000) + 500;
+  setTimeout(() => { renderRail(); refresh(true); everyMinute(); }, wait);
 }
 
 function setPressed(group, attr, value) {
@@ -194,6 +238,6 @@ function tick() {
 }
 setPressed('.chips', 'carrier', carrier);
 tick(); setInterval(tick, 1000);
-refresh(); setInterval(refresh, REFRESH_MS);
+refresh(true); setInterval(() => refresh(), REFRESH_MS); everyMinute();
 setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000); // keep countdowns moving between refreshes
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });

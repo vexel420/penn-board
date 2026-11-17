@@ -17,6 +17,18 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
 - A Claude artifact cannot run the board: artifact pages are not allowed to fetch
   from other sites. Where the notes below say `public/`, read `docs/`.
 
+## Freshness rules (added 17 Nov)
+
+- The page forces a fresh fetch of every feed just after each minute (and on
+  tab focus), and waits for it; the 20 s poll in between may show cached data.
+  `source()` in `docs/feeds.js` honours a forced read at most every 10 s, so many
+  open pages can't multiply feed requests (matters for NJ Transit's daily cap).
+- `visibleRows` / `shownStatus` in `docs/app.js`: a train is never shown as
+  boarding once its time has passed ("Departing" for LIRR/Amtrak; NJ Transit's
+  text kept as-is, colour dimmed), departures leave the board 1 min after their
+  time (late ones 15 min, cancelled 5 min, arrivals 5 min), and when the data is
+  over 90 s old no row keeps the green boarding highlight.
+
 ## What the owner wants
 
 A single website showing everything leaving New York Penn Station: LIRR, NJ Transit

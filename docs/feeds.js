@@ -28,16 +28,20 @@ function nyToEpoch(y, mo, d, h, mi, s) {
 
 // Each source is fetched at most once per `ttl` seconds; a failure keeps the
 // last good rows on the board and reports the error alongside them.
+// A forced read (the page's on-the-minute refresh) fetches again and waits for
+// the answer, unless the last fetch was under FORCE_GAP seconds ago. That gap
+// stops many open pages from multiplying requests to a feed.
+const FORCE_GAP = 10;
 function source(name, ttl, load) {
   const state = { data: null, at: 0, error: null, pending: null };
-  return async () => {
-    if (now() - state.at >= ttl && !state.pending) {
+  return async (force = false) => {
+    if (now() - state.at >= (force ? Math.min(ttl, FORCE_GAP) : ttl) && !state.pending) {
       state.pending = load()
         .then((data) => { state.data = data; state.error = null; })
         .catch((e) => { state.error = e.message || String(e); if (typeof window === 'undefined') console.error(`[${name}]`, state.error); })
         .finally(() => { state.at = now(); state.pending = null; });
     }
-    if (state.pending && (state.data === null || now() - state.at > ttl * 3)) await state.pending;
+    if (state.pending && (force || state.data === null || now() - state.at > ttl * 3)) await state.pending;
     return { data: state.data, error: state.error };
   };
 }
@@ -236,7 +240,8 @@ const amtrak = source('amtrak', 60, async () => {
 // Combine the sources into the document the page renders. `njt` and `path`
 // are optional { data, error } results that only the server can supply.
 async function board(extra = {}) {
-  const [l, a, s] = await Promise.all([lirr(), amtrak(), subway()]);
+  const force = !!extra.force;
+  const [l, a, s] = await Promise.all([lirr(force), amtrak(force), subway(force)]);
   const n = extra.njt || { data: null, error: null };
   const p = extra.path || { data: null, error: null };
   const t = now();
@@ -258,7 +263,9 @@ async function board(extra = {}) {
   departures.push(...amtrakDeps);
   if (a.data) arrivals.push(...a.data.arrivals);
 
-  const live = (r) => r.time > t - 120;
+  // The page decides what to show as trains leave (docs/app.js, visibleRows);
+  // this only drops rows long past.
+  const live = (r) => r.time > t - 20 * 60;
   const byTime = (x, y) => x.time - y.time;
   return {
     at: t,

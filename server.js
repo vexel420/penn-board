@@ -79,9 +79,9 @@ const njt = source('njt', 30, async () => {
   });
 });
 
-async function board() {
-  const [n, p] = await Promise.all([njt(), pathTrains()]);
-  return feeds.board({ server: true, njt: n, path: p, njtNeedsLogin: !NJT_USERNAME || !NJT_PASSWORD });
+async function board(force = false) {
+  const [n, p] = await Promise.all([njt(force), pathTrains(force)]);
+  return feeds.board({ server: true, force, njt: n, path: p, njtNeedsLogin: !NJT_USERNAME || !NJT_PASSWORD });
 }
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
@@ -91,7 +91,7 @@ http.createServer(async (req, res) => {
   if (url.pathname === '/api/board') {
     try {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-      res.end(JSON.stringify(await board()));
+      res.end(JSON.stringify(await board(url.searchParams.has('force'))));
     } catch (e) {
       res.writeHead(500, { 'content-type': 'application/json' });
       res.end(JSON.stringify({ error: e.message }));
