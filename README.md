@@ -3,7 +3,17 @@
 Live departures, arrivals, tracks and statuses for LIRR, NJ Transit and Amtrak
 at New York Penn Station, plus 1/2/3 and A/C/E subway times.
 
-## Run it
+## Two ways to run it
+
+**As a plain website (GitHub Pages).** The `docs/` folder works with no server:
+the page reads the LIRR, Amtrak and subway feeds straight from the browser. To
+turn it on, open the repository's Settings, then Pages, choose "Deploy from a
+branch", pick `main` and the `/docs` folder, and save. NJ Transit and live PATH
+times are not available this way.
+
+**With the server.** Adds NJ Transit (needs a login, below) and PATH.
+
+## Run the server
 
 ```bash
 node server.js

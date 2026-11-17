@@ -54,6 +54,7 @@ function emptyMessage() {
   const s = board.sources;
   if (carrier === 'njt') {
     if (view === 'arrivals') return 'NJ Transit publishes departures only, so its arriving trains can’t be listed here.';
+    if (s.njt.needsServer) return 'NJ Transit trains aren’t shown on this version of the site. See the note above.';
     if (s.njt.needsLogin) return 'NJ Transit trains appear once the site has an NJ Transit developer login. See the note above.';
     if (s.njt.error) return `NJ Transit data didn’t load: ${s.njt.error}. Trying again shortly.`;
   }
@@ -102,7 +103,9 @@ function renderPath() {
     byDest.get(x.dest).mins.push(m);
   }
   if (!byDest.size) {
-    $('path').innerHTML = `<p class="empty">${board.sources.path.error
+    $('path').innerHTML = `<p class="empty">${board.sources.path.needsServer
+      ? 'Live PATH times aren’t available on this version of the site. Trains from 33 St run to Hoboken and Journal Square.'
+      : board.sources.path.error
       ? 'PATH times didn’t load. Trying again shortly.'
       : 'PATH isn’t reporting live times right now. Trains from 33 St run to Hoboken and Journal Square.'}</p>`;
     return;
@@ -119,7 +122,8 @@ function renderPath() {
 function renderNotices() {
   if (!board) return;
   const s = board.sources, out = [];
-  if (s.njt.needsLogin) out.push('NJ Transit isn’t connected yet, so its trains are missing and Amtrak tracks appear only shortly before departure. Start the server with <code>NJT_USERNAME</code> and <code>NJT_PASSWORD</code> from a free NJ Transit developer account to add them.');
+  if (s.njt.needsServer) out.push('NJ Transit trains aren’t shown here. NJ Transit only gives its data to a server with a developer login, and this version of the site runs without one.');
+  else if (s.njt.needsLogin) out.push('NJ Transit isn’t connected yet, so its trains are missing and Amtrak tracks appear only shortly before departure. Start the server with <code>NJT_USERNAME</code> and <code>NJT_PASSWORD</code> from a free NJ Transit developer account to add them.');
   else if (s.njt.error) out.push(`NJ Transit data didn’t load (${esc(s.njt.error)}). The NJ Transit trains shown may not be real time.`);
   for (const k of ['lirr', 'amtrak']) if (s[k].error) out.push(`${CARRIERS[k]} data didn’t load (${esc(s[k].error)}). Showing the last trains received.`);
   if (s.subway.error) out.push('Subway times didn’t load. Showing the last times received.');
@@ -128,21 +132,32 @@ function renderNotices() {
 
 function renderStamp() {
   const el = $('updated');
-  if (!lastGood) { el.textContent = failed ? 'Can’t reach the board server. Trying again.' : 'Connecting…'; return; }
+  if (!lastGood) { el.textContent = failed ? 'Can’t reach the train feeds. Trying again.' : 'Connecting…'; return; }
   const age = Math.round((Date.now() - lastGood) / 1000);
   el.className = failed || age > 60 ? 'stale' : '';
   el.textContent = failed || age > 60
-    ? `Can’t reach the board server. Last updated ${Math.round(age / 60) || 1} min ago, so this information may not be real time.`
+    ? `Can’t reach the train feeds. Last updated ${Math.round(age / 60) || 1} min ago, so this information may not be real time.`
     : `Updated ${age < 5 ? 'just now' : age + ' seconds ago'}.`;
 }
 
 function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderStamp(); }
 
+// With server.js running, the server gathers everything. On static hosting
+// (GitHub Pages) there is no server, so the page reads the feeds itself.
+let direct = location.hostname.endsWith('github.io');
+async function loadBoard() {
+  if (!direct) {
+    const res = await fetch('api/board', { cache: 'no-store' }).catch(() => null);
+    if (res && res.ok) return res.json();
+    if (res && res.status !== 404) throw new Error(res.status);
+    direct = true;
+  }
+  return PennFeeds.board();
+}
+
 async function refresh() {
   try {
-    const res = await fetch('api/board', { cache: 'no-store' });
-    if (!res.ok) throw new Error(res.status);
-    board = await res.json();
+    board = await loadBoard();
     lastGood = Date.now();
     failed = false;
   } catch { failed = true; }

@@ -2,6 +2,21 @@
 
 Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
 
+## Update, later the same evening
+
+- The project is on GitHub: https://github.com/vexel420/penn-board (public, `main`).
+- `public/` was renamed `docs/` and the feed readers moved to `docs/feeds.js`,
+  which both `server.js` and the page load. The page now runs **without a server**:
+  it asks for `api/board`, and on a 404 (or on a `github.io` host) it reads LIRR,
+  Amtrak and subway feeds directly in the browser. Tested this way with a plain
+  static file server. NJ Transit and PATH still need `server.js` (NJ Transit needs
+  a private login; the PATH feed sends no CORS header).
+- Intended free hosting: GitHub Pages from `main` / `docs`, giving
+  https://vexel420.github.io/penn-board/ . The owner has to switch Pages on in the
+  repository settings; a session cannot do it. Not confirmed live.
+- A Claude artifact cannot run the board: artifact pages are not allowed to fetch
+  from other sites. Where the notes below say `public/`, read `docs/`.
+
 ## What the owner wants
 
 A single website showing everything leaving New York Penn Station: LIRR, NJ Transit
