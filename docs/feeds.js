@@ -224,12 +224,19 @@ const amtrak = source('amtrak', 60, async () => {
       if (tr.trainState === 'Completed') continue;
       const stop = (tr.stations || []).find((s) => s.code === 'NYP');
       if (!stop) continue;
-      const base = { carrier: 'amtrak', line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '', via: [] };
+      // Stops along the way, as LIRR rows have them: trains only (no
+      // connecting buses), without Penn itself or the far end of the trip.
+      const stations = tr.stations || [];
+      const at = stations.indexOf(stop);
+      const names = (list) => list.filter((x) => !x.bus).map((x) => x.name);
+      const viaOut = names(stations.slice(at + 1)).slice(0, -1);
+      const viaIn = names(stations.slice(0, at)).slice(1);
+      const base = { carrier: 'amtrak', line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '' };
       if (stop.status === 'Departed') {
         // Keep a train that has just left Penn, so the board can say so.
         const left = epoch(stop.dep);
         if (tr.destCode !== 'NYP' && left > t - 600) {
-          rows.departures.push({ ...base, id: `amtk-${tr.trainID}-departures`, time: left, sched: epoch(stop.schDep), place: tr.destName,
+          rows.departures.push({ ...base, via: viaOut, id: `amtk-${tr.trainID}-departures`, time: left, sched: epoch(stop.schDep), place: tr.destName,
             status: 'Departed', tone: 'quiet', departed: true, departedAt: left, leaves: left });
         }
         continue;
@@ -242,7 +249,7 @@ const amtrak = source('amtrak', 60, async () => {
         let status = 'On time', tone = 'ok';
         if (late >= 5) { status = `${late} min late`; tone = 'late'; }
         else if (stop.status === 'Station') { status = kind === 'departures' ? 'Boarding' : 'Arrived'; tone = 'go'; }
-        rows[kind].push({ ...base, id: `amtk-${tr.trainID}-${kind}`, time: when, sched, place, status, tone, leaves: when });
+        rows[kind].push({ ...base, via: kind === 'departures' ? viaOut : viaIn, id: `amtk-${tr.trainID}-${kind}`, time: when, sched, place, status, tone, leaves: when });
       };
       if (tr.destCode !== 'NYP') row('departures', epoch(stop.schDep), epoch(stop.dep), tr.destName);
       if (tr.origCode !== 'NYP') row('arrivals', epoch(stop.schArr), epoch(stop.arr), tr.origName);
