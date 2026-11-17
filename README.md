@@ -50,5 +50,13 @@ curl -L -o path-gtfs.zip https://data.trilliumtransit.com/gtfs/path-nj-us/path-n
 python3 scripts/build-path-schedule.py path-gtfs.zip
 ```
 
+Subway: line colours, station names and each line's normal stops come from
+`docs/subway-data.json`. Rebuild it when the MTA publishes a new timetable:
+
+```bash
+curl -o gtfs_subway.zip https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip
+python3 scripts/build-subway-data.py gtfs_subway.zip
+```
+
 To put it online, deploy this folder to any Node host (Render, Railway, Fly.io)
 and set `NJT_USERNAME` and `NJT_PASSWORD` as environment variables there.

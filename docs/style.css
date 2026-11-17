@@ -135,9 +135,36 @@ details.via p { margin: .35rem 0 .1rem; color: var(--ivory); font-size: .9rem; m
 .pdots i { width: .8rem; height: 1.6rem; border-radius: 3px; background: #6b7a70; }
 .dir h3 { margin: 1rem 0 .3rem; font-size: .85rem; font-weight: 500; color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
 .sline { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .7rem; align-items: center; padding: .4rem 0; }
-.bullet { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff; background: #6b7a70; }
-.bullet.red { background: #ee352e; }
-.bullet.blue { background: #0039a6; box-shadow: 0 0 0 1px #4a74d6; }
+.bullet { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff; background: #6b7a70; box-shadow: 0 0 0 1px rgba(242, 234, 216, .2); }
+.bullet.small { width: 1.4rem; height: 1.4rem; font-size: .8rem; }
+
+/* A rerouted line is a button that opens its map. */
+button.sline { width: 100%; margin: 0; padding: .4rem .35rem; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+button.sline.rerouted { background: rgba(230, 183, 81, .08); box-shadow: inset 0 0 0 1px rgba(230, 183, 81, .35); }
+button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
+.reroute-tag { display: block; margin-top: .15rem; color: var(--gold); font-size: .8rem; font-weight: 650; text-decoration: underline; text-underline-offset: 2px; }
+
+#reroute { width: min(46rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--enamel-2); color: var(--ivory); }
+#reroute::backdrop { background: rgba(5, 10, 8, .7); }
+.rr-head { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem .4rem; }
+.rr-head h2 { margin: 0; display: flex; align-items: center; gap: .6rem; font-size: 1.25rem; font-weight: 750; font-stretch: 105%; line-height: 1.2; }
+.rr-close { flex: none; padding: .45rem .9rem; border: 1px solid var(--line); border-radius: 6px; background: none; font-weight: 600; }
+.rr-note, .rr-small, .rr-list-h, .rr-stops { margin-inline: 1.1rem; }
+.rr-note { margin-block: 0 .8rem; max-width: 62ch; }
+.rr-map { height: min(55vh, 26rem); background: var(--enamel); border-block: 1px solid var(--line); }
+.rr-map.unavailable { display: none; }
+.rr-small { margin-block: .5rem 0; color: var(--dim); font-size: .82rem; }
+.rr-list-h { margin-block: 1rem .3rem; font-size: .95rem; font-weight: 650; }
+.rr-stops { padding: 0 0 1.2rem 1.4rem; columns: 2 14rem; column-gap: 2rem; }
+.rr-stops li { padding: .12rem 0; break-inside: avoid; }
+.rr-stops li.unusual { color: var(--gold); font-weight: 650; }
+.rr-stops li.unusual small { color: var(--dim); font-weight: 400; }
+.leaflet-container { font-family: inherit; background: var(--enamel); }
+.rr-tiles { filter: invert(1) hue-rotate(180deg) brightness(.8) contrast(.9) saturate(.5); }
+#reroute .leaflet-control-attribution { background: rgba(18, 29, 24, .8); color: var(--dim); }
+#reroute .leaflet-control-attribution a { color: var(--gold); }
+.leaflet-tooltip.rr-label { background: var(--enamel); color: var(--ivory); border: 1px solid var(--line); box-shadow: none; font-weight: 600; }
+.leaflet-tooltip.rr-label::before { display: none; }
 .sdest { font-weight: 550; font-stretch: 90%; line-height: 1.15; }
 .smins { text-align: right; white-space: nowrap; color: var(--dim); font-size: .9rem; }
 .smins b { color: var(--ivory); font-size: 1.35rem; font-weight: 750; font-stretch: 85%; }

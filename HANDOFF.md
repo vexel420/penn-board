@@ -17,6 +17,25 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
 - A Claude artifact cannot run the board: artifact pages are not allowed to fetch
   from other sites. Where the notes below say `public/`, read `docs/`.
 
+## Subway lines and reroutes (added 17 Nov)
+
+- `docs/subway-data.json`, built by `scripts/build-subway-data.py` from the
+  MTA's GTFS (https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip, current copy
+  covers Nov 2026 to May 2027), holds every line's official colours, every
+  station's name and location, and the stations each line normally serves.
+- The subway reader also takes the B/D/F/M feed and keeps each train's stops
+  from Penn onwards. The page colours bullets and names terminals from the data
+  file, so any line that turns up (a 5 on the 7 Av line, an F on the 8 Av line)
+  draws correctly.
+- A train calling at any station its line doesn't normally serve is marked
+  "Rerouted, see map". Tapping opens a dialog with a Leaflet map (cdnjs,
+  OpenStreetMap tiles darkened in CSS; CARTO's tiles now need an API key) and
+  the stop list, unusual stops in gold. The line joins stations in order and
+  says it doesn't trace exact tracks. Tested with simulated 5 and F reroutes;
+  none was running during the session.
+- Rebuild the data file when the MTA publishes a new timetable (dates in its
+  feed_info); a stale file could flag a newly normal stop as a reroute.
+
 ## PATH scheduled times (added 17 Nov)
 
 - The live PATH feed (`www.panynj.gov/bin/portauthority/ridepath.json`) has

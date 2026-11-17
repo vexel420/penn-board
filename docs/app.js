@@ -139,27 +139,136 @@ function renderRail() {
   for (const r of rows) seenTracks.set(r.id, r.track);
 }
 
+// ---------- subway lines: colours, station names, reroutes ----------
+// docs/subway-data.json is built from the MTA's timetable by
+// scripts/build-subway-data.py: every line's colours, every station, and the
+// stations each line normally serves.
+let subwayData;            // undefined: not loaded yet; null: couldn't load
+let subwayDataLoading = null;
+function loadSubwayData() {
+  if (subwayData !== undefined || subwayDataLoading) return;
+  subwayDataLoading = fetch('subway-data.json')
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    .then((d) => {
+      if (d) for (const r of Object.values(d.routes)) r.normalSet = new Set(r.normal);
+      subwayData = d; subwayDataLoading = null; renderSubway();
+    });
+}
+const lineInfo = (route) => (subwayData && subwayData.routes[route]) || { label: route, color: '#6b7a70', text: '#ffffff' };
+const stationName = (id) => (subwayData && subwayData.stops[id] ? subwayData.stops[id][0] : '');
+// Stations on this train's way that its line doesn't normally serve.
+function unusualStops(route, train) {
+  const r = subwayData && subwayData.routes[route];
+  if (!r || !train.stops) return [];
+  return train.stops.filter((id) => subwayData.stops[id] && !r.normalSet.has(id));
+}
+function bulletHtml(route, extraClass = '') {
+  const l = lineInfo(route);
+  return `<span class="bullet ${extraClass}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
+}
+
+let subwayShown = [];      // the groups drawn, so a tap can find its train
 const DIRS = { N: 'Uptown, the Bronx and Queens', S: 'Downtown and Brooklyn' };
 function renderSubway() {
   if (!board) return;
+  loadSubwayData();
   if (!board.subway.length) {
     $('subway').innerHTML = `<p class="empty">${board.sources.subway.error ? 'Subway times didn’t load. Trying again shortly.' : 'No subway trains reported right now.'}</p>`;
     return;
   }
   const nowS = Date.now() / 1000;
+  subwayShown = [];
   $('subway').innerHTML = ['N', 'S'].map((dir) => {
     const lines = board.subway.filter((g) => g.dir === dir).map((g) => {
-      const mins = g.trains.map((x) => Math.round((x.time - nowS) / 60)).filter((m) => m >= 0).slice(0, 3);
-      if (!mins.length) return '';
-      const colour = '123'.includes(g.route) ? 'red' : 'ACE'.includes(g.route) ? 'blue' : '';
-      const dest = g.trains[0].dest || (dir === 'N' ? 'Uptown' : 'Downtown');
+      const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
+      if (!trains.length) return '';
+      const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
+      const first = trains[0];
+      const last = first.stops && first.stops[first.stops.length - 1];
+      const dest = stationName(last) || first.dest || (dir === 'N' ? 'Uptown' : 'Downtown');
       const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
-      return `<div class="sline"><span class="bullet ${colour}" aria-label="${esc(g.route)} train">${esc(g.route)}</span><span class="sdest">${esc(dest)}</span><span class="smins">${firstMin}${rest}</span></div>`;
+      const rerouted = trains.find((x) => unusualStops(g.route, x).length);
+      if (!rerouted) {
+        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}</span><span class="smins">${firstMin}${rest}</span></div>`;
+      }
+      const i = subwayShown.push({ route: g.route, dir, train: rerouted }) - 1;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
     }).join('');
     return lines ? `<div class="dir"><h3>${DIRS[dir]}</h3>${lines}</div>` : '';
   }).join('');
 }
+
+// ---------- reroute map ----------
+const LEAFLET = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/';
+let leafletLoading = null;
+function loadLeaflet() {
+  if (window.L) return Promise.resolve(window.L);
+  if (!leafletLoading) {
+    leafletLoading = new Promise((resolve, reject) => {
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = LEAFLET + 'leaflet.min.css';
+      document.head.append(css);
+      const js = document.createElement('script');
+      js.src = LEAFLET + 'leaflet.min.js';
+      js.onload = () => resolve(window.L);
+      js.onerror = () => { leafletLoading = null; reject(new Error('map library did not load')); };
+      document.head.append(js);
+    });
+  }
+  return leafletLoading;
+}
+
+let rerouteMap = null;
+async function openReroute({ route, train }) {
+  const l = lineInfo(route);
+  const stops = train.stops.filter((id) => subwayData.stops[id]);
+  const unusual = new Set(unusualStops(route, train));
+  const dest = stationName(stops[stops.length - 1]);
+  $('reroute-h').innerHTML = `${bulletHtml(route)}<span>${esc(l.label)} train to ${esc(dest)}</span>`;
+  $('reroute-note').textContent = `This ${l.label} train is running on a different route from normal. ` +
+    `${unusual.size === 1 ? 'The station in gold is one' : `The ${unusual.size} stations in gold are ones`} the ${l.label} doesn’t usually stop at.`;
+  $('reroute-stops').innerHTML = stops.map((id) => unusual.has(id)
+    ? `<li class="unusual">${esc(stationName(id))} <small>not usual for the ${esc(l.label)}</small></li>`
+    : `<li>${esc(stationName(id))}</li>`).join('');
+  const dialog = $('reroute');
+  if (!dialog.open) dialog.showModal();
+
+  const box = $('reroute-map');
+  try {
+    const L = await loadLeaflet();
+    box.classList.remove('unavailable');
+    if (rerouteMap) rerouteMap.remove();
+    rerouteMap = L.map(box, { scrollWheelZoom: false, attributionControl: true });
+    // OpenStreetMap's own tiles (free, with credit), darkened in CSS to suit the board.
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18, className: 'rr-tiles',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    }).addTo(rerouteMap);
+    const pts = stops.map((id) => [subwayData.stops[id][1], subwayData.stops[id][2]]);
+    L.polyline(pts, { color: '#f2ead8', weight: 8, opacity: .35 }).addTo(rerouteMap);
+    L.polyline(pts, { color: l.color, weight: 5 }).addTo(rerouteMap);
+    stops.forEach((id, i) => {
+      const odd = unusual.has(id), end = i === 0 || i === stops.length - 1;
+      const m = L.circleMarker(pts[i], {
+        radius: odd ? 7 : end ? 7 : 4, weight: odd ? 3 : 2,
+        color: odd ? '#e6b751' : '#121d18', fillColor: odd ? '#e6b751' : '#f2ead8', fillOpacity: 1,
+      }).addTo(rerouteMap);
+      const label = i === 0 ? `${stationName(id)} (you are here)` : stationName(id);
+      m.bindTooltip(label, { permanent: end, direction: 'auto', className: 'rr-label' });
+    });
+    rerouteMap.fitBounds(L.latLngBounds(pts), { padding: [28, 28] });
+    setTimeout(() => rerouteMap && rerouteMap.invalidateSize(), 50);
+  } catch {
+    box.classList.add('unavailable'); // the list of stops still shows
+  }
+}
+$('subway').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-reroute]');
+  if (b && subwayShown[b.dataset.reroute]) openReroute(subwayShown[b.dataset.reroute]);
+});
+$('reroute-close').addEventListener('click', () => $('reroute').close());
+$('reroute').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
 
 function renderPath() {
   if (!board) return;

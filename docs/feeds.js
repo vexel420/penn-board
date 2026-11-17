@@ -92,35 +92,33 @@ function parseTripUpdates(buf) {
 
 // ---------- subway ----------
 
+// The B/D/F/M feed is read too: those lines are the ones usually sent along
+// the 8 Av line through Penn when there's a service change.
 const SUBWAY_FEEDS = [
   'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs',
   'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace',
+  'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm',
 ];
-const PENN_STOPS = new Set(['128', 'A28']); // 34 St-Penn Station: 1/2/3 and A/C/E
-const TERMINALS = {
-  101: 'Van Cortlandt Park-242 St', 103: '238 St', 106: '215 St', 112: '168 St', 137: 'Chambers St', 142: 'South Ferry',
-  201: 'Wakefield-241 St', 204: 'Nereid Av', 213: 'E 180 St', 234: 'Nevins St', 247: 'Flatbush Av-Brooklyn College',
-  301: 'Harlem-148 St', 120: '96 St', 127: 'Times Sq-42 St', 132: '14 St', 250: 'Crown Hts-Utica Av', 257: 'New Lots Av',
-  A02: 'Inwood-207 St', A09: '168 St', A15: '125 St', A24: '59 St-Columbus Circle', A55: 'Euclid Av',
-  A61: 'Rockaway Blvd', A65: 'Ozone Park-Lefferts Blvd', H11: 'Far Rockaway-Mott Av', H15: 'Rockaway Park-Beach 116 St',
-  H04: 'Broad Channel', E01: 'World Trade Center', G05: 'Jamaica Center', F01: 'Jamaica-179 St', F06: 'Kew Gardens-Union Tpke',
-  A27: '42 St-Port Authority', A32: 'W 4 St', A34: 'Chambers St', A36: 'Fulton St', A41: 'Jay St-MetroTech',
-};
+const PENN_STOPS = new Set(['128', 'A28']); // 34 St-Penn Station: 7 Av line and 8 Av line
 
+// Each train keeps the stations it will call at from Penn onwards (station
+// ids). The page names them, colours each line and spots reroutes using
+// docs/subway-data.json.
 const subway = source('subway', 20, async () => {
   const feeds = await Promise.all(SUBWAY_FEEDS.map(async (u) =>
     parseTripUpdates(new Uint8Array(await (await get(u)).arrayBuffer()))));
   const t = now();
   const groups = new Map();
   for (const trip of feeds.flat()) {
-    const stop = trip.stops.find((s) => PENN_STOPS.has(s.id.slice(0, -1)));
-    if (!stop || !stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
+    const at = trip.stops.findIndex((s) => PENN_STOPS.has(s.id.slice(0, -1)));
+    if (at < 0) continue;
+    const stop = trip.stops[at];
+    if (!stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
     const dir = stop.id.slice(-1); // N = uptown, S = downtown
-    const last = trip.stops[trip.stops.length - 1].id.slice(0, -1);
     const route = trip.route.replace(/X$/, '');
     const key = route + dir;
     if (!groups.has(key)) groups.set(key, { route, dir, trains: [] });
-    groups.get(key).trains.push({ time: stop.time, dest: TERMINALS[last] || '' });
+    groups.get(key).trains.push({ time: stop.time, stops: trip.stops.slice(at).map((s) => s.id.slice(0, -1)) });
   }
   return [...groups.values()].map((g) => {
     g.trains.sort((a, b) => a.time - b.time);
