@@ -1531,7 +1531,7 @@ function tick() {
   if (flipMode) {
     // Tiles turn only when the minute changes.
     if (lastClock !== t.hm + t.ap) { $('clock').innerHTML = flipText('clock', t.hm); $('clock-ap').innerHTML = flipText('clock-ap', t.ap); runFlips($('clock').parentNode); lastClock = t.hm + t.ap; }
-    $('clock-s').textContent = ':' + nySecs.format(new Date()).padStart(2, '0');
+    $('clock-s').textContent = ''; // no seconds on the flip board
     renderStamp();
     return;
   }

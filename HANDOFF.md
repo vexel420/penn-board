@@ -448,7 +448,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - "Board style: Standard | Flip board" switch above the footer (owner chose
   style B: dark green tiles, ivory/gold letters; masthead and clock on the red
   masthead as red tiles with gold letters). Choice kept in localStorage
-  `boardStyle`. Flip mode turns the masthead, clock (hh:mm and AM/PM; seconds
+  `boardStyle`. Flip mode turns the masthead, clock (hh:mm and AM/PM; no seconds in flip mode;
   stay plain) and each train's time, destination, status and track into tiles.
   `flipText(key, text)` draws tiles showing the field's previous text
   (`flipShown`), and `runFlips(root)` turns changed tiles after each redraw.
