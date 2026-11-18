@@ -85,10 +85,12 @@ Owner decisions so far (see `design/switchover-tags-express-banner.png`):
 - Late-night trains carry a pill: moon + "Late night".
 - Banners live inside each station box's Express section; 1 2 3 and A C E
   follow the same rules.
-- Evening: banner counts down from one hour before the first late-night train
-  ENTERS SERVICE on the line (e.g. A leaves Inwood 22:08 weekdays), then says
-  late-night service has started, and stays until the LAST EXPRESS train has
-  left Penn.
+- Evening: the banner counts down the END OF DAYTIME EXPRESS SERVICE ("The
+  last express A leaves Penn in N min"). It appears one hour before the first
+  late-night train enters service on the line (A leaves Inwood 22:08
+  weekdays), says late-night service has started from then, and is removed
+  once the last express train has left Penn (A ~22:33). After that, the normal
+  late-night layout. See `design/evening-switchover-v3.png`.
 - Late nights: the Express heading stays with "No express trains late nights.
   A trains run local until 5:38 AM."
 - Morning: no countdown banner. Express trains simply appear with their
@@ -96,7 +98,11 @@ Owner decisions so far (see `design/switchover-tags-express-banner.png`):
   until the first express train reaches Penn; late-night trains still at Penn
   keep their pill.
 - Times come from the MTA GTFS per line and day (weekday / Saturday / Sunday).
-- Still to confirm: when the tags switch on and off, and holiday wording.
+- Tags are specific: "Late-night service", "Weekend service", "Holiday
+  service", "Severe weather service" (from MTA schedule/weather notices).
+  See `design/service-tags.png`. Proposed: late-night tag on when the first
+  late-night train enters service, off when the last late-night train has
+  left Penn (not yet confirmed by the owner).
 
 ## Service notices (18 Nov, owner chose option A)
 
