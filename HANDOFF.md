@@ -77,6 +77,25 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   the 2 from about 23:03 to 05:47. Plan: precompute these per line and day
   into `subway-data.json` to drive the countdowns.
 
+## How Amtrak's data behaves at Penn (observed 17-19 Nov)
+
+Watched Amtraker (`api-v3.amtraker.com/v3/trains`) once a minute:
+- Each train's data is 1 to 5.5 minutes old at any moment (`lastValTS`).
+- The NYP `platform` (track) field is always empty: Amtrak tracks at Penn
+  only come from NJ Transit's feed (server version with login).
+- A through train shows NYP status `Station` 3 to 5 min after it arrives;
+  the board therefore treats a through train whose arrival time has passed
+  as boarding (departures only).
+- A train ending at Penn never shows `Station`; the whole trip goes
+  `Completed` a few minutes after arrival. The board shows it as Arrived for
+  5 min instead of dropping it.
+- A train starting at Penn (Keystone, Empire Service) is listed before its
+  scheduled time, drops out of the data while delayed, and reappears only as
+  `Departed` (Keystone 639 on 17 Nov: due 21:00, left 21:47). The board keeps
+  such a train as "No update from Amtrak" for up to 45 min past its time.
+- Departed Amtrak trains show for 5 min from when the board learns of it
+  (others 3 min), never more than 4 min beyond that after the real departure.
+
 ## Subway late-night / daytime / weekend (built 19 Nov)
 
 Owner decisions so far (see `design/switchover-tags-express-banner.png`):
