@@ -503,7 +503,8 @@ function njtNotices(messages) {
 // In the browser: through the relay, which holds the owner's login.
 const relayNjt = source('relay-njt', 20, async () => {
   const d = await (await get(`${relayBase()}/njt`)).json();
-  return { rows: parseNjt(d.ITEMS), notices: njtNotices(d.MESSAGES) };
+  // STALE: NJ Transit couldn't be reached, so the relay sent its last good copy.
+  return { rows: parseNjt(d.ITEMS), notices: njtNotices(d.MESSAGES), staleSince: d.STALE ? d.STALE.since : 0 };
 });
 
 // Combine the sources into the document the page renders. `njt` and `path`
@@ -516,7 +517,7 @@ async function board(extra = {}) {
   let njtNoticeList = extra.njtNotices || [];
   if (!extra.njt && relayBase()) {
     const r = await relayNjt(force);
-    n = { data: r.data ? r.data.rows : null, error: r.error };
+    n = { data: r.data ? r.data.rows : null, error: r.error, staleSince: r.data ? r.data.staleSince : 0 };
     njtNoticeList = r.data ? r.data.notices : [];
   }
   const p = extra.path || { data: null, error: null };
@@ -562,7 +563,7 @@ async function board(extra = {}) {
     },
     sources: {
       lirr: { ok: !!l.data && !l.error, error: l.error },
-      njt: { ok: !!n.data && !n.error, error: n.error, needsLogin: !!extra.njtNeedsLogin, needsServer: !extra.server && !relayBase() },
+      njt: { ok: !!n.data && !n.error, error: n.error, staleSince: n.staleSince || 0, needsLogin: !!extra.njtNeedsLogin, needsServer: !extra.server && !relayBase() },
       amtrak: { ok: !!a.data && !a.error, error: a.error },
       subway: { ok: !!s.data && !s.error, error: s.error },
       path: { ok: !!p.data && !p.error, error: p.error, needsServer: !extra.server && !extra.path },

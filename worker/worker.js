@@ -81,46 +81,69 @@ async function njtPost(endpoint, fields, host = NJT_API) {
 }
 // NJ Transit limits how many tokens a login may get per day, so the token is
 // kept (in memory, and in this location's cache for other instances).
+// NJ Transit allows only 10 sign-ins a day per login, and Cloudflare runs
+// this relay in many places at once. The token is therefore kept in Workers KV
+// (NJT_KV), which every location shares, so the whole relay normally signs in
+// once a day. If NJ Transit says the day's sign-ins are used up, the relay
+// stops trying until midnight in New York.
+const KV_TOKEN = 'token', KV_BLOCKED = 'signin-blocked';
+const secondsToNyMidnight = () => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hourCycle: 'h23', hour: 'numeric', minute: 'numeric', second: 'numeric' }).formatToParts(new Date()).map((x) => [x.type, +x.value]));
+  return Math.max(60, 86400 - (p.hour * 3600 + p.minute * 60 + p.second) + 120);
+};
 async function getToken(env, fresh) {
-  const cache = caches.default;
-  // A token kept for one setup (test only, or with production) isn't reused
-  // after the other is configured. NJ Transit allows only 10 tokens a day.
-  const TOKEN_KEY = `${TOKEN_BASE}-${env.NJT_PROD_USERNAME ? 'prod' : 'test'}`;
-  if (njtTokenFor !== TOKEN_KEY) { njtToken = ''; njtTokenFor = TOKEN_KEY; }
+  const setup = env.NJT_PROD_USERNAME ? 'prod' : 'test';
+  if (njtTokenFor !== setup) { njtToken = ''; njtTokenFor = setup; }
+  const kv = env.NJT_KV;
   if (!fresh && njtToken) return njtToken;
-  if (!fresh) {
-    const hit = await cache.match(TOKEN_KEY);
-    // Kept with the server that issued it (test or main): a token only works there.
-    if (hit) { const k = await hit.json().catch(() => ({})); if (k.token && k.host) { njtToken = k.token; NJT_API = k.host; return njtToken; } }
+  if (!fresh && kv) {
+    const k = await kv.get(`${KV_TOKEN}-${setup}`, 'json');
+    if (k && k.token && k.host) { njtToken = k.token; NJT_API = k.host; return njtToken; }
   }
-  // Production and test have separate logins (NJ Transit emails both):
-  // NJT_PROD_USERNAME / NJT_PROD_PASSWORD for production, NJT_USERNAME /
-  // NJT_PASSWORD for test. Only test tokens carry no tracks or statuses.
+  if (!fresh) {
+    // A token this location kept before KV was added: share it.
+    const hit = await caches.default.match(`${TOKEN_BASE}-${setup}`);
+    if (hit) {
+      const k = await hit.json().catch(() => ({}));
+      if (k.token && k.host) {
+        njtToken = k.token; NJT_API = k.host;
+        if (kv) await kv.put(`${KV_TOKEN}-${setup}`, JSON.stringify(k), { expirationTtl: 82800 });
+        return njtToken;
+      }
+    }
+  }
+  if (kv && await kv.get(KV_BLOCKED)) throw new Error('NJ Transit sign-ins are used up for today; trying again after midnight');
   // Each login is tried on each server, production addresses first.
   const creds = [env.NJT_PROD_USERNAME && [env.NJT_PROD_USERNAME, env.NJT_PROD_PASSWORD], [env.NJT_USERNAME, env.NJT_PASSWORD]].filter(Boolean);
   const logins = NJT_HOSTS.flatMap((h) => creds.map(([u, p]) => [h, u, p]));
   let r = null; const tried = [];
   for (const [host, user, pass] of logins) {
     const login = { username: String(user).trim(), password: String(pass).trim() };
-    try { r = await njtPost('getToken', login, host); } catch (e) { tried.push(`${new URL(host).host}: ${e.message}`); r = null; continue; }
+    try { r = await njtPost('getToken', login, host); } catch (e) {
+      tried.push(`${new URL(host).host}: ${e.message}`); r = null;
+      if (/daily usage|limit/i.test(e.message)) { if (kv) await kv.put(KV_BLOCKED, '1', { expirationTtl: secondsToNyMidnight() }); break; }
+      continue;
+    }
     if (r && r.UserToken) { NJT_API = host; break; }
-    // (A sign-in that fails because of the daily limit isn't retried elsewhere.)
-    if (r && /limit|exceed/i.test(r.errorMessage || '')) break;
     tried.push(`${new URL(host).host}: ${(r && r.errorMessage) || 'no token'}`);
   }
   if (!r || !r.UserToken) throw new Error(`NJ Transit did not accept the login (${tried.join('; ')})`);
   njtToken = r.UserToken;
-  await cache.put(TOKEN_KEY, new Response(JSON.stringify({ token: njtToken, host: NJT_API }), { headers: { 'cache-control': 'max-age=82800' } }));
+  const keep = JSON.stringify({ token: njtToken, host: NJT_API });
+  if (kv) await kv.put(`${KV_TOKEN}-${setup}`, keep, { expirationTtl: 82800 });
+  await caches.default.put(`${TOKEN_BASE}-${setup}`, new Response(keep, { headers: { 'cache-control': 'max-age=82800' } }));
   return njtToken;
 }
 async function njtCall(env, endpoint, fields) {
-  // An expired or unknown token comes back as an error: get a new one, once.
+  // A token NJ Transit no longer accepts comes back as "Invalid token": sign
+  // in again, once. (Other errors don't use up a sign-in.)
   try {
     const r = await njtPost(endpoint, { token: await getToken(env, false), ...fields });
-    if (!(r && !Array.isArray(r) && r.errorMessage)) return r;
+    if (!(r && !Array.isArray(r) && /token/i.test(r.errorMessage || ''))) return r;
   } catch (e) {
-    if (!/token/i.test(e.message)) throw e;
+    if (!/invalid token|token/i.test(e.message) || /did not accept|used up/i.test(e.message)) throw e;
   }
+  if (env.NJT_KV) await env.NJT_KV.delete(`${KV_TOKEN}-${env.NJT_PROD_USERNAME ? 'prod' : 'test'}`);
   return njtPost(endpoint, { token: await getToken(env, true), ...fields });
 }
 async function njt(env) {
@@ -150,9 +173,23 @@ export default {
         const key = new Request(request.url, { method: 'GET' });
         const hit = await cache.match(key);
         if (hit) return hit;
-        const res = json(await njt(env), 30);
-        ctx.waitUntil(cache.put(key, res.clone()));
-        return res;
+        // The last good copy is kept 6 h, and sent (marked STALE with its
+        // time) if NJ Transit can't be reached, rather than an error.
+        const lastKey = new Request('https://penn-board-relay.internal/njt-last');
+        try {
+          const body = await njt(env);
+          const res = json(body, 30);
+          ctx.waitUntil(cache.put(key, res.clone()));
+          ctx.waitUntil(cache.put(lastKey, new Response(JSON.stringify({ at: Date.now(), body }), { headers: { 'cache-control': 'max-age=21600' } })));
+          return res;
+        } catch (e) {
+          const last = await cache.match(lastKey);
+          if (!last) throw e;
+          const { at, body } = await last.json();
+          const d = JSON.parse(body);
+          d.STALE = { since: Math.round(at / 1000), reason: String(e.message || e).slice(0, 200) };
+          return json(JSON.stringify(d), 15);
+        }
       }
       const m = pathname.match(/^\/alerts\/(subway|lirr)$/);
       if (m) {

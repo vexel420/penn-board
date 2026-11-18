@@ -524,3 +524,11 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   total, so tokens are cached 23 h per setup (`njt-token-prod` / `-test`).
   Data calls: 40,000 a day.
 - raildata.njt.gov (address in the portal's newer docs) didn't resolve on Nov 18 (Cloudflare 1016); kept first in NJT_HOSTS so it's used if it goes live. /njt-server reports which host the relay uses.
+- Relay hardening (Nov 18 evening): NJ Transit token shared across all
+  Cloudflare locations in Workers KV (namespace "penn-board-relay-njt",
+  binding NJT_KV; keys token-test / token-prod, 23 h). When NJ Transit says
+  the day's sign-ins are used up, `signin-blocked` stops further tries until
+  NY midnight. Only an "Invalid token" error triggers a new sign-in. `/njt`
+  keeps the last good copy 6 h and serves it marked `STALE: {since, reason}`
+  instead of a 502; the page then says "NJ Transit times are from N min ago".
+  Deploy metadata must include the KV binding and keep_bindings secret_text.

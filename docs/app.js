@@ -1590,7 +1590,8 @@ function renderNotices() {
   const s = board.sources, out = [];
   // Not connected yet: a one-line note at the bottom of the page, not a banner.
   $('njt-note').textContent = s.njt.needsServer || s.njt.needsLogin ? 'NJ Transit data not yet available.' : '';
-  if (s.njt.error) out.push(`NJ Transit data didn’t load (${esc(s.njt.error)}). The NJ Transit trains shown may not be real time.`);
+  if (s.njt.error) out.push('NJ Transit data didn’t load. The NJ Transit trains shown may not be real time.');
+  else if (s.njt.staleSince) out.push(`NJ Transit times are from ${Math.max(1, Math.round((Date.now() / 1000 - s.njt.staleSince) / 60))} min ago and may not be real time. Confirm on the station screens.`);
   for (const k of ['lirr', 'amtrak']) if (s[k].error) out.push(`${CARRIERS[k]} data didn’t load (${esc(s[k].error)}). Showing the last trains received.`);
   if (s.subway.error) out.push('Subway times didn’t load. Showing the last times received.');
   $('notices').innerHTML = out.map((m) => `<p>${m}</p>`).join('');
