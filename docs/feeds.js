@@ -431,10 +431,17 @@ async function board(extra = {}) {
       njt: { ok: !!n.data && !n.error, error: n.error, needsLogin: !!extra.njtNeedsLogin, needsServer: !extra.server },
       amtrak: { ok: !!a.data && !a.error, error: a.error },
       subway: { ok: !!s.data && !s.error, error: s.error },
-      path: { ok: !!p.data && !p.error, error: p.error, needsServer: !extra.server },
+      path: { ok: !!p.data && !p.error, error: p.error, needsServer: !extra.server && !extra.path },
     },
   };
 }
 
-return { board, source, get, now, nyToEpoch, parsePath };
+// Live PATH through the relay (docs/config.js), for the version of the site
+// without its own server.
+const relayPath = source('relay-path', 20, async () => {
+  const base = typeof window !== 'undefined' && window.PENN_RELAY;
+  return parsePath(await (await get(`${base.replace(/\/$/, '')}/path`)).json());
+});
+
+return { board, source, get, now, nyToEpoch, parsePath, relayPath };
 });

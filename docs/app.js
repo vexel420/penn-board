@@ -755,7 +755,9 @@ async function loadBoard(force) {
     if (res && res.status !== 404) throw new Error(res.status);
     direct = true;
   }
-  return PennFeeds.board({ force });
+  // No server: read PATH's live times through the relay, if one is set up.
+  const path = window.PENN_RELAY ? await PennFeeds.relayPath(force) : null;
+  return PennFeeds.board({ force, path: path || undefined });
 }
 
 let loading = null;
