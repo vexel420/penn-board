@@ -358,8 +358,8 @@ function parseAlerts(feed, keep) {
     const text = alertText(a.header_text);
     if (!text) continue;
     const more = alertText(a.description_text);
-    if (!keep(lines, stops, `${text} ${more}`)) continue;
     const type = meta.alert_type || 'Service notice';
+    if (!keep(lines, stops, `${text} ${more}`, type)) continue;
     // For the service-change map: the stations named for each line (station
     // ids, without the N/S platform letter), and the full text with its line
     // breaks, which holds the MTA's alternatives.
@@ -393,8 +393,14 @@ const relayBase = () => (IN_BROWSER && window.PENN_RELAY ? window.PENN_RELAY.rep
 const FAST_ALERTS = !IN_BROWSER || !!relayBase();
 const alertUrl = (feed) => (relayBase() ? `${relayBase()}/alerts/${feed}` : ALERT_FEEDS[feed]);
 const subwayAlerts = source('subway-alerts', FAST_ALERTS ? 20 : 180, async () =>
-  parseAlerts(await (await get(alertUrl('subway'))).json(), (lines, stops) =>
-    lines.some((l) => PENN_LINES.has(l)) || stops.some((s) => /^(128|A28)[NS]?$/.test(s))));
+  parseAlerts(await (await get(alertUrl('subway'))).json(), (lines, stops, text, type) => {
+    if (stops.some((s) => /^(128|A28)[NS]?$/.test(s))) return true; // about Penn itself
+    if (!lines.some((l) => PENN_LINES.has(l))) return false;
+    // Skipped stops and station notices only matter at those stations (the
+    // downtown 1 skipping 125 St doesn't affect anyone leaving Penn);
+    // suspensions, reroutes, delays and the like change the trip itself.
+    return !/stops skipped|station notice|boarding change|extra transfer|elevator|escalator/i.test(type);
+  }));
 // LIRR notices about branches and stations apply to trains from Penn too;
 // leave out ones about Grand Central only, which LIRR trains from Penn
 // don't reach.

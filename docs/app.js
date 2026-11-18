@@ -417,17 +417,15 @@ function lateNightTrain(stationId, route, dir, epoch, code) {
   if (!w) return false;
   const { day, mins: m } = nyDayAt(epoch);
   const sched = (d) => w[d === nyNow().day ? scheduleToday(d) : d];
-  // Near the changeovers, go by which scheduled trip this is: a night train
-  // running late keeps its pill until it leaves Penn; a day train doesn't get one.
+  // Like PATH: go by which scheduled trip this train is (its id in the live
+  // feed). A night train running late keeps its pill until it leaves Penn; a
+  // day train never gets one. Morning: today's early trips, or last night's
+  // trips listed past midnight (start 24:00+, id 144000 and up).
   if (code) {
-    // Minutes between two clock times, across midnight (0 to 720).
-    const apart = (a, b) => { const d = ((a - b) % 1440 + 1440) % 1440; return Math.min(d, 1440 - d); };
-    const near = (W) => W && W.trips && (apart(m, W.to) <= 150 || apart(m, W.from) <= 150);
-    for (const d of [day, nyDayAt(epoch - 86400).day]) {
-      const W = sched(d);
-      if (W && W.trips && W.trips.includes(code)) return true;
-    }
-    if (near(sched(day))) return false;
+    const T = sched(day), Y = sched(nyDayAt(epoch - 86400).day);
+    const inT = !!(T && T.trips && T.trips.includes(code));
+    if (m >= 12 * 60) return inT;
+    return (inT && code < '144000') || !!(Y && Y.trips && Y.trips.includes(code) && code >= '144000');
   }
   if (m >= 12 * 60) { const T = sched(day); return !!T && T.from >= 12 * 60 && m >= T.from; }
   // After midnight: the night began the evening before (or just after midnight).

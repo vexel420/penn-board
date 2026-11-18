@@ -157,17 +157,15 @@ def night_window(trips_at_penn):
         frm = night[i] % 1440 if night[i] >= 1440 else night[i]
     if frm is None or 6 * 60 < frm < 19 * 60 or not morning:
         return None
-    # The scheduled trips around each changeover that are late-night trips, by
-    # their live-feed id: a late-running night train keeps its pill, and an
-    # early day train doesn't get one. (Trains further from the changeovers go
-    # by time alone.)
+    # Every scheduled late-night trip, by its live-feed id (the PATH method:
+    # each live train is matched to its own scheduled trip, so a late-running
+    # night train keeps its pill and an early day train never gets one).
     frm_x = frm if frm >= 12 * 60 else frm + 1440
     near = []
     for t in trips_at_penn:
         x = t[0] if t[0] >= 12 * 60 else t[0] + 1440   # evening-continuous minutes
         night_train = (x >= frm_x) and (t[0] >= 12 * 60 or t[0] < to)
-        close = abs(t[0] - to) <= 150 or abs(x - frm_x) <= 150
-        if night_train and close and t[3]:
+        if night_train and t[3]:
             near.append(t[3])
     return {'from': frm, 'to': to, 'trips': sorted(set(near))}
 

@@ -413,8 +413,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   "night" holds, per line/direction/day, when that line starts running 15+ min
   apart in the evening ("from") and when trains come closer again in the
   morning ("to"), from the MTA timetable. Pills drop off line by line.
-  Near each changeover the pill goes by which scheduled trip a live train is:
-  "trips" lists the night trips' ids (the 6-digit scheduled start that begins
+  Like PATH, the pill goes by which scheduled trip each live train is:
+  "trips" lists every night trip's id (the 6-digit scheduled start that begins
   the MTA's live trip_id, e.g. "033750" of "033750_1..N03R"), so a late night
   train keeps its pill until it leaves.
 - PATH pills: per line (Journal Square incl. via Hoboken; Hoboken) from PATH's
@@ -437,3 +437,6 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - PATH's late-night banner ends when the night's last via-Hoboken train has
   left (`lastNight` in the timetable), or sooner if live PATH data has no
   via-Hoboken trains left in the last hour of night service.
+- Subway notices: stops-skipped, station, boarding-change and elevator notices
+  show only if they name a Penn station (128/A28); suspensions, reroutes and
+  delays on Penn lines always show.
