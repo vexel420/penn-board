@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Limelight&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611180700">
+<link rel="stylesheet" href="style.css?v=202611180757">
 </head>
 <body data-view="departures">
 
@@ -77,8 +77,20 @@
   <ol id="reroute-stops" class="rr-stops"></ol>
 </dialog>
 
-<script src="config.js?v=202611180700"></script>
-<script src="feeds.js?v=202611180700"></script>
-<script src="app.js?v=202611180700"></script>
+<dialog id="change" aria-labelledby="chg-h">
+  <div class="cm-body">
+    <div class="cm-head">
+      <div><p class="cm-kind" id="chg-kind"></p><h2 id="chg-h"></h2></div>
+      <button type="button" class="rr-close" id="chg-close">Close</button>
+    </div>
+    <div id="chg-top" class="cm-top"></div>
+    <div id="chg-map" class="cm-map" role="img" aria-label="Map of the line and the service change"></div>
+    <div id="chg-below" class="cm-below"></div>
+  </div>
+</dialog>
+
+<script src="config.js?v=202611180757"></script>
+<script src="feeds.js?v=202611180757"></script>
+<script src="app.js?v=202611180757"></script>
 </body>
 </html>

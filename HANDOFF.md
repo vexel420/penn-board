@@ -380,3 +380,25 @@ The owner's Default cloud environment had these hosts added for this project:
 - Trains that end at Penn (the 3 downtown late nights) are skipped in `docs/feeds.js`.
 - `subway-data.json` now has `nightGaps` (built by `scripts/build-subway-data.py`): the C (both ways) and the 3 downtown have no trains from Penn late nights. The board shows "No C trains late nights. Take the A, running local, until T." in that line's usual section. Alternatives are set in `NIGHT_ALTERNATIVE` in the build script.
 - Late nights the 3 still runs express uptown from Penn, so the uptown 2 note says "2 trains run local late nights, until T." instead of "No express trains".
+
+## Service-change map (Nov 18, 2026)
+Subway notices that close or reroute part of a line ("Planned - Part Suspended",
+"Suspended", "Reroute") get a **See map** button in the notices strip; a
+"Rerouted, see map" train row opens the same map when a notice covers that line.
+- **View 1, the whole line:** the line's own track (from `docs/subway-shapes.json`,
+  built by `scripts/build-subway-data.py`), grey and dashed between the stations
+  the notice names (both ends named = closed), live rerouted trains drawn in the
+  line's colour, labels for Penn, the line's ends and where it stops/restarts.
+- **View 2, "How to get around this":** read from the notice's own text
+  (`readAlternatives` in `docs/app.js`): transfer stations ("Name | [A][N]", or a
+  "Transfer stations:" list), shuttle buses ("... between X and Y, stopping at
+  ..."), and lines the MTA says to take/consider/use. Those lines are drawn only
+  near the closed part. Stations listed under the map zoom in when tapped, each
+  with Google/Apple Maps transit directions (from the person's location). The
+  MTA's full text is always shown underneath, plus "Live directions from Penn".
+- Nothing is invented: what can't be read from the notice isn't drawn. On 18 Nov,
+  50 of 51 system-wide route-change notices got view 1, and 36 a drawn view 2
+  (the rest show the MTA's text only).
+- The relay now passes subway notices' full text (`description_text`); about 30 KB.
+- Map: Leaflet + OpenStreetMap tiles, made pale in CSS (`.cm-tiles`); labels are
+  placed to avoid overlaps (`placeLabels`) and re-placed on zoom.

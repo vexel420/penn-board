@@ -13,6 +13,9 @@ one that turns up at Penn because of a service change:
     going downtown, which ends at Penn), the hours with no trains and the
     line to take instead.
 
+It also builds docs/subway-shapes.json: the path of every line's tracks
+(simplified to about 100 KB), which the service-change map draws.
+
 Rebuild it when the MTA publishes a new timetable (a few times a year):
 
     curl -o gtfs_subway.zip https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip
@@ -23,6 +26,8 @@ from collections import defaultdict
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / 'docs' / 'subway-data.json'
+SHAPES_OUT = OUT.with_name('subway-shapes.json')
+SIMPLIFY = 0.00004  # degrees, about 4 m: drops points that don't change the drawn line
 
 # Penn's two subway stations, and the next stations that only local trains
 # call at (the same rule as serviceFromPenn in docs/feeds.js).
@@ -75,6 +80,48 @@ def night_gap(trips_at_penn):
     gaps = [((times[(i + 1) % len(times)] - t) % 1440, t, times[(i + 1) % len(times)]) for i, t in enumerate(times)]
     size, after, until = max(gaps)
     return {'after': after, 'until': until} if size > NIGHT_GAP_MIN else None
+
+
+def simplify(p, eps):
+    """Douglas-Peucker: keep only the points needed to draw the line within eps."""
+    if len(p) < 3:
+        return p
+    (y1, x1), (y2, x2) = p[0], p[-1]
+    dx, dy = x2 - x1, y2 - y1
+    length = (dx * dx + dy * dy) ** .5 or 1e-12
+    i, far = 0, 0
+    for k in range(1, len(p) - 1):
+        d = abs(dy * (p[k][1] - x1) - dx * (p[k][0] - y1)) / length
+        if d > far:
+            i, far = k, d
+    if far > eps:
+        return simplify(p[:i + 1], eps)[:-1] + simplify(p[i:], eps)
+    return [p[0], p[-1]]
+
+
+def line_shapes(z, shape_line):
+    """Each line's track paths, simplified, leaving out paths that only repeat
+    another one of the same line (short trips over part of the route)."""
+    pts = defaultdict(list)
+    for r in rows(z, 'shapes.txt'):
+        if r['shape_id'] in shape_line:
+            pts[r['shape_id']].append((int(r['shape_pt_sequence']), float(r['shape_pt_lat']), float(r['shape_pt_lon'])))
+    by_line = defaultdict(list)
+    for sid, p in pts.items():
+        p = [(a, b) for _, a, b in sorted(p)]
+        by_line[shape_line[sid]].append([[round(a, 5), round(b, 5)] for a, b in simplify(p, SIMPLIFY)])
+    out = {}
+    for line, paths in by_line.items():
+        paths.sort(key=len, reverse=True)
+        keep, seen = [], set()
+        for path in paths:
+            cells = {(round(a, 3), round(b, 3)) for a, b in path}
+            if keep and len(cells - seen) <= 2:
+                continue
+            keep.append(path)
+            seen |= cells
+        out[line] = keep
+    return out
 
 
 def rows(z, name):
@@ -153,6 +200,13 @@ def main(zip_path):
             gaps.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = gap
     for line, r in routes.items():
         r['normal'] = sorted(normal[line])
+
+    shape_line = {}
+    for t in trips.values():
+        shape_line.setdefault(t['shape_id'], line_of(t['route_id']))
+    shapes = line_shapes(z, shape_line)
+    SHAPES_OUT.write_text(json.dumps({'version': info.get('feed_version', ''), 'lines': shapes}, separators=(',', ':')))
+    print(f'Wrote {SHAPES_OUT}: {sum(len(v) for v in shapes.values())} track paths, {SHAPES_OUT.stat().st_size // 1024} KB')
 
     doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))

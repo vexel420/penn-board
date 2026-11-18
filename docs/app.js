@@ -628,10 +628,419 @@ async function openReroute({ route, svc, train }) {
 }
 $('subway').addEventListener('click', (e) => {
   const b = e.target.closest('[data-reroute]');
-  if (b && subwayShown[b.dataset.reroute]) openReroute(subwayShown[b.dataset.reroute]);
+  if (!b || !subwayShown[b.dataset.reroute]) return;
+  const x = subwayShown[b.dataset.reroute], m = changeFor(x.route);
+  if (m) openChange(m.n.id); else openReroute(x);
 });
 $('reroute-close').addEventListener('click', () => $('reroute').close());
 $('reroute').addEventListener('click', (e) => { if (e.target === e.currentTarget) e.currentTarget.close(); });
+
+// ---------- service-change map ----------
+// For an MTA notice that closes or reroutes part of a line, a map in two views:
+//   1. the whole line: where it runs (its colour), where it doesn't (grey,
+//      dashed), and where it ends and starts again;
+//   2. how to get around it, when the MTA's notice says: the lines it suggests
+//      (drawn only near the closed part), its shuttle buses, its transfer
+//      stations (tap one to zoom in), and the MTA's own wording underneath.
+// Nothing is invented: the closed part comes from the stations the notice
+// names, the alternatives from its text. What the board can't read from a
+// notice simply isn't drawn; the MTA's text is always shown.
+const CHANGE_TYPES = /suspend|reroute/i;
+const PENN_LL = [40.7506, -73.9935];
+const LIVE_DIRECTIONS = {
+  google: 'https://www.google.com/maps/dir/?api=1&origin=34+St-Penn+Station,+New+York,+NY&travelmode=transit',
+  apple: 'https://maps.apple.com/?saddr=Penn+Station,+New+York,+NY&dirflg=r',
+};
+const directionsTo = ([lat, lon], name) => ({
+  // No starting point: the maps app starts from where the person is.
+  google: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=transit`,
+  apple: `https://maps.apple.com/?daddr=${lat},${lon}&q=${encodeURIComponent(name)}&dirflg=r`,
+});
+
+let subwayShapes = null, subwayShapesLoading = null;
+function loadSubwayShapes() {
+  if (subwayShapes) return Promise.resolve(subwayShapes);
+  if (!subwayShapesLoading) {
+    subwayShapesLoading = fetch(`subway-shapes.json?v=${encodeURIComponent((subwayData && subwayData.version) || '')}`)
+      .then((r) => { if (!r.ok) throw new Error('track shapes did not load'); return r.json(); })
+      .then((d) => (subwayShapes = d.lines))
+      .catch((e) => { subwayShapesLoading = null; throw e; });
+  }
+  return subwayShapesLoading;
+}
+
+// Which lines call at each station (by the timetable).
+let stationLinesCache = null;
+function stationLines(id) {
+  if (!stationLinesCache) {
+    stationLinesCache = new Map();
+    for (const [r, info] of Object.entries(subwayData.routes)) for (const s of info.normal) {
+      if (!stationLinesCache.has(s)) stationLinesCache.set(s, new Set());
+      stationLinesCache.get(s).add(r);
+    }
+  }
+  return stationLinesCache.get(id) || new Set();
+}
+const LL = (id) => [subwayData.stops[id][1], subwayData.stops[id][2]];
+const bulletsIn = (t) => [...String(t).matchAll(/\[([A-Z0-9]{1,2})\]/g)].map((m) => m[1]).filter((l) => subwayData.routes[l]);
+
+// A station name as the MTA writes it in a notice -> a station id. Names are
+// compared loosely ("Hoyt-Schermerhorn Sts" = "Hoyt–Schermerhorn Sts"); when
+// several stations share a name (14 St), the one served by the lines the
+// notice mentions wins.
+const normName = (s) => String(s).toLowerCase().replace(/[‐-―-]/g, ' ').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
+function findStation(name, prefer = []) {
+  const q = normName(name);
+  if (!q) return null;
+  const all = Object.entries(subwayData.stops);
+  let hits = all.filter(([, s]) => normName(s[0]) === q);
+  if (!hits.length) hits = all.filter(([, s]) => { const n = normName(s[0]); return n.startsWith(q + ' ') || q.startsWith(n + ' '); });
+  if (!hits.length) return null;
+  const score = ([id]) => prefer.filter((l) => stationLines(id).has(l)).length;
+  hits.sort((a, b) => score(b) - score(a));
+  return hits[0][0];
+}
+// "42 St-Port Authority/Times Sq-42 St" names a station complex: one id per part.
+const findStations = (name, prefer) => [...new Set(String(name).split('/').map((p) => findStation(p, prefer)).filter(Boolean))];
+
+// The MTA's alternatives, read from the notice's text.
+function readAlternatives(desc, route) {
+  const text = String(desc || '').split(/what'?s happening\?/i)[0].trim();
+  const lines = text.split('\n').map((x) => x.trim());
+  const transfers = [], buses = [];
+  let busList = false, transferList = false;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) { busList = false; transferList = false; continue; }
+    if (/^transfer stations:?$|via transfer at:$/i.test(line)) { transferList = true; continue; }
+    // Transfer stations: "Name [accessibility icon] (A) | [A][N][Q]", or the
+    // name on one line and its lines alone on the next.
+    let m = line.match(/^(?:transfer (?:at|between .+? at)\s+)?([^[|]+?)\s*(?:\[accessibility icon\])?\s*(?:\([^)]*\))?\s*\|\s*(.+)$/i);
+    if (!m && !line.includes('[') && /^(\[[A-Z0-9]{1,2}\])+$/.test(lines[i + 1] || '')) m = [line, line, lines[++i]];
+    // In a "Transfer stations:" list, also "Name [A][N][Q]" on one line.
+    if (!m && transferList) m = line.match(/^([^[|]+?)\s*(?:\[accessibility icon\])?\s*((?:\[[A-Z0-9]{1,2}\])+)$/);
+    if (m) {
+      const ls = bulletsIn(m[2]);
+      const ids = findStations(m[1], ls);
+      if (ids.length) transfers.push({ name: m[1].trim(), lines: ls, ids, bus: /shuttle bus/i.test(m[2]) });
+      continue;
+    }
+    // Shuttle buses: a list under "Free shuttle buses run on two routes:", or
+    // one line saying where they run.
+    if (/shuttle bus/i.test(line) && /:$/.test(line)) { busList = true; continue; }
+    // (Not "For stations between X and Y, take a bus": that's advice, not a route.)
+    if (busList || (/shuttle bus/i.test(line) && /\b(run|runs|make|makes|operate|operates)\b/i.test(line))) {
+      const b = line.match(/between (.+?) and (.+?)(?:,\s*stopping at (.+?))?\.?$/i);
+      if (b) {
+        const via = b[3] ? b[3].split(/,\s*(?:and\s+)?|\s+and\s+/) : null;
+        const names = [b[1], ...(via || []), b[2].replace(/,.*$/, '')];
+        const ids = names.map((n) => findStation(n, [route])).filter(Boolean);
+        const same = (x) => x.ids[0] === ids[0] && x.ids[x.ids.length - 1] === ids[ids.length - 1];
+        if (ids.length > 1 && !buses.some(same)) buses.push({ ids, along: !via });
+      }
+    }
+  }
+  // Lines the MTA suggests: named where it says take/consider/use, or at a
+  // transfer station (not lines merely mentioned in a note).
+  const advice = lines.filter((x) => /\b(take|consider|use|transfer)\b/i.test(x) && !/^notes?:/i.test(x)).join(' ');
+  const detours = [...new Set(bulletsIn(advice))].filter((l) => l !== route);
+  for (const t of transfers) for (const l of t.lines) if (l !== route && !detours.includes(l)) detours.push(l);
+  return { text, transfers, buses, detours };
+}
+
+// The notice as a map: its main line, the stations closed on it, and the
+// alternatives. Null for notices that don't close or reroute part of a line.
+function changeModel(n) {
+  if (!n || n.carrier !== 'subway' || !subwayData || !CHANGE_TYPES.test(n.type)) return null;
+  const named = Object.keys(n.affected || {}).filter((r) => subwayData.routes[r]);
+  if (!named.length) return null;
+  const route = bulletsIn(n.text).find((r) => named.includes(r)) || named[0];
+  const closed = new Set(n.affected[route].filter((id) => subwayData.stops[id]));
+  if (!closed.size) return null;
+  return { n, route, closed, alt: readAlternatives(n.desc, route) };
+}
+const changeModels = () => ((board && board.notices && board.notices.subway) || []).map(changeModel).filter(Boolean);
+
+// Geometry: where a station falls along a track path (the nearest point on
+// any segment; straight stretches have few points), and the part of a path
+// between two stations.
+function along(path, p) {
+  let best = { s: 0, d: Infinity };
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i], b = path[i + 1], dx = b[0] - a[0], dy = b[1] - a[1];
+    const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+    const d = Math.hypot(a[0] + t * dx - p[0], a[1] + t * dy - p[1]);
+    if (d < best.d) best = { s: i + t, d };
+  }
+  return best;
+}
+function between(path, sa, sb, a, b) {
+  if (sa > sb) return between(path, sb, sa, b, a).reverse();
+  return [a, ...path.slice(Math.floor(sa) + 1, Math.floor(sb) + 1), b];
+}
+// A line's track cut into station-to-station pieces, each closed or open.
+function lineSegments(route, closed) {
+  const ids = [...new Set([...subwayData.routes[route].normal, ...closed])].filter((id) => subwayData.stops[id]);
+  const segs = [], ends = new Set();
+  for (const path of subwayShapes[route] || []) {
+    const on = ids.map((id) => ({ id, ...along(path, LL(id)) })).filter((x) => x.d < 0.0015).sort((a, b) => a.s - b.s);
+    if (on.length) { ends.add(on[0].id); ends.add(on[on.length - 1].id); }
+    for (let i = 0; i < on.length - 1; i++) {
+      const a = on[i], b = on[i + 1];
+      segs.push({ a: a.id, b: b.id, pts: between(path, a.s, b.s, LL(a.id), LL(b.id)), closed: closed.has(a.id) && closed.has(b.id) });
+    }
+  }
+  return { segs, ends };
+}
+// Where live trains on this line are running off their usual tracks right now
+// (from the train feed): straight lines between the stations they call at.
+function liveDetours(route) {
+  const out = [], lastStops = new Set();
+  for (const g of (board && board.subway) || []) {
+    if (g.route !== route) continue;
+    for (const t of g.trains) {
+      const odd = new Set(unusualStops(route, t));
+      if (!odd.size) continue;
+      const st = t.stops.filter((id) => subwayData.stops[id]);
+      for (let i = 0; i < st.length - 1; i++) if (odd.has(st[i]) || odd.has(st[i + 1])) out.push([LL(st[i]), LL(st[i + 1])]);
+      lastStops.add(st[st.length - 1]);
+    }
+  }
+  return { paths: out, lastStops };
+}
+
+// Labels placed so they don't cover each other: each tries the right, left,
+// below and above its station, and is left off (if not essential) when all
+// four are taken. Placed again after every zoom.
+function placeLabels(map, layer, labels) {
+  layer.clearLayers();
+  const taken = [];
+  const free = (r) => !taken.some((t) => r.x < t.x + t.w && t.x < r.x + r.w && r.y < t.y + t.h && t.y < r.y + r.h);
+  const size = map.getSize();
+  for (const lb of labels) {
+    const p = map.latLngToContainerPoint(lb.at);
+    const w = lb.w, h = lb.h || 26;
+    const sides = [[10, -h / 2], [-w - 10, -h / 2], [-w / 2, 12], [-w / 2, -h - 12]];
+    let spot = null;
+    for (const [dx, dy] of sides) {
+      const r = { x: p.x + dx, y: p.y + dy, w, h };
+      if (r.x < 4 || r.x + w > size.x - 4 || r.y < 4 || r.y + h > size.y - 4) continue;
+      if (free(r)) { spot = [dx, dy, r]; break; }
+    }
+    if (!spot && !lb.must) continue;
+    if (!spot) { const dx = p.x + 10 + w > size.x ? -w - 10 : 10; spot = [dx, -h / 2, { x: p.x + dx, y: p.y - h / 2, w, h }]; }
+    taken.push(spot[2]);
+    L.marker(lb.at, { interactive: false, zIndexOffset: 1000, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="cm-label ${lb.cls || ''}" style="transform:translate(${spot[0]}px,${spot[1]}px)">${lb.html}</div>` }) }).addTo(layer);
+  }
+}
+const textWidth = (s, bullets = 0) => Math.round(String(s).length * 7.4 + bullets * 21 + 18);
+
+let changeMap = null, changeOpen = null;
+function closeChange() { if ($('change').open) $('change').close(); }
+
+async function openChange(id, view = 1) {
+  const model = changeModels().find((m) => m.n.id === id);
+  if (!model) return;
+  changeOpen = { id, view };
+  const { n, route, alt } = model;
+  const label = esc(lineInfo(route).label);
+  $('chg-kind').textContent = friendlyType(n.type);
+  const hasAlt = alt.text.length > 0;
+  const canMapAlt = alt.transfers.length || alt.buses.length;
+  if (view === 1) {
+    $('chg-h').innerHTML = noticeText(n.text);
+    $('chg-top').innerHTML = `<ul class="cm-key">
+        <li><span class="sw" style="border-color:${esc(lineInfo(route).color)}"></span>${label} trains running</li>
+        <li><span class="sw off"></span>No ${label} trains</li>
+        ${alt.buses.length ? '<li><span class="sw bus"></span>Free shuttle bus</li>' : ''}
+      </ul>
+      ${hasAlt ? '<button type="button" class="cm-go" data-view="2">How to get around this <span aria-hidden="true">→</span></button>' : liveDirectionsHtml()}`;
+    $('chg-below').innerHTML = '';
+  } else {
+    $('chg-h').innerHTML = `Getting around it`;
+    $('chg-top').innerHTML = `<button type="button" class="cm-back" data-view="1">← Whole ${label} line</button>
+      <p class="cm-sum">${noticeText(n.text)}</p>`;
+    const chips = alt.transfers.map((t, i) => {
+      const d = directionsTo(LL(t.ids[0]), t.name);
+      return `<li class="cm-stn"><button type="button" class="cm-zoom" data-zoom="t${i}"><b>${noticeText(t.name)}</b><span class="ls">${t.lines.map((l) => bulletHtml(l, 'tiny')).join('')}</span></button>
+        <span class="cm-dir">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></span></li>`;
+    }).join('');
+    $('chg-below').innerHTML = `${chips ? `<h3 class="cm-h">${canMapAlt ? 'Tap a station to zoom in' : 'Stations to change at'}</h3><ul class="cm-stns">${chips}</ul>` : ''}
+      <h3 class="cm-h">From the MTA</h3>
+      <div class="cm-mta">${mtaTextHtml(alt.text)}</div>
+      ${liveDirectionsHtml()}`;
+  }
+  const dialog = $('change');
+  if (!dialog.open) dialog.showModal();
+  dialog.querySelector('.cm-body').scrollTop = 0;
+
+  const box = $('chg-map');
+  // View 2 without anything to draw: the MTA's text is the help.
+  box.hidden = view === 2 && !canMapAlt;
+  if (box.hidden) return;
+  try {
+    const [Lf] = await Promise.all([loadLeaflet(), loadSubwayShapes()]);
+    if (!changeOpen || changeOpen.id !== id || changeOpen.view !== view) return; // another view opened meanwhile
+    if (changeMap) changeMap.remove();
+    changeMap = Lf.map(box, { zoomSnap: 0.25, scrollWheelZoom: false });
+    Lf.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18, className: 'cm-tiles',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Lines: MTA',
+    }).addTo(changeMap);
+    drawChange(changeMap, model, view);
+  } catch (e) {
+    console.warn('Service-change map:', e);
+    box.hidden = true; // the text still helps
+  }
+}
+const liveDirectionsHtml = () => `<p class="cm-live">Live directions from Penn: <a href="${LIVE_DIRECTIONS.google}" target="_blank" rel="noopener">Google Maps</a> · <a href="${LIVE_DIRECTIONS.apple}" target="_blank" rel="noopener">Apple Maps</a></p>`;
+// The MTA's text, line by line, with its symbols drawn; "Transfer stations:"
+// and the like become small headings.
+const mtaTextHtml = (t) => t.split('\n').map((x) => x.trim()).filter(Boolean)
+  .map((x) => (/:$/.test(x) && x.length < 60 ? `<h4>${noticeText(x)}</h4>` : `<p>${noticeText(x)}</p>`)).join('');
+
+function drawChange(map, model, view) {
+  const { route, closed, alt } = model;
+  const info = lineInfo(route);
+  const { segs, ends } = lineSegments(route, closed);
+  const live = liveDetours(route);
+  const casing = (pts, w) => L.polyline(pts, { color: '#fff', weight: w + 4, interactive: false }).addTo(map);
+  const bullets = (ls) => ls.map((l) => bulletHtml(l, 'tiny')).join('');
+
+  // Area for view 2: around the closed part, the transfer stations and buses.
+  let area = null;
+  if (view === 2) {
+    const pts = [...closed, ...alt.transfers.flatMap((t) => t.ids), ...alt.buses.flatMap((b) => b.ids)].map(LL);
+    area = L.latLngBounds(pts).pad(0.25);
+    if (subwayData.routes[route].normal.some((id) => id === '128' || id === 'A28') && area.pad(0.4).contains(PENN_LL)) area.extend(PENN_LL);
+    // The suggested lines, only within that area, thinner and lighter.
+    for (const l of alt.detours) {
+      for (const path of subwayShapes[l] || []) {
+        let cur = [];
+        const flush = () => { if (cur.length > 1) { casing(cur, 3); L.polyline(cur, { color: lineInfo(l).color, weight: 4, opacity: 0.8, interactive: false }).addTo(map); } cur = []; };
+        for (const p of path) { if (area.contains(p)) cur.push(p); else flush(); }
+        flush();
+      }
+    }
+  }
+  // The line itself: open parts in its colour, the closed part grey and dashed.
+  // (White edges first, then the colours, so no edge covers a line.)
+  for (const s of segs) casing(s.pts, 6);
+  for (const p of live.paths) casing(p, 6);
+  for (const s of segs.filter((x) => x.closed)) L.polyline(s.pts, { color: '#8f8f8f', weight: 5, dashArray: '8 7', interactive: false }).addTo(map);
+  for (const s of segs.filter((x) => !x.closed)) L.polyline(s.pts, { color: info.color, weight: 6, interactive: false }).addTo(map);
+  for (const p of live.paths) L.polyline(p, { color: info.color, weight: 6, interactive: false }).addTo(map);
+  // Shuttle buses, stop to stop (the MTA doesn't give the streets they use).
+  for (const b of alt.buses) {
+    let ids = b.ids;
+    if (b.along) { // "make stops between X and Y": every station of the line between them
+      const path = (subwayShapes[route] || []).find((p) => along(p, LL(ids[0])).d < 0.0015 && along(p, LL(ids[ids.length - 1])).d < 0.0015);
+      if (path) {
+        const [sa, sb] = [along(path, LL(ids[0])).s, along(path, LL(ids[ids.length - 1])).s];
+        ids = [...new Set([...subwayData.routes[route].normal, ...closed])].filter((id) => subwayData.stops[id])
+          .map((id) => ({ id, ...along(path, LL(id)) })).filter((x) => x.d < 0.0015 && x.s >= Math.min(sa, sb) - 0.01 && x.s <= Math.max(sa, sb) + 0.01)
+          .sort((x, y) => (sa < sb ? x.s - y.s : y.s - x.s)).map((x) => x.id);
+      }
+    }
+    const pts = ids.map(LL);
+    L.polyline(pts, { color: '#fff', weight: 8, interactive: false }).addTo(map);
+    L.polyline(pts, { color: '#222', weight: 4, dashArray: '2 7', lineCap: 'round', interactive: false }).addTo(map);
+  }
+
+  // Stations: dots on the line (grey where closed), and on suggested lines in view 2.
+  // Station dots grow as you zoom in; zoomed right out they'd hide the line.
+  const dots = [];
+  const dotSize = (small) => { const z = map.getZoom(); return z < 11.5 ? (small ? 1.5 : 2.5) : z < 13 ? (small ? 2.5 : 3.5) : (small ? 3.5 : 4.5); };
+  const dot = (id, off, small) => dots.push([small, L.circleMarker(LL(id), { radius: 3, weight: small ? 1.5 : 2, color: off ? '#8f8f8f' : '#1b1b1b', fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(map)]);
+  const lineIds = subwayData.routes[route].normal.filter((id) => subwayData.stops[id]);
+  for (const id of new Set([...lineIds, ...closed])) dot(id, closed.has(id));
+  const names = L.layerGroup();
+  const shownIds = new Set([...lineIds, ...closed]);
+  if (view === 2) {
+    for (const l of alt.detours) for (const id of subwayData.routes[l].normal) {
+      if (subwayData.stops[id] && !shownIds.has(id) && area.contains(LL(id))) { dot(id, false, true); shownIds.add(id); }
+    }
+  }
+  // Zoomed in, every station shows its name and lines.
+  const named = [];
+  const linesAt = (id) => [...stationLines(id)].filter((l) => (view === 2 ? l === route || alt.detours.includes(l) : l === route) && !(l === route && closed.has(id)));
+  // One name per station complex (Jay St-MetroTech has two stations): the one with lines running.
+  const order = [...shownIds].sort((a, b) => linesAt(b).length - linesAt(a).length);
+  for (const id of order) {
+    const ls = linesAt(id);
+    const [la, lo] = LL(id);
+    if (named.some(([n, a, o]) => n === stationName(id) && Math.hypot(a - la, o - lo) < 0.004)) continue;
+    named.push([stationName(id), la, lo]);
+    L.marker(LL(id), { interactive: false, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="cm-name${closed.has(id) && !ls.length ? ' off' : ''}">${esc(stationName(id))}${bullets(ls)}</div>` }) }).addTo(names);
+  }
+
+  // Labels for the overall picture.
+  const labels = [];
+  const name = (id) => stationName(id).replace(/-/g, '–');
+  if (lineIds.includes('128') || lineIds.includes('A28')) {
+    const id = lineIds.includes('A28') ? 'A28' : '128';
+    labels.push({ at: LL(id), must: true, cls: 'here', html: `★ ${esc(name(id))}<small>You are here</small>`, w: textWidth(name(id)) + 10, h: 36 });
+  }
+  const closedList = [...closed].filter((id) => subwayData.stops[id]);
+  const mid = closedList[Math.floor(closedList.length / 2)];
+  if (mid) labels.push({ at: LL(mid), must: true, cls: 'off', html: `No ${lineLabel(info)} trains`, w: textWidth(`No ${info.label} trains`) });
+  if (view === 1) {
+    // Where the line ends and starts again around the closed part, and its far ends.
+    const open = (id) => segs.some((s) => !s.closed && (s.a === id || s.b === id));
+    const edges = closedList.filter((id) => open(id));
+    for (const id of live.lastStops) labels.push({ at: LL(id), must: true, html: `${esc(name(id))}<small>${lineLabel(info)} trains end here</small>`, w: textWidth(`${lineLabel(info)} trains end here`), h: 36 });
+    for (const id of edges) if (!live.lastStops.has(id)) labels.push({ at: LL(id), html: esc(name(id)), w: textWidth(name(id)) });
+    for (const id of ends) if (!closed.has(id)) labels.push({ at: LL(id), html: esc(name(id)), w: textWidth(name(id)) });
+  } else {
+    alt.transfers.forEach((t) => {
+      // A complex ("42 St-Port Authority/Times Sq-42 St") is labelled by its shortest name.
+      const short = t.ids.map((id) => name(id)).sort((a, b) => a.length - b.length)[0];
+      labels.push({ at: LL(t.ids[0]), must: true, html: `${esc(short)}${bullets(t.lines)}`, w: textWidth(short, t.lines.length) });
+    });
+    const transferNames = new Set(alt.transfers.flatMap((t) => t.ids.map(stationName)));
+    for (const b of alt.buses) for (const id of [b.ids[0], b.ids[b.ids.length - 1]]) if (!transferNames.has(stationName(id))) labels.push({ at: LL(id), html: `${esc(name(id))}<small>Shuttle bus</small>`, w: textWidth(name(id)), h: 36 });
+  }
+  const labelLayer = L.layerGroup().addTo(map);
+  const ring = L.layerGroup().addTo(map);
+  const sync = () => {
+    for (const [small, m] of dots) { m.setRadius(dotSize(small)); m.setStyle({ weight: map.getZoom() < 11.5 ? 1.2 : small ? 1.5 : 2 }); }
+    if (map.getZoom() >= 14) { labelLayer.clearLayers(); names.addTo(map); }
+    else { names.remove(); placeLabels(map, labelLayer, labels); }
+  };
+  const fit = view === 2 ? area : L.latLngBounds([...lineIds, ...closed].map(LL));
+  map.fitBounds(fit, { padding: [24, 24] });
+  // (Only once the map has a view: dots and labels are sized from it.)
+  map.on('zoomend moveend', sync);
+  sync();
+  setTimeout(() => { map.invalidateSize(); map.fitBounds(fit, { padding: [24, 24] }); sync(); }, 60);
+
+  // Tap a station under the map: zoom to it and circle it.
+  $('chg-below').onclick = (e) => {
+    const b = e.target.closest('[data-zoom]');
+    if (!b) return;
+    const t = alt.transfers[+b.dataset.zoom.slice(1)];
+    const at = LL(t.ids[0]);
+    $('chg-below').querySelectorAll('[data-zoom]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    ring.clearLayers();
+    L.marker(at, { interactive: false, zIndexOffset: 2000, icon: L.divIcon({ className: '', iconSize: [0, 0], html: '<div class="cm-ring"></div>' }) }).addTo(ring);
+    map.flyTo(at, 15.5, { duration: 0.8 });
+    $('chg-map').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+}
+const lineLabel = (info) => esc(info.label);
+
+$('change').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) return closeChange();
+  const v = e.target.closest('[data-view]');
+  if (v && changeOpen) openChange(changeOpen.id, +v.dataset.view);
+});
+$('chg-close').addEventListener('click', closeChange);
+$('subway-notices').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-change]');
+  if (b) openChange(b.dataset.change);
+});
+// A "Rerouted, see map" row opens the notice behind it when there is one.
+const changeFor = (route) => changeModels().find((m) => m.route === route);
 
 function renderPath() {
   if (!board) return;
@@ -755,7 +1164,9 @@ function noticeStrip(list, where) {
   try { closed = sessionStorage.getItem('closed-' + where) === sig; } catch {}
   const urgent = list.some((n) => n.urgent);
   const label = where === 'subway' ? 'Subway service notices' : 'Service notices for trains at Penn';
-  const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}</p></div>`).join('');
+  // Notices that close or reroute part of a line open a map.
+  const mapBtn = (n) => (typeof changeModel === 'function' && changeModel(n) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
+  const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}</p></div>`).join('');
   return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${closed ? '' : ' open'}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
 }
 function renderServiceNotices() {

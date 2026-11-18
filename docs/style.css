@@ -294,3 +294,56 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
   .track.flip b, .track.ring b { animation: none; }
   .track.ring b { box-shadow: inset 0 0 0 2px var(--alarm); }
 }
+
+/* ---------- service-change map ---------- */
+/* A light map, like a printed subway map, inside the board's dark frame. */
+#change { width: min(62rem, calc(100vw - 1rem)); max-height: calc(100dvh - 1rem); padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--enamel); color: var(--ivory); }
+#change::backdrop { background: rgba(5, 10, 8, .7); }
+.cm-body { max-height: calc(100dvh - 1rem); overflow-y: auto; }
+.cm-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; padding: 1rem 1.1rem 0; background: var(--enamel-2); }
+.cm-kind { margin: 0 0 .2rem; color: var(--gold); font-size: .75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.cm-head h2 { margin: 0; font-size: 1.15rem; font-weight: 750; line-height: 1.3; }
+.cm-top { padding: .6rem 1.1rem 1rem; background: var(--enamel-2); border-bottom: 1px solid var(--line); }
+.cm-key { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem 1.1rem; font-size: .9rem; color: var(--dim); }
+.cm-key li { display: flex; align-items: center; gap: .45rem; }
+.cm-key .sw { width: 24px; border-top: 6px solid; border-radius: 3px; }
+.cm-key .sw.off { border-top: 4px dashed #9a9a9a; }
+.cm-key .sw.bus { border-top: 4px dotted var(--ivory); }
+.cm-go { margin-top: .85rem; width: 100%; padding: .7rem 1rem; border: 0; border-radius: 8px; background: var(--gold); color: #1b1a12; font-weight: 750; font-size: 1rem; }
+.cm-back { padding: .3rem .75rem; border: 1px solid var(--gold); border-radius: 99px; background: none; color: var(--gold); font-size: .88rem; font-weight: 650; }
+.cm-sum { margin: .6rem 0 0; color: var(--dim); font-size: .92rem; }
+.cm-map { height: min(60vh, 34rem); min-height: 320px; background: #efe9dc; }
+.cm-map[hidden] { display: none; }
+.cm-map .leaflet-container, .cm-map.leaflet-container { background: #efe9dc; font-family: inherit; }
+.cm-tiles { filter: grayscale(1) contrast(.55) brightness(1.18); opacity: .55; }
+.cm-label { display: inline-flex; flex-direction: column; justify-content: center; width: max-content; padding: 3px 7px; border-radius: 5px; background: #fff; color: #1b1b1b; font-size: 13px; font-weight: 700; line-height: 1.2; box-shadow: 0 1px 3px rgba(0, 0, 0, .35); white-space: nowrap; }
+.cm-label .bullet { margin-left: 3px; }
+.cm-label small { font-size: 11px; font-weight: 600; color: #555; }
+.cm-label.here { border: 2px solid var(--gold); }
+.cm-label.off { background: #5b5b5b; color: #fff; }
+.cm-label:has(.bullet) { flex-direction: row; align-items: center; }
+.cm-name { transform: translate(8px, -50%); width: max-content; display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 700; color: #1b1b1b; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; white-space: nowrap; }
+.cm-name.off { color: #8a8a8a; text-decoration: line-through; }
+.cm-name .bullet { text-shadow: none; }
+.cm-ring { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--gold); transform: translate(-50%, -50%); }
+.cm-below { padding: .4rem 1.1rem 1.2rem; }
+.cm-h { margin: 1rem 0 .5rem; font-size: .9rem; font-weight: 650; color: var(--dim); }
+.cm-stns { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr)); gap: .45rem; }
+.cm-stn { border: 1px solid var(--line); border-radius: 8px; background: var(--enamel-2); }
+.cm-zoom { display: flex; justify-content: space-between; align-items: center; gap: .5rem; width: 100%; padding: .55rem .7rem .2rem; border: 0; background: none; text-align: left; }
+.cm-zoom[aria-pressed="true"] { color: var(--gold); }
+.cm-zoom .ls { display: flex; gap: 2px; flex: none; }
+.cm-dir { display: block; padding: 0 .7rem .55rem; color: var(--dim); font-size: .82rem; }
+.cm-dir a, .cm-live a { color: var(--gold); }
+.cm-mta { max-width: 68ch; font-size: .92rem; }
+.cm-mta p { margin: 0 0 .35rem; }
+.cm-mta h4 { margin: .8rem 0 .3rem; font-size: .9rem; color: var(--gold); }
+.cm-live { margin: 1rem 0 0; font-size: .9rem; color: var(--dim); }
+.al-map { margin-left: .4rem; padding: .1rem .55rem; border: 1px solid var(--gold); border-radius: 99px; background: none; color: var(--gold); font-size: .8rem; font-weight: 650; }
+@media (max-width: 600px) {
+  #change { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border-radius: 0; border: 0; }
+  .cm-body { max-height: 100dvh; }
+}
+#change .bullet { display: inline-grid; place-items: center; box-shadow: none; width: 1.4em; height: 1.4em; font-size: .78em; vertical-align: -.2em; }
+#change .cm-label .bullet, #change .cm-name .bullet { width: 18px; height: 18px; font-size: 11px; margin-left: 2px; vertical-align: middle; }
+#change .cm-zoom .bullet { width: 20px; height: 20px; font-size: 11.5px; }

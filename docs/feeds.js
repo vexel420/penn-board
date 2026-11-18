@@ -349,7 +349,18 @@ function parseAlerts(feed, keep) {
     const more = alertText(a.description_text);
     if (!keep(lines, stops, `${text} ${more}`)) continue;
     const type = meta.alert_type || 'Service notice';
-    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more });
+    // For the service-change map: the stations named for each line (station
+    // ids, without the N/S platform letter), and the full text with its line
+    // breaks, which holds the MTA's alternatives.
+    const affected = {};
+    for (const x of ents) {
+      if (!x.route_id || !x.stop_id) continue;
+      const id = x.stop_id.replace(/[NS]$/, '');
+      (affected[x.route_id] = affected[x.route_id] || []).includes(id) || affected[x.route_id].push(id);
+    }
+    const tr = (a.description_text && a.description_text.translation) || [];
+    const desc = ((tr.find((x) => x.language === 'en') || {}).text || '').trim();
+    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc });
   }
   out.sort((x, y) => y.urgent - x.urgent);
   const byText = new Map();

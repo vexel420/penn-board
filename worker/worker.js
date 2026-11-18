@@ -7,7 +7,7 @@
 //                       or the Penn stations), in effect now or within the hour
 //   GET /alerts/lirr    LIRR service notices in effect now or within the hour
 //
-// The MTA's subway notice file is about 1 MB; filtered here it is a few KB, so
+// The MTA's subway notice file is about 1 MB; filtered here it is a few tens of KB, so
 // the board can refresh notices as often as trains. Every response is cached
 // for 15-20 seconds, so however many people have the board open, each source is
 // asked at most a few times a minute. See worker/README.md for setup.
@@ -51,10 +51,11 @@ async function alerts(feed) {
     if (!live) return false;
     if (feed !== 'subway') return true;
     return (a.informed_entity || []).some((x) => PENN_LINES.has(x.route_id) || PENN_STOP.test(x.stop_id || ''));
-  // The board shows only the headline for subway notices; LIRR's longer text is
-  // used to leave out notices about Grand Central only.
+  // The full text is kept: for the subway it holds the MTA's alternatives
+  // (transfer stations, shuttle buses), which the board maps; for the LIRR it
+  // is used to leave out notices about Grand Central only.
   }).map((e) => ({ ...e, alert: { ...e.alert, header_text: plain(e.alert.header_text),
-    description_text: feed === 'subway' ? undefined : plain(e.alert.description_text) } }));
+    description_text: plain(e.alert.description_text) } }));
   return JSON.stringify({ entity });
 }
 
