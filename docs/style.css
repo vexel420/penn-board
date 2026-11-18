@@ -261,6 +261,8 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 /* ---------- footer ---------- */
 .foot { margin-top: 2.5rem; padding-block: 1rem 2.5rem; border-top: 1px solid var(--line); color: var(--dim); font-size: .85rem; }
 .foot p { margin: 0 0 .35rem; max-width: 75ch; }
+.foot .njt-note { color: var(--ivory); }
+.foot .njt-note:empty { display: none; }
 .foot .stale { color: var(--late); }
 
 /* ---------- narrow screens ---------- */

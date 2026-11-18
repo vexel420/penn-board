@@ -241,8 +241,7 @@ function emptyMessage() {
   const s = board.sources;
   if (carrier === 'njt') {
     if (view === 'arrivals') return 'NJ Transit publishes departures only, so its arriving trains can’t be listed here.';
-    if (s.njt.needsServer) return 'NJ Transit trains aren’t shown on this version of the site. See the note above.';
-    if (s.njt.needsLogin) return 'NJ Transit trains appear once the site has an NJ Transit developer login. See the note above.';
+    if (s.njt.needsServer || s.njt.needsLogin) return 'NJ Transit data not yet available.';
     if (s.njt.error) return `NJ Transit data didn’t load: ${s.njt.error}. Trying again shortly.`;
   }
   if (carrier !== 'all' && s[carrier] && s[carrier].error) return `${CARRIERS[carrier]} data didn’t load: ${s[carrier].error}. Trying again shortly.`;
@@ -635,9 +634,9 @@ document.addEventListener('toggle', (e) => {
 function renderNotices() {
   if (!board) return;
   const s = board.sources, out = [];
-  if (s.njt.needsServer) out.push('NJ Transit trains aren’t shown here. NJ Transit only gives its data to a server with a developer login, and this version of the site runs without one.');
-  else if (s.njt.needsLogin) out.push('NJ Transit isn’t connected yet, so its trains are missing and Amtrak tracks appear only shortly before departure. Start the server with <code>NJT_USERNAME</code> and <code>NJT_PASSWORD</code> from a free NJ Transit developer account to add them.');
-  else if (s.njt.error) out.push(`NJ Transit data didn’t load (${esc(s.njt.error)}). The NJ Transit trains shown may not be real time.`);
+  // Not connected yet: a one-line note at the bottom of the page, not a banner.
+  $('njt-note').textContent = s.njt.needsServer || s.njt.needsLogin ? 'NJ Transit data not yet available.' : '';
+  if (s.njt.error) out.push(`NJ Transit data didn’t load (${esc(s.njt.error)}). The NJ Transit trains shown may not be real time.`);
   for (const k of ['lirr', 'amtrak']) if (s[k].error) out.push(`${CARRIERS[k]} data didn’t load (${esc(s[k].error)}). Showing the last trains received.`);
   if (s.subway.error) out.push('Subway times didn’t load. Showing the last times received.');
   $('notices').innerHTML = out.map((m) => `<p>${m}</p>`).join('');
