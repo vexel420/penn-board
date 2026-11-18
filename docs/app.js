@@ -67,36 +67,53 @@ function runFlips(root) {
     tiles.forEach((f, i) => {
       const from = f.querySelector('.t b').textContent;
       const ch = to[i] || ' ';
-      if (from !== ch) flipTile(f, from, ch, i * 30);
-      else if (recolour && ch !== ' ') setTimeout(() => turnTile(f, ch, ch), i * 30);
+      if (from !== ch) flipTile(f, from, ch, i * 40);
+      else if (recolour && ch !== ' ') setTimeout(() => turnTile(f, ch, ch), i * 40);
     });
     flipShown.set(k, to);
     flipLook.set(k, el.dataset.look);
     delete el.dataset.to;
   });
 }
-function flipTile(f, from, ch, delay) {
+// Each change turns the tile over a few times (stepping through letters on
+// the way), one flap after another. Each flap is a real animation on its own
+// layer: the top half falls (getting darker as it tips away), then the new
+// bottom half drops and settles with a slight bounce, like the real thing.
+const FLAP_FALL = 120, FLAP_DROP = 150;
+async function flipTile(f, from, ch, delay) {
   const a = FLIP_CHARS.indexOf(from), b = FLIP_CHARS.indexOf(ch);
   const steps = [];
   if (a >= 0 && b >= 0) {
-    const dist = (b - a + FLIP_CHARS.length) % FLIP_CHARS.length, n = Math.min(4, dist);
+    const dist = (b - a + FLIP_CHARS.length) % FLIP_CHARS.length, n = Math.min(3, dist);
     for (let k = 1; k < n; k++) steps.push(FLIP_CHARS[(a + Math.round((k * dist) / n)) % FLIP_CHARS.length]);
   }
   steps.push(ch);
-  let prev = from, t = delay;
-  for (const c of steps) { const was = prev; setTimeout(() => turnTile(f, was, c), t); t += 90; prev = c; }
+  f.dataset.turning = '1';
+  await new Promise((r) => setTimeout(r, delay));
+  let prev = from;
+  for (const c of steps) {
+    if (!f.isConnected) return;
+    await turnTile(f, prev, c);
+    prev = c;
+  }
+  delete f.dataset.turning;
 }
 function turnTile(f, from, to) {
-  if (!f.isConnected) return;
+  if (!f.isConnected) return Promise.resolve();
   const top = f.querySelector('.t b'), bot = f.querySelector('.bt b');
-  top.textContent = to;
+  top.textContent = to; // the new top half waits behind the falling flap
   const ft = document.createElement('span'); ft.className = 'ft'; ft.innerHTML = `<b>${esc(from)}</b>`;
   const fb = document.createElement('span'); fb.className = 'fb'; fb.innerHTML = `<b>${esc(to)}</b>`;
   fb.style.transform = 'rotateX(90deg)';
   f.append(ft, fb);
-  ft.animate([{ transform: 'rotateX(0)' }, { transform: 'rotateX(-90deg)' }], { duration: 45, easing: 'ease-in', fill: 'forwards' });
-  fb.animate([{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0)' }], { duration: 45, delay: 45, easing: 'ease-out', fill: 'forwards' })
-    .finished.then(() => { bot.textContent = to; ft.remove(); fb.remove(); }, () => {});
+  ft.animate([{ transform: 'rotateX(0deg)', filter: 'brightness(1)' }, { transform: 'rotateX(-90deg)', filter: 'brightness(.55)' }],
+    { duration: FLAP_FALL, easing: 'cubic-bezier(.55,0,1,.45)', fill: 'forwards' });
+  const drop = fb.animate([
+    { transform: 'rotateX(90deg)', filter: 'brightness(.55)' },
+    { transform: 'rotateX(-8deg)', filter: 'brightness(1)', offset: .78 },
+    { transform: 'rotateX(0deg)', filter: 'brightness(1)' },
+  ], { duration: FLAP_DROP, delay: FLAP_FALL - 10, easing: 'ease-out', fill: 'forwards' });
+  return drop.finished.then(() => { bot.textContent = to; ft.remove(); fb.remove(); }, () => {});
 }
 // Masthead and clock.
 function renderMastFlip() {

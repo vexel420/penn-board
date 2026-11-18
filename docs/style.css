@@ -367,7 +367,7 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 .fl { display: inline-flex; flex-wrap: wrap; gap: .18em 0; vertical-align: middle; line-height: 1; }
 .fw { display: inline-flex; white-space: nowrap; }
 .f { --tile: #1b2b22; --tile-top: #22362b; --seam: #08100c;
-  position: relative; display: inline-block; width: .9em; height: 1.32em; margin-right: .12em; perspective: 12em;
+  position: relative; display: inline-block; width: .9em; height: 1.32em; margin-right: .12em; perspective: 3.5em;
   font-weight: 700; font-stretch: 90%; text-align: center; border-radius: .14em; }
 .f > span { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; background: var(--tile); backface-visibility: hidden; }
 .f > span b { position: absolute; left: 0; right: 0; height: 1.32em; line-height: 1.32em; font-weight: inherit; color: inherit; font-size: 1em; }
@@ -375,8 +375,8 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 .f .bt, .f .fb { bottom: 0; border-radius: 0 0 .14em .14em; }
 .f .t b, .f .ft b { top: 0; }
 .f .bt b, .f .fb b { bottom: 0; }
-.f .ft { transform-origin: bottom; z-index: 2; }
-.f .fb { transform-origin: top; z-index: 2; }
+.f .ft { transform-origin: bottom; z-index: 2; will-change: transform, filter; }
+.f .fb { transform-origin: top; z-index: 2; will-change: transform, filter; }
 .f::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% - .5px); height: 1px; background: var(--seam); z-index: 3; }
 /* in the train list */
 .flipboard .time b { color: var(--gold); }
