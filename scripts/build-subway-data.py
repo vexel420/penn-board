@@ -263,14 +263,16 @@ def main(zip_path):
     SHAPES_OUT.write_text(json.dumps({'version': info.get('feed_version', ''), 'lines': shapes}, separators=(',', ':')))
     print(f'Wrote {SHAPES_OUT}: {sum(len(v) for v in shapes.values())} track paths, {SHAPES_OUT.stat().st_size // 1024} KB')
 
-    # Each line's scheduled last stops from Penn, by direction: every last stop
-    # in the timetable (the A downtown: Far Rockaway, Lefferts Blvd, and a few
-    # Rockaway Park and Euclid Av trips). The board shows a line's scheduled
-    # trains on one row, named by the next train's last stop; a last stop not
-    # in the timetable (a service change) gets a row of its own.
+    # Each line's main last stops from Penn, by direction: those at least 10%
+    # of its trips from Penn end at (the A downtown: Far Rockaway and Lefferts
+    # Blvd). The board shows a line's trains to these on one row, named by the
+    # next train's last stop. Any other last stop (a short trip when the
+    # schedule changes over, the weekday rush-hour A to Rockaway Park, or a
+    # service change like A to Chambers St) gets a row of its own.
     terminals = {}
     for (line, d), counts in ends.items():
-        terminals.setdefault(line, {})[d] = sorted(counts)
+        total = sum(counts.values())
+        terminals.setdefault(line, {})[d] = sorted(k for k, n in counts.items() if n >= 0.1 * total)
     doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps, 'night': nights, 'terminals': terminals}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT}: {len(routes)} lines, {len(stops)} stations, {OUT.stat().st_size // 1024} KB')

@@ -472,7 +472,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   rebuilding ("Layerize") was most of the cost before. Tiles use
   `contain: layout paint style`. On a 4x-slowed phone, stutters (>34 ms
   frames) in a 40-field change went from 15 to 1.
-- Subway rows: a line's trains to any of its timetabled last stops share one
+- Subway rows: a line's trains to its main last stops (10%+ of its trips) share one
   row (`mergeScheduled`, subway-data.json "terminals"), named by the next
   train's last stop; the name slides to the next one when it changes
   (`destName`, `.dname.changing`). A last stop not in the timetable (service
