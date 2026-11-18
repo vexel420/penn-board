@@ -180,7 +180,8 @@ const lirr = source('lirr', 20, async () => {
   for (const a of arrivals) {
     const leaving = a.direction === 'E';
     const stops = (a.stops || []).filter((c) => c !== 'NYK');
-    const lateMin = a.status && a.status.otp < 0 ? Math.round(-a.status.otp / 60) : 0;
+    const delaySec = a.status && a.status.otp < 0 ? -a.status.otp : 0;
+    const lateMin = Math.round(delaySec / 60);
     let status = 'On time', tone = 'ok';
     const departed = a.stop_status === 'DEPARTED';
     if (a.status && a.status.canceled) { status = 'Cancelled'; tone = 'stop'; }
@@ -193,7 +194,10 @@ const lirr = source('lirr', 20, async () => {
     rows[leaving ? 'departures' : 'arrivals'].push({
       id: a.train_id,
       carrier: 'lirr',
-      time: a.time,
+      // LIRR lists the scheduled time and reports the delay separately (otp,
+      // seconds, negative = late): show and sort by the real expected time.
+      time: a.time + delaySec,
+      sched: a.time,
       place: stationName(leaving ? stops[stops.length - 1] : stops[0]),
       line: `${LIRR_BRANCHES[a.branch] || a.branch} Branch`,
       train: a.train_num,
@@ -203,7 +207,7 @@ const lirr = source('lirr', 20, async () => {
       // Departures: LIRR says when a train has left; `leaves` is the clock
       // fallback (its listed time may not include a delay, so add it).
       departed: leaving && departed,
-      leaves: a.time + (lateMin >= 2 ? lateMin * 60 : 0),
+      leaves: a.time + delaySec,
       via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(stationName),
     });
   }
@@ -241,7 +245,9 @@ const amtrak = source('amtrak', 60, async () => {
       }
       const row = (kind, sched, est, place) => {
         if (!sched) return;
-        const when = est || sched;
+        // A train can reach Penn early, but it won't leave before its
+        // scheduled time; arrivals can be early.
+        const when = kind === 'departures' ? Math.max(est || sched, sched) : (est || sched);
         // A departure stays until Amtrak reports it gone (the page drops one
         // whose estimate is 30 min stale); an arrival goes 5 min after it's due.
         if (when < t - (kind === 'departures' ? 1800 : 300) || when > t + 8 * 3600) return;
@@ -288,7 +294,8 @@ async function board(extra = {}) {
   // The page decides what to show as trains leave (docs/app.js, visibleRows);
   // this only drops rows long past.
   const live = (r) => r.time > t - 20 * 60;
-  const byTime = (x, y) => x.time - y.time;
+  // Order by when each train is really expected (delays included).
+  const byTime = (x, y) => (x.leaves ?? x.time) - (y.leaves ?? y.time);
   return {
     at: t,
     departures: departures.filter(live).sort(byTime),

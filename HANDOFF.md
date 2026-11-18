@@ -55,6 +55,20 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   allows the transit hosts, including `data.trilliumtransit.com` and
   `path.api.razza.dev`.
 
+## Ordering by real departure (18 Nov)
+
+- Rows are ordered by when each train is really expected to leave (`leaves`,
+  delay included), departed rows by when they left (`visibleRows`), so a delayed
+  train moves down the board. The feed-side sort uses the same key.
+- LIRR's `time` is the SCHEDULED time (checked against `/locations` sched_time);
+  `status.otp` is the delay in seconds (negative = late). Rows now carry
+  `time` = scheduled + delay and `sched` = scheduled, so the expected time is
+  the big one with "scheduled h:mm" underneath when 2+ minutes apart.
+- Amtrak departures use the later of the estimate and the schedule (Amtrak
+  estimates an early ARRIVAL at Penn, but trains don't leave before schedule).
+- NJ Transit rows still display NJ Transit's scheduled time as-is but are
+  placed by scheduled + SEC_LATE, so one can look out of order by clock time.
+
 ## Freshness rules (added 17 Nov)
 
 - The page forces a fresh fetch of every feed just after each minute (and on
@@ -63,7 +77,7 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   open pages can't multiply feed requests (matters for NJ Transit's daily cap).
 - Departed trains (`departedAt`, `noteVanished`, `visibleRows`, `shownStatus` in
   `docs/app.js`): an LIRR, NJ Transit or Amtrak departure shows "Departed" and
-  "left N min ago" for 5 minutes (owner's choice, 18 Nov), then comes off.
+  "left N min ago" for 3 minutes (owner's choice, 18 Nov), then comes off.
   Amtrak departs only on Amtrak's own report (`departsByFeed`): a late train
   whose estimate passes stays, marked "due", until reported gone or the estimate
   is 30 min stale. "Departed" comes from the feed

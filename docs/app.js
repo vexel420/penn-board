@@ -41,7 +41,7 @@ const fromNjt = (r) => String(r.id).startsWith('njt-'); // NJ Transit text is sh
 
 // A departed LIRR, NJ Transit or Amtrak train stays on the board marked
 // "Departed" for this long, then comes off. (Subway and PATH just drop off.)
-const DEPARTED_SHOWN_S = 5 * 60;
+const DEPARTED_SHOWN_S = 3 * 60;
 // Amtrak trains leave the board only when Amtrak reports them gone. If its
 // estimate passes with no word, the train stays (it is running late) until
 // the estimate is this old, which means the data has stopped updating.
@@ -82,7 +82,10 @@ function noteVanished(prev, next) {
 function visibleRows(rows, kind) {
   const nowS = Date.now() / 1000;
   if (kind === 'arrivals') return rows.filter((r) => r.time > nowS - 5 * 60);
-  const all = [...rows, ...vanished.values()].sort((a, b) => a.time - b.time);
+  // Ordered by real departure: when a train left, or when it's now expected
+  // to leave (delay included), so a delayed train moves down the board.
+  const when = (r) => departedAt(r) ?? r.leaves ?? r.time;
+  const all = [...rows, ...vanished.values()].sort((a, b) => when(a) - when(b));
   return all.filter((r) => {
     if (r.tone === 'stop') return r.time > nowS - 5 * 60; // keep a cancellation up a while
     const at = departedAt(r);
