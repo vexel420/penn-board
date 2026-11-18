@@ -214,6 +214,7 @@ const lirr = source('lirr', 20, async () => {
       time: a.time + delaySec,
       sched: a.time,
       lateMin,
+      fare: a.peak_code === 'P' ? 'peak' : a.peak_code === 'O' ? 'offpeak' : '', // LIRR peak or off-peak fare
       place: stationName(leaving ? stops[stops.length - 1] : stops[0]),
       line: `${LIRR_BRANCHES[a.branch] || a.branch} Branch`,
       train: a.train_num,

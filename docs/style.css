@@ -187,6 +187,11 @@ details.via .checking { display: block; color: var(--dim); font-size: .8rem; }
 .sched-note { margin: .4rem 0 .5rem; color: var(--dim); font-size: .82rem; }
 .pdots i { width: .8rem; height: 1.6rem; border-radius: 3px; background: #6b7a70; }
 .svc h4 { margin: .55rem 0 .1rem; font-size: .8rem; font-weight: 700; font-stretch: 110%; color: var(--ivory); }
+.stn { margin-top: .9rem; padding: .7rem .8rem .5rem; border: 1px solid var(--line); border-radius: 8px; }
+.stn-lines { display: flex; gap: .3rem; }
+.stn .dir:first-of-type h3 { margin-top: .6rem; }
+.fare { display: inline-block; margin-left: .2rem; padding: 0 .4rem; border: 1px solid var(--line); border-radius: 3px; font-size: .72rem; font-weight: 700; color: var(--dim); vertical-align: 1px; text-decoration: none; }
+.fare.peak { border-color: var(--gold); color: var(--gold); }
 .dir h3 { margin: 1rem 0 .3rem; font-size: .85rem; font-weight: 500; color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
 .sline { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .7rem; align-items: center; padding: .4rem 0; }
 .bullet { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff; background: #6b7a70; box-shadow: 0 0 0 1px rgba(242, 234, 216, .2); }

@@ -166,6 +166,9 @@ function viaStates(r) {
   return null;
 }
 
+// LIRR fares depend on whether the train is peak or off-peak.
+const fareTag = (r) => (r.fare === 'peak' ? ' <span class="fare peak">Peak</span>' : r.fare === 'offpeak' ? ' <span class="fare">Off-peak</span>' : '');
+
 function viaHtml(r) {
   const states = viaStates(r);
   const open = openRows.has(r.id);
@@ -190,7 +193,7 @@ function viaHtml(r) {
     last = r.continuesTo || 'Penn Station';
     if (r.continuesTo) tail = ', Penn Station';
   }
-  return `<details class="via" data-id="${esc(r.id)}"${open ? ' open' : ''}><summary>${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stops</u>${where}</summary><p>${names}${tail}</p><p class="last-stop">Last stop: <b>${esc(last)}</b></p>${checking}</details>`;
+  return `<details class="via" data-id="${esc(r.id)}"${open ? ' open' : ''}><summary>${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stops</u>${where}${fareTag(r)}</summary><p>${names}${tail}</p><p class="last-stop">Last stop: <b>${esc(last)}</b></p>${checking}</details>`;
 }
 
 function rowHtml(r) {
@@ -208,7 +211,7 @@ function rowHtml(r) {
   if (r.sched && Math.abs(r.sched - r.time) >= 120) notes.push(`scheduled ${clock(r.sched).hm}`);
   if (view === 'arrivals' && r.continuesTo) notes.push(`continues to ${esc(r.continuesTo)}, leaves ${clock(r.departsAt).hm}`);
   const sched = notes.length ? `<small>${notes.join(', ')}</small>` : '';
-  const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}</div>`;
+  const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
   return `<li class="row ${r.tone}${left === 'gone' && !gone && !due ? ' gone' : ''}">
     <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
@@ -268,7 +271,7 @@ function bulletHtml(route, extraClass = '') {
 }
 
 let subwayShown = [];      // the groups drawn, so a tap can find its train
-const DIRS = { N: 'Uptown, the Bronx and Queens', S: 'Downtown and Brooklyn' };
+const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
 function renderSubway() {
   if (!board) return;
   loadSubwayData();
@@ -281,9 +284,15 @@ function renderSubway() {
   // Each direction splits into express and local, by how each train is
   // actually running from Penn (night service and reroutes included).
   const SVC = { express: 'Express', local: 'Local' };
-  $('subway').innerHTML = ['N', 'S'].map((dir) => {
+  // Two separate stations: the 7 Av line (1 2 3) and the 8 Av line (A C E).
+  // A train belongs to the station it calls at, so a rerouted train lands
+  // in the right box.
+  const STATIONS = [{ id: '128', lines: ['1', '2', '3'] }, { id: 'A28', lines: ['A', 'C', 'E'] }];
+  $('subway').innerHTML = STATIONS.map((stn) => {
+  const here = board.subway.filter((g) => (g.trains[0] && g.trains[0].stops ? g.trains[0].stops[0] : '') === stn.id);
+  const dirs = ['N', 'S'].map((dir) => {
     const parts = ['express', 'local'].map((svc) => {
-    const lines = board.subway.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
+    const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
       if (!trains.length) return '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
@@ -301,7 +310,10 @@ function renderSubway() {
     }).join('');
       return lines ? `<div class="svc"><h4>${SVC[svc]}</h4>${lines}</div>` : '';
     }).join('');
-    return parts ? `<div class="dir"><h3>${DIRS[dir]}</h3>${parts}</div>` : '';
+    return parts ? `<div class="dir"><h3>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
+  }).join('');
+  const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('');
+  return `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
   }).join('');
 }
 

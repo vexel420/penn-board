@@ -55,6 +55,20 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   allows the transit hosts, including `data.trilliumtransit.com` and
   `path.api.razza.dev`.
 
+## Subway stations and LIRR fares (19 Nov)
+
+- The subway panel has two boxes, 1 2 3 (stop 128) and A C E (stop A28),
+  headed only by line symbols (owner: no explanatory notes; station signs do
+  that). A train goes in the box of the Penn stop it calls at.
+- LIRR rows carry a Peak or Off-peak tag from `peak_code` (P/O).
+- Day/night/weekend indication is for the subway only (owner's choice). A
+  design for the late-night switchover is in
+  `design/subway-night-day-design.png`, awaiting approval. The real switch
+  times vary by line and day: from the MTA GTFS, downtown A trains run local at
+  Penn from about 22:42 to 05:38 on weekdays (Sat from 22:38, Sun until 07:26);
+  the 2 from about 23:03 to 05:47. Plan: precompute these per line and day
+  into `subway-data.json` to drive the countdowns.
+
 ## Service notices (18 Nov, owner chose option A)
 
 - `docs/feeds.js`: MTA alert feeds (`camsys/subway-alerts.json` ~1 MB, read
