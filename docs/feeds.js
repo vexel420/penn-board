@@ -329,11 +329,12 @@ function parseAlerts(feed, keep) {
     const ents = a.informed_entity || [];
     const lines = [...new Set(ents.map((x) => x.route_id).filter(Boolean))];
     const stops = ents.map((x) => x.stop_id).filter(Boolean);
-    if (!keep(lines, stops)) continue;
     const text = alertText(a.header_text);
     if (!text) continue;
+    const more = alertText(a.description_text);
+    if (!keep(lines, stops, `${text} ${more}`)) continue;
     const type = meta.alert_type || 'Service notice';
-    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more: alertText(a.description_text) });
+    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more });
   }
   return out.sort((x, y) => y.urgent - x.urgent);
 }
@@ -343,9 +344,12 @@ function parseAlerts(feed, keep) {
 const subwayAlerts = source('subway-alerts', 180, async () =>
   parseAlerts(await (await get(ALERT_FEEDS.subway)).json(), (lines, stops) =>
     lines.some((l) => PENN_LINES.has(l)) || stops.some((s) => /^(128|A28)[NS]?$/.test(s))));
-// Everything LIRR announces matters at Penn, its main terminal.
+// LIRR notices about branches and stations apply to trains from Penn too;
+// leave out ones about Grand Central only, which LIRR trains from Penn
+// don't reach.
+const aboutGrandCentralOnly = (text) => /grand central/i.test(text) && !/penn/i.test(text);
 const lirrAlerts = source('lirr-alerts', 120, async () =>
-  parseAlerts(await (await get(ALERT_FEEDS.lirr)).json(), () => true));
+  parseAlerts(await (await get(ALERT_FEEDS.lirr)).json(), (lines, stops, text) => !aboutGrandCentralOnly(text)));
 
 // Amtrak publishes notices per train; list each train's once.
 function amtrakNotices(rows) {
