@@ -375,3 +375,8 @@ The owner's Default cloud environment had these hosts added for this project:
 `api-endpoint.mta.info`, `backend-unified.mylirr.org`, `api-v3.amtraker.com`,
 `www.njtransit.com`, `dv.njtransit.com`, `raildata.njtransit.com`, `www.panynj.gov`.
 `www.njtransit.com` and `dv.njtransit.com` are no longer needed by the code.
+
+## Late-night subway fixes (Nov 18, 2026)
+- Trains that end at Penn (the 3 downtown late nights) are skipped in `docs/feeds.js`.
+- `subway-data.json` now has `nightGaps` (built by `scripts/build-subway-data.py`): the C (both ways) and the 3 downtown have no trains from Penn late nights. The board shows "No C trains late nights. Take the A, running local, until T." in that line's usual section. Alternatives are set in `NIGHT_ALTERNATIVE` in the build script.
+- Late nights the 3 still runs express uptown from Penn, so the uptown 2 note says "2 trains run local late nights, until T." instead of "No express trains".

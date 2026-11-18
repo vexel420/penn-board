@@ -8,7 +8,10 @@ one that turns up at Penn because of a service change:
   - the stations each line normally serves, so a train stopping somewhere its
     line doesn't usually go can be shown as rerouted;
   - for lines that run express through Penn by day and local late at night
-    (the A and the 2), when that switch happens, per direction and day.
+    (the A and the 2), when that switch happens, per direction and day;
+  - for lines that don't leave Penn at all late at night (the C, and the 3
+    going downtown, which ends at Penn), the hours with no trains and the
+    line to take instead.
 
 Rebuild it when the MTA publishes a new timetable (a few times a year):
 
@@ -25,6 +28,10 @@ OUT = Path(__file__).resolve().parent.parent / 'docs' / 'subway-data.json'
 # call at (the same rule as serviceFromPenn in docs/feeds.js).
 PENN = {'128', 'A28'}
 LOCAL_NEXT = {'129', '126', 'A30', 'A25'}
+# Late at night, the train to take from Penn when a line isn't running: the A
+# makes the C's stops (it runs local then), and the 2 makes the 3's (local).
+NIGHT_ALTERNATIVE = {'C': 'A', '3': '2'}
+NIGHT_GAP_MIN = 90  # a longer break than this in a line's trains is its night off
 
 
 def minutes(hms):
@@ -55,6 +62,19 @@ def switch_times(trips_at_penn):
         'firstExpressStart': first_express[1],
         'firstExpressPenn': first_express[0],
     }
+
+
+def night_gap(trips_at_penn):
+    """The longest break in a line's departures from Penn over the day (on a
+    24-hour clock, wrapping past midnight), if it's long enough to be the
+    line's night off: {'after': last train before it, 'until': first after it},
+    in minutes after midnight."""
+    times = sorted({t[0] % 1440 for t in trips_at_penn})
+    if len(times) < 2:
+        return None
+    gaps = [((times[(i + 1) % len(times)] - t) % 1440, t, times[(i + 1) % len(times)]) for i, t in enumerate(times)]
+    size, after, until = max(gaps)
+    return {'after': after, 'until': until} if size > NIGHT_GAP_MIN else None
 
 
 def rows(z, name):
@@ -120,17 +140,27 @@ def main(zip_path):
             if c[1] in PENN and i + 2 < len(cs):
                 express = not any(n in LOCAL_NEXT for n in names[i + 1:i + 4])
                 at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express))
-    switches = {}
+    switches, gaps = {}, {}
     for (station, line, d, day), ts in at_penn.items():
         sw = switch_times(ts)
         if sw:
             switches.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = sw
+        gap = night_gap(ts) if line in NIGHT_ALTERNATIVE else None
+        if gap:
+            # The section it's shown in: how the line usually runs from Penn.
+            express = sum(t[2] for t in ts) * 2 > len(ts)
+            gap.update(alt=NIGHT_ALTERNATIVE[line], svc='express' if express else 'local')
+            gaps.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = gap
     for line, r in routes.items():
         r['normal'] = sorted(normal[line])
 
-    doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches}
+    doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT}: {len(routes)} lines, {len(stops)} stations, {OUT.stat().st_size // 1024} KB')
+    for station, ls in gaps.items():
+        for line, ds in ls.items():
+            for d, days in ds.items():
+                print(f'No {line} {d} from {station} late nights:', {k: (v['after'], v['until']) for k, v in days.items()})
     print(f'Late-night switches: {sum(len(d) for ls in switches.values() for l in ls.values() for d in l.values())} line/direction/day combinations')
 
 

@@ -124,7 +124,9 @@ const subway = source('subway', 20, async () => {
   const groups = new Map();
   for (const trip of feeds.flat()) {
     const at = trip.stops.findIndex((s) => PENN_STOPS.has(s.id.slice(0, -1)));
-    if (at < 0) continue;
+    // Not found, or Penn is where it ends (the 3 downtown late at night):
+    // nobody can board it here.
+    if (at < 0 || at === trip.stops.length - 1) continue;
     const stop = trip.stops[at];
     if (!stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
     const dir = stop.id.slice(-1); // N = uptown, S = downtown

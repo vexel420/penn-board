@@ -375,6 +375,21 @@ function switchState(stationId, line, dir) {
   return { phase, lastExpress, until, key };
 }
 
+// Lines with no trains from Penn late at night (the C; the 3 downtown, which
+// ends at Penn), from the timetable: subway-data.json "nightGaps" holds the
+// last train before the break, the first after it, and the line to take.
+function nightGapState(stationId, line, dir) {
+  const g = subwayData && subwayData.nightGaps && ((subwayData.nightGaps[stationId] || {})[line] || {})[dir];
+  if (!g) return null;
+  const today = nyNow(), tom = nyNow(1);
+  const T = g[scheduleToday(today.day)], N = g[tom.day] || T;
+  if (!T) return null;
+  const m = today.mins;
+  if (m >= 12 * 60 && m > T.after) return { ...T, until: N.until };
+  if (m < 12 * 60 && m < T.until) return T;
+  return null;
+}
+
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 
 // PATH's late-night service: the hours when weekday trains from 33 St run to
@@ -482,16 +497,31 @@ function renderSubway() {
     const dirNight = switching.some((x) => x.st.phase === 'night' || x.st.phase === 'morning');
     const parts = ['express', 'local'].map((svc) => {
     let notes = '';
+    // A line that isn't running late at night says which train to take.
+    const gaps = stn.lines.map((line) => {
+      const g = nightGapState(stn.id, line, dir);
+      if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
+      // "No downtown 3 trains" when the other direction still runs.
+      const way = nightGapState(stn.id, line, dir === 'N' ? 'S' : 'N') ? '' : (dir === 'N' ? ' uptown' : ' downtown');
+      const alt = esc(lineInfo(g.alt).label);
+      return `<div class="none-row">${bulletHtml(line)}<span>No${way} ${esc(lineInfo(line).label)} trains late nights. Take the ${alt}, running local, until ${fmtClock(g.until)}.</span></div>`;
+    }).join('');
     if (svc === 'express') {
+      // Other lines still running express in this direction (the 3 uptown, late at night).
+      const otherExpress = (line) => here.some((g) => g.route !== line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time >= nowS - 30));
       notes = switching.map(({ line, st }) => {
         const label = esc(lineInfo(line).label);
         if (st.phase === 'started') return `<p class="svc-line night">${ICON.moon}<span><b>Late-night service has started on the ${label}.</b> The last express train leaves at ${fmtClock(st.lastExpress)}.</span></p>`;
         if (st.phase === 'morning') return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${label}.</b></span></p>`;
         const expressDue = here.some((g) => g.route === line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time >= nowS - 30));
-        if (st.phase === 'night' && !expressDue) return `<div class="none-row">${bulletHtml(line)}<span>No express trains late nights. ${label} trains run local until ${fmtClock(st.until)}.</span></div>`;
+        if (st.phase === 'night' && !expressDue) {
+          const say = otherExpress(line) ? `${label} trains run local late nights, until ${fmtClock(st.until)}.` : `No express trains late nights. ${label} trains run local until ${fmtClock(st.until)}.`;
+          return `<div class="none-row">${bulletHtml(line)}<span>${say}</span></div>`;
+        }
         return '';
       }).join('');
     }
+    notes += gaps;
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
       const pill = (svc === 'local' && lateNight(g.route)) || dirNight ? LATE_PILL : '';
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
