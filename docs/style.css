@@ -197,6 +197,7 @@ details.via .checking { display: block; color: var(--dim); font-size: .8rem; }
 .subway .empty { padding: .6rem 0; font-size: .9rem; }
 .pdots { display: flex; gap: 3px; justify-content: center; }
 .sched-note { margin: .4rem 0 .5rem; color: var(--dim); font-size: .82rem; }
+.every-sub { display: block; margin-top: .1rem; color: var(--dim); font-size: .82rem; font-weight: 500; }
 .pdots i { width: .8rem; height: 1.6rem; border-radius: 3px; background: #6b7a70; }
 .svc h4 { margin: .55rem 0 .1rem; font-size: .8rem; font-weight: 700; font-stretch: 110%; color: var(--ivory); }
 /* Subway service pattern: tags beside the heading, banners in the Express

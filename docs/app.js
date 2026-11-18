@@ -593,12 +593,13 @@ function nextScheduledPath() {
   const list = [
     ...(pathSchedule.days[today.day] || []).filter((d) => d.t >= today.mins),
     ...(pathSchedule.days[tomorrow.day] || []).map((d) => ({ ...d, t: d.t + 1440 })),
-  ].filter((d) => d.t < today.mins + 60);
+  ].filter((d) => d.t < today.mins + 120);
   const byDest = new Map();
   for (const d of list) {
-    if (!byDest.has(d.to)) byDest.set(d.to, { colors: PATH_COLORS[d.to] || [d.color], times: [] });
-    byDest.get(d.to).times.push(d.t);
+    if (!byDest.has(d.to)) byDest.set(d.to, { colors: PATH_COLORS[d.to] || [d.color], times: [], later: [] });
+    byDest.get(d.to)[d.t < today.mins + 60 ? 'times' : 'later'].push(d.t);
   }
+  for (const [dest, g] of byDest) if (!g.times.length) byDest.delete(dest);
   return { byDest, today };
 }
 
@@ -618,7 +619,11 @@ function renderPathSchedule() {
     const [first, ...rest] = g.times.slice(0, 3).map(fmtMins);
     const dots = g.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('');
     const pill = pathLateNight(g.times[0]) ? LATE_PILL : '';
-    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
+    // How often trains run: the typical gap between the next few trains.
+    const ts = [...g.times, ...g.later].slice(0, 5);
+    const gaps = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b);
+    const every = gaps.length ? `<span class="every-sub">About every ${gaps[Math.floor(gaps.length / 2)]} min</span>` : '';
+    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}${every}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
   }).join('');
   $('path').innerHTML = (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>') + note;
 }
