@@ -64,6 +64,17 @@ function departedAt(r) {
   return leaves <= nowS ? leaves : null;
 }
 
+// A departed train stays on the board for DEPARTED_SHOWN_S from when the
+// board learned it had left, not from when it actually left: Amtrak's data
+// runs a few minutes behind, so counting from the real departure made late
+// reports vanish without ever showing "Departed". ("left N min ago" still
+// uses the real time.)
+const learnedAt = new Map(); // train id -> when the board first knew it had left
+function shownSince(r, at) {
+  if (!learnedAt.has(r.id)) learnedAt.set(r.id, Date.now() / 1000);
+  return Math.max(at, learnedAt.get(r.id));
+}
+
 // Feeds sometimes drop a train the moment it leaves. Remember any that
 // disappear close to their time, so they still show as departed.
 function noteVanished(prev, next) {
@@ -76,7 +87,7 @@ function noteVanished(prev, next) {
     const at = departedAt(r) ?? nowS;
     vanished.set(r.id, { ...r, departed: true, departedAt: Math.min(at, nowS) });
   }
-  for (const [id, r] of vanished) if (nowS - r.departedAt > DEPARTED_SHOWN_S) vanished.delete(id);
+  for (const [id, r] of vanished) if (nowS - shownSince(r, r.departedAt) > DEPARTED_SHOWN_S) vanished.delete(id);
 }
 
 function visibleRows(rows, kind) {
@@ -91,7 +102,7 @@ function visibleRows(rows, kind) {
   return all.filter((r) => {
     if (r.tone === 'stop') return r.time > nowS - 5 * 60; // keep a cancellation up a while
     const at = departedAt(r);
-    if (at !== null) return nowS - at < DEPARTED_SHOWN_S;
+    if (at !== null) return nowS - shownSince(r, at) < DEPARTED_SHOWN_S;
     if (r.departsByFeed) return r.time > nowS - AMTRAK_SILENT_S;
     return true;
   });
