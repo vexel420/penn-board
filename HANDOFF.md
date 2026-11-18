@@ -517,3 +517,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   includes Amtrak trains (ids "A2127") with tracks, merged into Amtrak rows.
 - Nov 18 check: on the TEST server none of getTrainSchedule, getTrainSchedule19Rec or getStationSchedule carry tracks or statuses (0 of 19 / 474 trains). Production access is needed for tracks.
 - "Final call" is now worded "All aboard" on every railroad (owner, Nov 18), matching NJ Transit.
+- NJ Transit's RailData guide (V2.1): registration emails SEPARATE Test and
+  Production credentials. Worker secrets: NJT_USERNAME/NJT_PASSWORD = test,
+  NJT_PROD_USERNAME/NJT_PROD_PASSWORD = production (preferred when set; only
+  production has tracks/statuses). getToken + isValidToken: 10 calls a day in
+  total, so tokens are cached 23 h per setup (`njt-token-prod` / `-test`).
+  Data calls: 40,000 a day.

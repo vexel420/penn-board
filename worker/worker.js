@@ -65,12 +65,11 @@ async function alerts(feed) {
 }
 
 // ---------- NJ Transit RailData ----------
-// NJ Transit sets up new developer accounts on its test server first, then on
-// the main one; the relay uses whichever knows the login.
+// NJ Transit's production and test servers (each with its own login).
 const NJT_HOSTS = ['https://raildata.njtransit.com/api/TrainData/', 'https://testraildata.njtransit.com/api/TrainData/'];
 let NJT_API = NJT_HOSTS[0];
-const TOKEN_KEY = 'https://penn-board-relay.internal/njt-token';
-let njtToken = '';
+const TOKEN_BASE = 'https://penn-board-relay.internal/njt-token';
+let njtToken = '', njtTokenFor = '';
 
 async function njtPost(endpoint, fields, host = NJT_API) {
   const body = new FormData();
@@ -83,15 +82,26 @@ async function njtPost(endpoint, fields, host = NJT_API) {
 // kept (in memory, and in this location's cache for other instances).
 async function getToken(env, fresh) {
   const cache = caches.default;
+  // A token kept for one setup (test only, or with production) isn't reused
+  // after the other is configured. NJ Transit allows only 10 tokens a day.
+  const TOKEN_KEY = `${TOKEN_BASE}-${env.NJT_PROD_USERNAME ? 'prod' : 'test'}`;
+  if (njtTokenFor !== TOKEN_KEY) { njtToken = ''; njtTokenFor = TOKEN_KEY; }
   if (!fresh && njtToken) return njtToken;
   if (!fresh) {
     const hit = await cache.match(TOKEN_KEY);
     // Kept with the server that issued it (test or main): a token only works there.
     if (hit) { const k = await hit.json().catch(() => ({})); if (k.token && k.host) { njtToken = k.token; NJT_API = k.host; return njtToken; } }
   }
-  const login = { username: String(env.NJT_USERNAME).trim(), password: String(env.NJT_PASSWORD).trim() };
+  // Production and test have separate logins (NJ Transit emails both):
+  // NJT_PROD_USERNAME / NJT_PROD_PASSWORD for production, NJT_USERNAME /
+  // NJT_PASSWORD for test. Only test tokens carry no tracks or statuses.
+  const logins = [
+    env.NJT_PROD_USERNAME && [NJT_HOSTS[0], env.NJT_PROD_USERNAME, env.NJT_PROD_PASSWORD],
+    [NJT_HOSTS[1], env.NJT_USERNAME, env.NJT_PASSWORD],
+  ].filter(Boolean);
   let r = null; const tried = [];
-  for (const host of NJT_HOSTS) {
+  for (const [host, user, pass] of logins) {
+    const login = { username: String(user).trim(), password: String(pass).trim() };
     try { r = await njtPost('getToken', login, host); } catch (e) { tried.push(`${new URL(host).host}: ${e.message}`); r = null; continue; }
     if (r && r.UserToken) { NJT_API = host; break; }
     tried.push(`${new URL(host).host}: ${(r && r.errorMessage) || 'no token'}`);
