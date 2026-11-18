@@ -42,6 +42,8 @@ const fromNjt = (r) => String(r.id).startsWith('njt-'); // NJ Transit text is sh
 // A departed LIRR, NJ Transit or Amtrak train stays on the board marked
 // "Departed" for this long, then comes off. (Subway and PATH just drop off.)
 const DEPARTED_SHOWN_S = 3 * 60;
+const AMTRAK_DEPARTED_SHOWN_S = 5 * 60; // owner's choice: Amtrak gets longer
+const shownFor = (r) => (r.carrier === 'amtrak' ? AMTRAK_DEPARTED_SHOWN_S : DEPARTED_SHOWN_S);
 // Amtrak trains leave the board only when Amtrak reports them gone. If its
 // estimate passes with no word, the train stays (it is running late) until
 // the estimate is this old, which means the data has stopped updating.
@@ -87,7 +89,7 @@ function noteVanished(prev, next) {
     const at = departedAt(r) ?? nowS;
     vanished.set(r.id, { ...r, departed: true, departedAt: Math.min(at, nowS) });
   }
-  for (const [id, r] of vanished) if (nowS - shownSince(r, r.departedAt) > DEPARTED_SHOWN_S) vanished.delete(id);
+  for (const [id, r] of vanished) if (nowS - shownSince(r, r.departedAt) > shownFor(r)) vanished.delete(id);
 }
 
 function visibleRows(rows, kind) {
@@ -102,7 +104,7 @@ function visibleRows(rows, kind) {
   return all.filter((r) => {
     if (r.tone === 'stop') return r.time > nowS - 5 * 60; // keep a cancellation up a while
     const at = departedAt(r);
-    if (at !== null) return nowS - shownSince(r, at) < DEPARTED_SHOWN_S;
+    if (at !== null) return nowS - shownSince(r, at) < shownFor(r);
     if (r.departsByFeed) return r.time > nowS - AMTRAK_SILENT_S;
     return true;
   });
@@ -278,7 +280,7 @@ function unusualStops(route, train) {
 }
 function bulletHtml(route, extraClass = '') {
   const l = lineInfo(route);
-  return `<span class="bullet ${extraClass}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
+  return `<span class="bullet ${extraClass}${l.label.length > 2 ? ' wide' : ''}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
 }
 
 // ---------- subway service pattern: late nights, weekends, holidays, weather ----------
@@ -590,8 +592,21 @@ function noticeWho(n) {
   if (n.carrier === 'subway') return n.lines.filter((l) => subwayData && subwayData.routes[l]).slice(0, 4).map((l) => bulletHtml(l, 'tiny')).join('') || bulletHtml('S', 'tiny');
   return `<span class="plate ${n.carrier}">${CARRIERS[n.carrier]}</span>`;
 }
-// "[1]" in MTA text is a line symbol.
-const noticeText = (t) => esc(t).replace(/\[([A-Z0-9]{1,2})\]/g, (m, l) => (subwayData && subwayData.routes[l] ? bulletHtml(l, 'tiny') : m));
+// The MTA writes symbols into notice text: "[1]" is a line, "[SIR]" the
+// Staten Island Railway, "[airplane icon]" and the like are pictograms.
+// Known pictograms are drawn; unknown ones are dropped rather than shown as words.
+const NOTICE_ICONS = {
+  airplane: ['Airport', '<path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V18l-2 1.5V21l3.5-1 3.5 1v-1.5L13 18v-5z" fill="currentColor"/>'],
+  accessibility: ['Accessible', '<circle cx="12" cy="4" r="2" fill="currentColor"/><path d="M19 13v-2c-1.5 0-3-.6-4-1.6l-1.3-1.4c-.4-.4-1-.7-1.6-.7-1.1 0-2 .9-2 2v5.7c0 1.1.9 2 2 2h5v5h2v-5.5c0-1.1-.9-2-2-2h-3v-3.5c1.3 1.1 3 1.9 4.9 2zM12.1 19a3 3 0 0 1-5.8-1 3 3 0 0 1 2.3-2.9v-2.1A5 5 0 1 0 14.1 19z" fill="currentColor"/>'],
+  'shuttle bus': ['Shuttle bus', '<path d="M4 16c0 .9.4 1.7 1 2.2V20a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1h8v1a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-1.8c.6-.5 1-1.3 1-2.2V6c0-3.5-3.6-4-8-4S4 2.5 4 6zm3.5 1a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm9 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zM18 11H6V6h12z" fill="currentColor"/>'],
+};
+NOTICE_ICONS.bus = NOTICE_ICONS['shuttle bus'];
+const noticeIcon = ([label, path]) => `<svg class="ic notice-ic" viewBox="0 0 24 24" role="img" aria-label="${label}">${path}</svg>`;
+const noticeText = (t) => esc(t)
+  .replace(/\[([a-z ]+?) icon\]/gi, (m, name) => (NOTICE_ICONS[name.toLowerCase()] ? noticeIcon(NOTICE_ICONS[name.toLowerCase()]) : ''))
+  .replace(/\[SIR\]/g, () => (subwayData && subwayData.routes.SI ? bulletHtml('SI', 'tiny') : 'SIR'))
+  .replace(/\[([A-Z0-9]{1,2})\]/g, (m, l) => (subwayData && subwayData.routes[l] ? bulletHtml(l, 'tiny') : m))
+  .replace(/ {2,}/g, ' ').trim();
 function noticeStrip(list, where) {
   if (!list || !list.length) return '';
   const sig = list.map((n) => n.id).join('|');
