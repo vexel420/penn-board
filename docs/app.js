@@ -758,6 +758,7 @@ const destShown = new Map();
 const minsShown = new Map(); // what each row's times showed, to slide out on a turn
 const ROTATE_MS = 8000;      // how long each end of the line shows
 let subwayTurning = false;   // a row is taking turns (redraw on each turn)
+const turnCycles = new Map(); // row -> { order of its ends, turn it started on }
 function destName(key, name) {
   const before = destShown.get(key);
   destShown.set(key, name);
@@ -860,7 +861,16 @@ function renderSubway() {
       // every A train's time, whatever its end.
       const arriving = upcoming.length && Math.round((upcoming[0].time - nowS) / 60) <= 0;
       if (ends.length > 1) subwayTurning = true;
-      if (ends.length > 1 && !arriving) upcoming = upcoming.filter((x) => lastOf(x) === ends[Math.floor(Date.now() / ROTATE_MS) % ends.length]);
+      // The turns always start with the end whose train comes first, and start
+      // over from it whenever that order changes (a train leaves, or a "now").
+      if (ends.length > 1) {
+        const order = arriving ? '' : ends.join(',');
+        const c = turnCycles.get(`${stn.id}|${g.route}|${dir}|${g.svc}`);
+        const turnNow = Math.floor(Date.now() / ROTATE_MS);
+        if (!c || c.order !== order) turnCycles.set(`${stn.id}|${g.route}|${dir}|${g.svc}`, { order, from: turnNow });
+        const from = turnCycles.get(`${stn.id}|${g.route}|${dir}|${g.svc}`).from;
+        if (!arriving) upcoming = upcoming.filter((x) => lastOf(x) === ends[(turnNow - from) % ends.length]);
+      }
       const trains = upcoming.slice(0, 3);
       if (!trains.length) return '';
       // Late-night pill by the next train's own time and line (stays until it leaves).
