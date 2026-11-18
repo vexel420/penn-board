@@ -532,3 +532,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   keeps the last good copy 6 h and serves it marked `STALE: {since, reason}`
   instead of a 502; the page then says "NJ Transit times are from N min ago".
   Deploy metadata must include the KV binding and keep_bindings secret_text.
+- Subway slides: renderSubway waits until a destination slide (1 s, SLIDE_MS) has finished before redrawing, so data/tick redraws no longer cut slides short.

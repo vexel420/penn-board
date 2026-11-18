@@ -763,13 +763,24 @@ function destName(key, name) {
   const before = destShown.get(key);
   destShown.set(key, name);
   if (before === undefined || before === name) return `<span class="dname">${esc(name)}</span>`;
+  slideStarted = performance.now();
   return `<span class="dname changing"><span class="out" aria-hidden="true">${esc(before)}</span><span class="in">${esc(name)}</span></span>`;
 }
 
 let subwayShown = [];      // the groups drawn, so a tap can find its train
 const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
+// The panel is redrawn often (new data, the 10 s tick, each turn). Redrawing
+// while a destination is sliding would cut the slide short and make it jump,
+// so a redraw that comes mid-slide waits until the slide has finished.
+const SLIDE_MS = 1000; // .dname slide: .75 s out, .8 s in after .15 s
+let slideStarted = -Infinity, slideWait = 0;
 function renderSubway() {
   if (!board) return;
+  const busy = SLIDE_MS - (performance.now() - slideStarted);
+  if (busy > 0) {
+    if (!slideWait) slideWait = setTimeout(() => { slideWait = 0; renderSubway(); }, busy + 20);
+    return;
+  }
   loadSubwayData();
   if (!board.subway.length) {
     $('subway').innerHTML = `<p class="empty">${board.sources.subway.error ? 'Subway times didn’t load. Trying again shortly.' : 'No subway trains reported right now.'}</p>`;
