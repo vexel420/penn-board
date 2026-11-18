@@ -36,6 +36,7 @@ LOCAL_NEXT = {'129', '126', 'A30', 'A25'}
 # Lines checked for a break in service from Penn late at night.
 NIGHT_GAP_LINES = {'C', '3'}
 NIGHT_GAP_MIN = 90  # a longer break than this in a line's trains is its night off
+NIGHT_HEADWAY = 15  # minutes: trains this far apart (or more) are late-night service
 
 
 def minutes(hms):
@@ -128,6 +129,37 @@ def line_shapes(z, shape_line):
     return out
 
 
+def night_window(trips_at_penn):
+    """When a line runs its late-night timetable from Penn (trains NIGHT_HEADWAY
+    minutes or more apart): 'from', the first evening train of that pattern,
+    and 'to', the first morning train that comes sooner after the one before.
+    Trains at or after 'from', or before 'to', are late-night trains. Each line
+    has its own, so the pill drops off line by line as service ramps up."""
+    times = sorted({t[0] for t in trips_at_penn})
+    morning = [t for t in times if t < 12 * 60]
+    # (Evening trips run past midnight as 24:xx, 25:xx...; stop at 4 AM so the
+    # next morning's ramp-up doesn't count.)
+    evening = [t for t in times if 12 * 60 <= t < 28 * 60]
+    to = 12 * 60
+    for prev, t in zip(morning, morning[1:]):
+        if t >= 3 * 60 and t - prev < NIGHT_HEADWAY:
+            to = t
+            break
+    # The night runs on into the small hours, which the timetable may list as
+    # early-morning times (01:29) rather than 25:29: join them on, up to 'to'.
+    if not evening:
+        return None
+    night = evening + [t + 1440 for t in morning if evening[-1] < t + 1440 < to + 1440]
+    frm = None
+    for i in range(len(night) - 1, 0, -1):
+        if night[i] - night[i - 1] < NIGHT_HEADWAY:
+            break
+        frm = night[i] % 1440 if night[i] >= 1440 else night[i]
+    if frm is None or 6 * 60 < frm < 19 * 60 or not morning:
+        return None
+    return {'from': frm, 'to': to}
+
+
 def rows(z, name):
     with z.open(name) as f:
         yield from csv.DictReader(io.TextIOWrapper(f, encoding='utf-8-sig'))
@@ -191,8 +223,11 @@ def main(zip_path):
             if c[1] in PENN and i + 2 < len(cs):
                 express = not any(n in LOCAL_NEXT for n in names[i + 1:i + 4])
                 at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express))
-    switches, gaps = {}, {}
+    switches, gaps, nights = {}, {}, {}
     for (station, line, d, day), ts in at_penn.items():
+        w = night_window(ts) if not (line in NIGHT_GAP_LINES and night_gap(ts)) else None
+        if w:
+            nights.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = w
         sw = switch_times(ts)
         if sw:
             switches.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = sw
@@ -212,9 +247,14 @@ def main(zip_path):
     SHAPES_OUT.write_text(json.dumps({'version': info.get('feed_version', ''), 'lines': shapes}, separators=(',', ':')))
     print(f'Wrote {SHAPES_OUT}: {sum(len(v) for v in shapes.values())} track paths, {SHAPES_OUT.stat().st_size // 1024} KB')
 
-    doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps}
+    doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps, 'night': nights}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT}: {len(routes)} lines, {len(stops)} stations, {OUT.stat().st_size // 1024} KB')
+    for station, ls in nights.items():
+        for line, ds in sorted(ls.items()):
+            for d, days in sorted(ds.items()):
+                fmt = lambda m: f'{m // 60 % 24}:{m % 60:02}'
+                print(f'Late-night {line} {d} at {station}:', ', '.join(f'{k} {fmt(w["from"])}-{fmt(w["to"])}' for k, w in sorted(days.items())))
     for station, ls in gaps.items():
         for line, ds in ls.items():
             for d, days in ds.items():

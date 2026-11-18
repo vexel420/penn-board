@@ -409,13 +409,21 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Rerouted-train map note names the line borrowed: "running via the A line from
   59 St-Columbus Circle to Inwood-207 St" (the line normally serving most of the
   unusual stops).
-- Late-night pill is per train (`lateNightTrain`): a train at Penn before the
-  station's switching line's first daytime express (2 for 1 2 3, A for A C E),
-  or after its last evening express. It stays on each train until it leaves.
+- Late-night pill is per train and per line (`lateNightTrain`): subway-data.json
+  "night" holds, per line/direction/day, when that line starts running 15+ min
+  apart in the evening ("from") and when trains come closer again in the
+  morning ("to"), from the MTA timetable. Pills drop off line by line.
 - "Daytime service has started on the C/3" banners: `nightGaps` now has
   `firstStart` (first morning train leaves its terminal); the banner shows from
   then until a train of that line shows "now" at Penn (or 30 min after due).
-- LIRR: its Penn feed never says DEPARTED; it drops a train ~30 s after it
-  really leaves (watched 18 Nov). The board treats that as Departed. The clock
-  fallback now waits 10 min (`departGrace`), so a late train whose delay hasn't
-  reached the feed keeps showing Final call (2 min past) then Boarding.
+- Departed is never assumed from the clock (owner's rule). It comes from the
+  feed's report (Amtrak), or from the train dropping out of its feed as it's due
+  (LIRR: watched 18 Nov, its Penn feed never says DEPARTED and drops a train
+  ~30 s after it really leaves; NJ Transit likewise). A train still listed past
+  its time shows Final call for 2 min, then Boarding; one still listed 30 min
+  past its time is dropped quietly (`LISTED_PAST_S`).
+- C and downtown 3: in the hour before their last train, a banner counts down
+  ("The last downtown 3 train leaves at 10:24 PM, in 14 min.").
+- PATH's late-night banner ends when the night's last via-Hoboken train has
+  left (`lastNight` in the timetable), or sooner if live PATH data has no
+  via-Hoboken trains left in the last hour of night service.

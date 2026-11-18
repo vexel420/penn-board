@@ -52,7 +52,8 @@ const AWAITING_MAX_S = 45 * 60; // an Amtrak train with no news this long past i
 const AMTRAK_SILENT_S = 30 * 60;
 const flaggedAt = new Map(); // train id -> when we first saw its feed call it departed
 const vanished = new Map();  // train id -> row for a train that left the feed as it was due out
-const CANCELLED_SHOWN_S = 5 * 60; // a cancelled train stays until this long past its time
+const CANCELLED_SHOWN_S = 5 * 60;
+const LISTED_PAST_S = 30 * 60; // a non-Amtrak train still listed this long past its time is dropped // a cancelled train stays until this long past its time
 const cancelledGone = { departures: new Map(), arrivals: new Map() }; // cancelled trains a feed dropped early
 function keepCancelled(prev, next, kind) {
   const nowS = Date.now() / 1000;
@@ -65,8 +66,10 @@ function keepCancelled(prev, next, kind) {
   for (const [id, r] of kept) if (r.time <= nowS - CANCELLED_SHOWN_S) kept.delete(id);
 }
 
-// When a train left, or null if it hasn't. Uses the feed's own word where it
-// has one (LIRR, Amtrak), else the departure time plus any delay.
+// When a train left, or null if it hasn't. Only data says a train has left:
+// the feed's own report (Amtrak), or the train dropping out of its feed as
+// it's due (LIRR, NJ Transit; see noteVanished). The clock never does: a
+// late train whose delay hasn't reached the feed is still at the platform.
 function departedAt(r) {
   if (r.tone === 'stop') return null; // a cancelled train never left
   const nowS = Date.now() / 1000;
@@ -75,9 +78,7 @@ function departedAt(r) {
     if (!flaggedAt.has(r.id)) flaggedAt.set(r.id, nowS);
     return flaggedAt.get(r.id);
   }
-  if (r.departsByFeed) return null; // Amtrak: only its own report counts
-  const leaves = r.leaves ?? r.time;
-  return leaves + (r.departGrace || 0) <= nowS ? leaves : null;
+  return null;
 }
 
 // A departed train stays on the board for DEPARTED_SHOWN_S from when the
@@ -137,7 +138,9 @@ function visibleRows(rows, kind) {
     if (at !== null) return nowS - shownSince(r, at) < shownFor(r) && nowS - at < shownFor(r) + REPORT_LAG_S;
     if (r.awaiting) return nowS - (r.leaves ?? r.time) < AWAITING_MAX_S;
     if (r.departsByFeed) return r.time > nowS - AMTRAK_SILENT_S;
-    return true;
+    // A train still listed long after its time (a feed that stopped
+    // updating) leaves the board without being called departed.
+    return (r.leaves ?? r.time) > nowS - LISTED_PAST_S;
   });
 }
 
@@ -151,9 +154,9 @@ const isDelayed = (r) => (r.lateMin || 0) >= 2;
 function finalCall(r, kind) {
   if (kind !== 'departures' || r.tone !== 'go' || isStale()) return false;
   const left = (r.leaves ?? r.time) - Date.now() / 1000;
-  // Past its time but still in LIRR's feed (it hasn't left): final call for
-  // 2 more minutes, then plain boarding until it goes.
-  return left > (r.departGrace ? -120 : 0) && left <= (isDelayed(r) ? 120 : 60);
+  // Past its time but still in its feed (it hasn't left): final call for 2
+  // more minutes, then plain boarding until it goes. (Amtrak has its own rule.)
+  return left > (r.departsByFeed ? 0 : -120) && left <= (isDelayed(r) ? 120 : 60);
 }
 
 function shownStatus(r, kind) {
@@ -392,26 +395,33 @@ function nightGapState(stationId, line, dir) {
   const m = today.mins;
   const key = `${today.date}|${stationId}|${line}|${dir}|gap`;
   if (m >= 12 * 60 && m > T.after) return { ...T, until: N.until, phase: 'night', key };
+  // The hour before the last train: count down to it.
+  if (m >= 12 * 60 && m >= T.after - 60) return { ...T, phase: 'countdown', left: T.after - m, key };
   if (m < 12 * 60 && m < (T.firstStart ?? T.until)) return { ...T, phase: 'night', key };
   if (m < 12 * 60 && !morningReached.has(key) && m < T.until + 30) return { ...T, phase: 'morning', key };
   return null;
 }
-// A train at Penn at this time (epoch seconds) is a late-night train: before
-// the first daytime express reaches Penn in the morning, or after the last
-// express leaves at night, by the timetable of the station's switching line
-// (the 2 for the 1 2 3, the A for the A C E). Every line there gets the pill,
-// and it stays on each train until it leaves.
-const SWITCH_LINE = { '128': '2', A28: 'A' };
-function lateNightTrain(stationId, dir, epoch) {
-  const sw = subwayData && subwayData.switches && ((subwayData.switches[stationId] || {})[SWITCH_LINE[stationId]] || {})[dir];
-  if (!sw) return false;
+// A train at Penn at this time (epoch seconds) is a late-night train when its
+// own line runs its late-night timetable then: subway-data.json "night" has,
+// per line, direction and day, when trains start running 15+ min apart in the
+// evening ("from") and when they come closer together again in the morning
+// ("to"), from the MTA timetable. Each line ramps up at its own time, so the
+// pills drop off line by line, and each stays on its train until it leaves.
+const nyDayAt = (epoch) => {
   const p = {};
   nyParts.formatToParts(new Date(epoch * 1000)).forEach((x) => { p[x.type] = x.value; });
-  const day = p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday';
-  const m = +p.hour * 60 + +p.minute;
-  const T = sw[day === nyNow().day ? scheduleToday(day) : day];
-  if (!T) return false;
-  return m < 12 * 60 ? m < T.firstExpressPenn : m >= T.lastExpress;
+  return { day: p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday', mins: +p.hour * 60 + +p.minute };
+};
+function lateNightTrain(stationId, route, dir, epoch) {
+  const w = subwayData && subwayData.night && ((subwayData.night[stationId] || {})[route] || {})[dir];
+  if (!w) return false;
+  const { day, mins: m } = nyDayAt(epoch);
+  const sched = (d) => w[d === nyNow().day ? scheduleToday(d) : d];
+  if (m >= 12 * 60) { const T = sched(day); return !!T && T.from >= 12 * 60 && m >= T.from; }
+  // After midnight: the night began the evening before (or just after midnight).
+  const T = sched(day), Y = sched(nyDayAt(epoch - 86400).day);
+  if (!T || m >= T.to) return false;
+  return !Y || Y.from >= 12 * 60 || m >= Y.from;
 }
 
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
@@ -431,8 +441,12 @@ function pathDay(day) {
   if (!direct.length || !via.length) return null;
   const lastDirect = Math.max(...direct);
   const viaAfter = via.filter((t) => t > lastDirect);
+  const firstDirect = Math.min(...direct);
+  const viaBefore = via.filter((t) => t < firstDirect);
   return {
-    firstDirect: Math.min(...direct),
+    firstDirect,
+    // The last via-Hoboken train of the night, before direct trains resume.
+    lastNight: viaBefore.length ? Math.max(...viaBefore) : null,
     lastDirect,
     nightStart: viaAfter.length ? Math.min(...viaAfter) : null, // first via-Hoboken train of the night
   };
@@ -443,7 +457,16 @@ function pathState() {
   const now = nyNow(), T = pathDay(now.day);
   if (!T) return null;
   const m = now.mins;
-  if (m < T.firstDirect) return { phase: 'night', until: T.firstDirect };
+  // Morning: late-night service lasts until its last train via Hoboken has
+  // left, not until the first direct train (live PATH data, when there is
+  // some, says so sooner: no via-Hoboken trains left in it).
+  if (m < T.firstDirect) {
+    const nearEnd = T.lastNight == null || m >= T.lastNight - 60;
+    const live = nearEnd && board && board.path && board.path.length ? board.path : null;
+    const viaLeft = live ? live.some((x) => /via/i.test(x.dest || '')) : true;
+    if (!viaLeft || (T.lastNight != null && m > T.lastNight)) return { phase: 'day' };
+    return { phase: 'night', until: T.firstDirect };
+  }
   if (m > T.lastDirect) {
     const N = pathDay(nyNow(1).day);
     return { phase: 'night', until: N ? N.firstDirect : T.firstDirect };
@@ -499,7 +522,6 @@ function renderSubway() {
   // in the right box.
   const STATIONS = [{ id: '128', lines: ['1', '2', '3'] }, { id: 'A28', lines: ['A', 'C', 'E'] }];
   const states = [];
-  const morningNow = nyNow().mins < 12 * 60;
   $('subway').innerHTML = STATIONS.map((stn) => {
   const here = board.subway.filter((g) => (g.trains[0] && g.trains[0].stops ? g.trains[0].stops[0] : '') === stn.id);
   const dirs = ['N', 'S'].map((dir) => {
@@ -514,7 +536,6 @@ function renderSubway() {
       }
       states.push(x.st);
     }
-    const lateNight = (route) => switching.some((x) => x.line === route) && (switching.find((x) => x.line === route).st.phase !== 'day' || morningNow);
     const parts = ['express', 'local'].map((svc) => {
     let notes = '';
     // A line that isn't running late at night says which train to take.
@@ -526,15 +547,24 @@ function renderSubway() {
         g = nightGapState(stn.id, line, dir);
       }
       if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${esc(lineInfo(line).label)}.</b></span></p>`;
+      // "The last C train leaves at 10:34 PM, in 25 min." / "The last downtown 3 train..."
+      if (g && g.phase === 'countdown' && g.svc === svc) {
+        const other = nightGapState(stn.id, line, dir === 'N' ? 'S' : 'N');
+        const way = other ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
+        const left = g.left < 1 ? 'now' : `in ${g.left} min`;
+        return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${esc(lineInfo(line).label)} train leaves at ${fmtClock(g.after)}, ${left}.</b> No ${way}${esc(lineInfo(line).label)} trains late nights.</span></p>`;
+      }
+      if (g && g.phase === 'countdown') return '';
       if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
       // The other lines at this station still running this way (C: A or E; 3: 1 or 2).
-      const alts = stn.lines.filter((l) => l !== line && !nightGapState(stn.id, l, dir)).map((l) => esc(lineInfo(l).label));
+      const off = (l, d) => { const x = nightGapState(stn.id, l, d); return !!x && x.phase !== 'countdown'; };
+      const alts = stn.lines.filter((l) => l !== line && !off(l, dir)).map((l) => esc(lineInfo(l).label));
       const altText = alts.length ? `the ${alts.slice(0, -1).join(', ')}${alts.length > 1 ? ' or ' : ''}${alts[alts.length - 1]}` : '';
       const way = dir === 'N' ? 'uptown' : 'downtown';
       const label = esc(lineInfo(line).label);
       // Short: "No C trains until 5:41 AM. For downtown service, use the A or E."
       // When only one direction stops (the 3 ends at Penn), say which.
-      const oneWay = !nightGapState(stn.id, line, dir === 'N' ? 'S' : 'N');
+      const oneWay = !off(line, dir === 'N' ? 'S' : 'N');
       const say = oneWay
         ? `No ${label} trains ${way} until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`
         : `No ${label} trains until ${fmtClock(g.until)}.${altText ? ` For ${way} service, use ${altText}.` : ''}`;
@@ -559,10 +589,8 @@ function renderSubway() {
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
       if (!trains.length) return '';
-      // Late-night pill by the next train's own time (stays until it leaves);
-      // in the evening, the switching line's locals get it as soon as
-      // late-night service has started.
-      const pill = lateNightTrain(stn.id, dir, trains[0].time) || (svc === 'local' && lateNight(g.route) && !morningNow) ? LATE_PILL : '';
+      // Late-night pill by the next train's own time and line (stays until it leaves).
+      const pill = lateNightTrain(stn.id, g.route, dir, trains[0].time) ? LATE_PILL : '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = trains[0];
       const last = first.stops && first.stops[first.stops.length - 1];

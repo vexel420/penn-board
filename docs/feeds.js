@@ -232,12 +232,9 @@ const lirr = source('lirr', 20, async () => {
       // fallback (its listed time may not include a delay, so add it).
       departed: leaving && departed,
       leaves: a.time + delaySec,
-      // LIRR's feed drops a train from Penn's list about half a minute after it
-      // really leaves (it never says "departed" here); the page shows that as
-      // Departed. A delay can reach the feed late, so the clock only takes
-      // over 10 min after `leaves`: a late train still at the platform keeps
-      // boarding instead of showing as gone.
-      departGrace: 600,
+      // (LIRR's feed drops a train from Penn's list about half a minute after
+      // it really leaves; it never says "departed" here. The page shows the
+      // drop as Departed: see noteVanished in app.js.)
       via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(stationName),
       viaCodes: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined), // to match LIRR's per-train progress
     });
