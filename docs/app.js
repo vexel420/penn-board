@@ -308,8 +308,10 @@ function visibleRows(rows, kind) {
 
 // A train that has left says "Departed", whatever its last status was. Stale
 // data never keeps the green boarding highlight.
-// Final call: a boarding train in its last minute. NJ Transit rows keep NJ
-// Transit's own wording (its terms ask for as-is text); the row still turns red.
+// The last call to board, worded "All aboard" on every railroad to match NJ
+// Transit, whose own status says that (owner's choice): a boarding train in its
+// last minute. NJ Transit rows keep NJ Transit's own wording (its terms ask
+// for as-is text); the row still turns red.
 // A delayed train's final call starts 2 minutes before its estimated
 // departure, so no one misses it; an on-time train's, 1 minute before.
 const isDelayed = (r) => (r.lateMin || 0) >= 2;
@@ -325,7 +327,7 @@ function shownStatus(r, kind) {
   if (kind === 'departures' && departedAt(r) !== null) return { status: 'Departed', tone: 'departed' };
   // A delayed train whose track is posted is boarding (NJ Transit's own text stays).
   if (kind === 'departures' && r.tone === 'late' && r.track && !fromNjt(r)) r = { ...r, status: 'Boarding', tone: 'go' };
-  if (finalCall(r, kind)) return { status: fromNjt(r) ? r.status : 'Final call', tone: 'final' };
+  if (finalCall(r, kind)) return { status: fromNjt(r) ? r.status : 'All aboard', tone: 'final' };
   // An Amtrak train past its time that Amtrak hasn't reported boarding or gone.
   if (kind === 'departures' && r.departsByFeed && r.tone !== 'go' && r.tone !== 'stop' && (r.leaves ?? r.time) <= Date.now() / 1000) return { status: 'No update from Amtrak', tone: 'late' };
   if (r.tone !== 'go') return { status: r.status, tone: r.tone };
