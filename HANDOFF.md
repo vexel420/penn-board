@@ -484,3 +484,10 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   whenever that order changes (`turnCycles`); name and times slide together. Euclid Av A
   trips keep their own row. While its next train is "now" the row stops
   turning and lists every A train's time (named by the "now" train).
+- Owner adopted the turning row for every subway line (Nov 18): all of a
+  line's trains in one direction and service (express/local) share one row
+  whatever their last stop (main ends, short trips, service changes), taking
+  turns every 8 s when they go to more than one place, soonest first, and
+  stopping on all times while a train is "now". Express and local stay in
+  their own sections. subway-data.json "terminals" (and SHARE_ROW in the build
+  script) are no longer used for this; kept in case per-destination rows return.

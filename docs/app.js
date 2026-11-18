@@ -736,15 +736,13 @@ function renderPathPattern() {
   return '';
 }
 
-// A line's trains to its scheduled last stops share one row, named by the
-// next train's last stop (the A downtown: Far Rockaway, then Lefferts Blvd...).
-// A last stop that isn't in the timetable (a service change: A to Chambers St)
-// keeps its own row. subway-data.json "terminals" lists the scheduled ones.
+// All of a line's trains in one direction and service (express or local)
+// share one row, whatever their last stop: Far Rockaway, Lefferts Blvd, a
+// short trip to Euclid Av, or a service change like A to Chambers St. When
+// they go to more than one place, the row takes turns (see renderSubway).
 function mergeScheduled(groups) {
   const out = [], merged = new Map();
   for (const g of groups) {
-    const ends = subwayData && subwayData.terminals && ((subwayData.terminals[g.route] || {})[g.dir]);
-    if (!ends || !ends.includes(g.dest)) { out.push(g); continue; }
     const k = `${g.route}|${g.dir}|${g.svc}`;
     if (!merged.has(k)) { const m = { ...g, scheduled: true, trains: [] }; merged.set(k, m); out.push(m); }
     merged.get(k).trains.push(...g.trains);
