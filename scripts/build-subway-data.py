@@ -21,7 +21,7 @@ Rebuild it when the MTA publishes a new timetable (a few times a year):
     curl -o gtfs_subway.zip https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip
     python3 scripts/build-subway-data.py gtfs_subway.zip
 """
-import csv, io, json, sys, zipfile
+import csv, io, json, re, sys, zipfile
 from collections import defaultdict
 from pathlib import Path
 
@@ -157,7 +157,19 @@ def night_window(trips_at_penn):
         frm = night[i] % 1440 if night[i] >= 1440 else night[i]
     if frm is None or 6 * 60 < frm < 19 * 60 or not morning:
         return None
-    return {'from': frm, 'to': to}
+    # The scheduled trips around each changeover that are late-night trips, by
+    # their live-feed id: a late-running night train keeps its pill, and an
+    # early day train doesn't get one. (Trains further from the changeovers go
+    # by time alone.)
+    frm_x = frm if frm >= 12 * 60 else frm + 1440
+    near = []
+    for t in trips_at_penn:
+        x = t[0] if t[0] >= 12 * 60 else t[0] + 1440   # evening-continuous minutes
+        night_train = (x >= frm_x) and (t[0] >= 12 * 60 or t[0] < to)
+        close = abs(t[0] - to) <= 150 or abs(x - frm_x) <= 150
+        if night_train and close and t[3]:
+            near.append(t[3])
+    return {'from': frm, 'to': to, 'trips': sorted(set(near))}
 
 
 def rows(z, name):
@@ -222,7 +234,11 @@ def main(zip_path):
         for i, c in enumerate(cs):
             if c[1] in PENN and i + 2 < len(cs):
                 express = not any(n in LOCAL_NEXT for n in names[i + 1:i + 4])
-                at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express))
+                # The trip's id in the MTA's live feed starts with its scheduled
+                # start in hundredths of a minute ("033750_1..N03R"); the
+                # timetable's trip id carries the same number.
+                code = re.search(r'_(\d{6})_', tid)
+                at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express, code.group(1) if code else ''))
     switches, gaps, nights = {}, {}, {}
     for (station, line, d, day), ts in at_penn.items():
         w = night_window(ts) if not (line in NIGHT_GAP_LINES and night_gap(ts)) else None

@@ -72,7 +72,7 @@ const all = (fields, n) => fields.filter((x) => x[0] === n).map((x) => x[1]);
 const utf8 = new TextDecoder();
 const str = (b) => (b ? utf8.decode(b) : '');
 
-// -> [{ route, stops: [{ id, time }] }]
+// -> [{ route, trip, stops: [{ id, time }] }]
 function parseTripUpdates(buf) {
   const trips = [];
   for (const entity of all(readFields(buf), 2)) {
@@ -85,7 +85,7 @@ function parseTripUpdates(buf) {
       const ev = first(sf, 3) || first(sf, 2);
       return { id: str(first(sf, 4)), time: ev ? first(readFields(ev), 2) : undefined };
     });
-    trips.push({ route: str(first(trip, 5)), stops });
+    trips.push({ route: str(first(trip, 5)), trip: str(first(trip, 1)), stops });
   }
   return trips;
 }
@@ -139,7 +139,10 @@ const subway = source('subway', 20, async () => {
     const last = stops[stops.length - 1];
     const key = `${route}|${dir}|${svc}|${last}`;
     if (!groups.has(key)) groups.set(key, { route, dir, svc, dest: last, trains: [] });
-    groups.get(key).trains.push({ time: stop.time, stops });
+    // `code`: the trip's scheduled start ("033750" of "033750_1..N03R"), which
+    // says which timetable trip this is (the late-night pill uses it).
+    const code = (/^(\d{6})_/.exec(trip.trip || '') || [])[1] || '';
+    groups.get(key).trains.push({ time: stop.time, stops, code });
   }
   return [...groups.values()].map((g) => {
     g.trains.sort((a, b) => a.time - b.time);

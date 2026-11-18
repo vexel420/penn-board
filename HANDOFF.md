@@ -413,15 +413,25 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   "night" holds, per line/direction/day, when that line starts running 15+ min
   apart in the evening ("from") and when trains come closer again in the
   morning ("to"), from the MTA timetable. Pills drop off line by line.
+  Near each changeover the pill goes by which scheduled trip a live train is:
+  "trips" lists the night trips' ids (the 6-digit scheduled start that begins
+  the MTA's live trip_id, e.g. "033750" of "033750_1..N03R"), so a late night
+  train keeps its pill until it leaves.
+- PATH pills: per line (Journal Square incl. via Hoboken; Hoboken) from PATH's
+  timetable, trains 16+ min apart = night (`pathNightWindow`); a live train is
+  matched to its scheduled departure (within 8 min). Weekday JSQ: 10:58 PM to
+  6:03 AM; Hoboken has no night trains, so never a pill.
 - "Daytime service has started on the C/3" banners: `nightGaps` now has
   `firstStart` (first morning train leaves its terminal); the banner shows from
   then until a train of that line shows "now" at Penn (or 30 min after due).
 - Departed is never assumed from the clock (owner's rule). It comes from the
   feed's report (Amtrak), or from the train dropping out of its feed as it's due
   (LIRR: watched 18 Nov, its Penn feed never says DEPARTED and drops a train
-  ~30 s after it really leaves; NJ Transit likewise). A train still listed past
-  its time shows Final call for 2 min, then Boarding; one still listed 30 min
-  past its time is dropped quietly (`LISTED_PAST_S`).
+  ~30 s after it really leaves; NJ Transit likewise). A boarding train still
+  listed past its time stays on Final call until it drops out; one still listed
+  30 min past its time is dropped quietly (`LISTED_PAST_S`).
+- The greyed "usual" LIRR track is LIRR's own `sched_track` (scheduled track);
+  the posted `track` replaces it.
 - C and downtown 3: in the hour before their last train, a banner counts down
   ("The last downtown 3 train leaves at 10:24 PM, in 14 min.").
 - PATH's late-night banner ends when the night's last via-Hoboken train has

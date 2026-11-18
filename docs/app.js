@@ -154,9 +154,9 @@ const isDelayed = (r) => (r.lateMin || 0) >= 2;
 function finalCall(r, kind) {
   if (kind !== 'departures' || r.tone !== 'go' || isStale()) return false;
   const left = (r.leaves ?? r.time) - Date.now() / 1000;
-  // Past its time but still in its feed (it hasn't left): final call for 2
-  // more minutes, then plain boarding until it goes. (Amtrak has its own rule.)
-  return left > (r.departsByFeed ? 0 : -120) && left <= (isDelayed(r) ? 120 : 60);
+  // Past its time but still listed and boarding (it hasn't left): final call
+  // until its feed shows it has gone. (Amtrak has its own rule.)
+  return (r.departsByFeed ? left > 0 : true) && left <= (isDelayed(r) ? 120 : 60);
 }
 
 function shownStatus(r, kind) {
@@ -412,11 +412,23 @@ const nyDayAt = (epoch) => {
   nyParts.formatToParts(new Date(epoch * 1000)).forEach((x) => { p[x.type] = x.value; });
   return { day: p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday', mins: +p.hour * 60 + +p.minute };
 };
-function lateNightTrain(stationId, route, dir, epoch) {
+function lateNightTrain(stationId, route, dir, epoch, code) {
   const w = subwayData && subwayData.night && ((subwayData.night[stationId] || {})[route] || {})[dir];
   if (!w) return false;
   const { day, mins: m } = nyDayAt(epoch);
   const sched = (d) => w[d === nyNow().day ? scheduleToday(d) : d];
+  // Near the changeovers, go by which scheduled trip this is: a night train
+  // running late keeps its pill until it leaves Penn; a day train doesn't get one.
+  if (code) {
+    // Minutes between two clock times, across midnight (0 to 720).
+    const apart = (a, b) => { const d = ((a - b) % 1440 + 1440) % 1440; return Math.min(d, 1440 - d); };
+    const near = (W) => W && W.trips && (apart(m, W.to) <= 150 || apart(m, W.from) <= 150);
+    for (const d of [day, nyDayAt(epoch - 86400).day]) {
+      const W = sched(d);
+      if (W && W.trips && W.trips.includes(code)) return true;
+    }
+    if (near(sched(day))) return false;
+  }
   if (m >= 12 * 60) { const T = sched(day); return !!T && T.from >= 12 * 60 && m >= T.from; }
   // After midnight: the night began the evening before (or just after midnight).
   const T = sched(day), Y = sched(nyDayAt(epoch - 86400).day);
@@ -474,14 +486,50 @@ function pathState() {
   if (m >= T.lastDirect - 60) return { phase: 'countdown', lastDirect: T.lastDirect, nightStart: T.nightStart, left: T.lastDirect - m };
   return { phase: 'day' };
 }
-// A PATH train leaving at this time (minutes after midnight, today) runs in
-// the late-night pattern: after the last direct Journal Square train, or
-// before the first one.
-function pathLateNight(minsAfterMidnight) {
-  const T = pathDay(nyNow().day);
-  if (!T) return false;
-  const m = ((minsAfterMidnight % 1440) + 1440) % 1440;
-  return m > T.lastDirect || m < T.firstDirect;
+// PATH's late-night trains, per line (Journal Square, direct or via Hoboken;
+// Hoboken), from its timetable: trains 16+ min apart are the night pattern
+// (PATH's normal evening service is every 15). 'to' is the first morning
+// train that's part of frequent service again; 'from' the first evening train
+// of the night pattern. A live train is matched to its scheduled departure,
+// so a late-running night train keeps its pill until it leaves.
+const PATH_NIGHT_GAP = 16;
+const pathLine = (dest) => (/journal/i.test(dest) ? 'JSQ' : /hoboken/i.test(dest) ? 'HOB' : dest);
+const pathNightCache = new Map();
+function pathNightWindow(day, line) {
+  const key = `${day}|${line}`;
+  if (pathNightCache.has(key)) return pathNightCache.get(key);
+  const list = ((pathSchedule && pathSchedule.days[day]) || []).filter((d) => pathLine(d.to) === line).map((d) => d.t).sort((a, b) => a - b);
+  const morning = list.filter((t) => t < 720), evening = list.filter((t) => t >= 720);
+  let to = 720;
+  for (let i = 0; i < morning.length; i++) {
+    const t = morning[i], prev = morning[i - 1], next = morning[i + 1];
+    // Frequent again: soon after the train before; or, for a line's first
+    // train of the day (Hoboken), soon before the next one.
+    const firstOfDay = prev == null || t - prev > 180;
+    if (t >= 180 && ((!firstOfDay && t - prev < PATH_NIGHT_GAP) || (firstOfDay && next != null && next - t < PATH_NIGHT_GAP))) { to = t; break; }
+  }
+  const night = [...evening, ...morning.filter((t) => t < to).map((t) => t + 1440)];
+  let from = null;
+  for (let i = night.length - 1; i > 0; i--) {
+    if (night[i] - night[i - 1] < PATH_NIGHT_GAP) break;
+    from = night[i] % 1440;
+  }
+  const w = { from, to, times: list };
+  pathNightCache.set(key, w);
+  return w;
+}
+function pathLateNight(dest, epoch) {
+  if (!pathSchedule) return false;
+  const { day, mins } = nyDayAt(epoch);
+  const W = pathNightWindow(day, pathLine(dest));
+  // The scheduled departure this train is (closest within 8 min), else its own time.
+  const near = W.times.reduce((best, t) => (Math.abs(t - mins) < Math.abs(best - mins) ? t : best), Infinity);
+  const m = Math.abs(near - mins) <= 8 ? near : mins;
+  if (m < 12 * 60 && m < W.to) {
+    const Y = pathNightWindow(nyDayAt(epoch - 86400).day, pathLine(dest));
+    return Y.from == null ? false : Y.from >= 720 || m >= Y.from;
+  }
+  return W.from != null && W.from >= 720 && m >= W.from;
 }
 // Tags beside the PATH heading, and what goes above the train rows.
 function renderPathPattern() {
@@ -590,7 +638,7 @@ function renderSubway() {
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
       if (!trains.length) return '';
       // Late-night pill by the next train's own time and line (stays until it leaves).
-      const pill = lateNightTrain(stn.id, g.route, dir, trains[0].time) ? LATE_PILL : '';
+      const pill = lateNightTrain(stn.id, g.route, dir, trains[0].time, trains[0].code) ? LATE_PILL : '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = trains[0];
       const last = first.stops && first.stops[first.stops.length - 1];
@@ -1152,7 +1200,7 @@ function renderPath() {
     const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
     const rest = mins.length > 1 ? `, ${mins.slice(1).join(', ')}` : '';
     const dots = (g.colors.length ? g.colors : ['']).map((c) => `<i${c ? ` style="background:#${c}"` : ''}></i>`).join('');
-    const pill = pathLateNight(nyNow().mins + (mins[0] || 0)) ? LATE_PILL : '';
+    const pill = pathLateNight(dest, nowS + (mins[0] || 0) * 60) ? LATE_PILL : '';
     return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
   }).join('') + '<p class="sched-note live-note">Live times from PATH.</p>';
 }
@@ -1213,7 +1261,7 @@ function renderPathSchedule() {
   const lines = [...byDest].map(([dest, g]) => {
     const [first, ...rest] = g.times.slice(0, 3).map(fmtMins);
     const dots = g.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('');
-    const pill = pathLateNight(g.times[0]) ? LATE_PILL : '';
+    const pill = pathLateNight(dest, Date.now() / 1000 + (((g.times[0] - nyNow().mins) % 1440) + 1440) % 1440 * 60) ? LATE_PILL : '';
     // How often trains run: the typical gap between the next few trains.
     const ts = [...g.times, ...g.later].slice(0, 5);
     const gaps = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b);
