@@ -481,4 +481,5 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Trial (owner, Nov 18): a shared row with trains to more than one end (the A
   downtown) takes turns every 5 s (`ROTATE_MS`), showing each end's own next
   trains, soonest end first; name and times slide over together. Euclid Av A
-  trips keep their own row.
+  trips keep their own row. While its next train is "now" the row stops
+  turning and lists every A train's time (named by the "now" train).

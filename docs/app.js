@@ -856,8 +856,11 @@ function renderSubway() {
       // soonest first, sliding from one to the next.
       const lastOf = (x) => x.stops && x.stops[x.stops.length - 1];
       const ends = g.scheduled ? [...new Set(upcoming.map(lastOf))] : [];
+      // ...except while a train is "now": then it stops on that train and lists
+      // every A train's time, whatever its end.
+      const arriving = upcoming.length && Math.round((upcoming[0].time - nowS) / 60) <= 0;
       if (ends.length > 1) subwayTurning = true;
-      if (ends.length > 1) upcoming = upcoming.filter((x) => lastOf(x) === ends[Math.floor(Date.now() / ROTATE_MS) % ends.length]);
+      if (ends.length > 1 && !arriving) upcoming = upcoming.filter((x) => lastOf(x) === ends[Math.floor(Date.now() / ROTATE_MS) % ends.length]);
       const trains = upcoming.slice(0, 3);
       if (!trains.length) return '';
       // Late-night pill by the next train's own time and line (stays until it leaves).
