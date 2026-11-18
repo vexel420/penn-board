@@ -360,17 +360,23 @@ function parseAlerts(feed, keep) {
   return [...byText.values()];
 }
 
-// The subway notices file is about 1 MB, so it is read every 3 minutes, and
-// never forced by the on-the-minute refresh.
-const subwayAlerts = source('subway-alerts', 180, async () =>
-  parseAlerts(await (await get(ALERT_FEEDS.subway)).json(), (lines, stops) =>
+// Notices refresh as often as trains (every 20 s and on the minute) wherever
+// that's cheap: on the server, or in the browser through the relay, which
+// trims the MTA's 1 MB subway file to a few KB. A browser with no relay reads
+// the full file only every 3 minutes.
+const IN_BROWSER = typeof window !== 'undefined';
+const relayBase = () => (IN_BROWSER && window.PENN_RELAY ? window.PENN_RELAY.replace(/\/$/, '') : '');
+const FAST_ALERTS = !IN_BROWSER || !!relayBase();
+const alertUrl = (feed) => (relayBase() ? `${relayBase()}/alerts/${feed}` : ALERT_FEEDS[feed]);
+const subwayAlerts = source('subway-alerts', FAST_ALERTS ? 20 : 180, async () =>
+  parseAlerts(await (await get(alertUrl('subway'))).json(), (lines, stops) =>
     lines.some((l) => PENN_LINES.has(l)) || stops.some((s) => /^(128|A28)[NS]?$/.test(s))));
 // LIRR notices about branches and stations apply to trains from Penn too;
 // leave out ones about Grand Central only, which LIRR trains from Penn
 // don't reach.
 const aboutGrandCentralOnly = (text) => /grand central/i.test(text) && !/penn/i.test(text);
-const lirrAlerts = source('lirr-alerts', 120, async () =>
-  parseAlerts(await (await get(ALERT_FEEDS.lirr)).json(), (lines, stops, text) => !aboutGrandCentralOnly(text)));
+const lirrAlerts = source('lirr-alerts', FAST_ALERTS ? 20 : 120, async () =>
+  parseAlerts(await (await get(alertUrl('lirr'))).json(), (lines, stops, text) => !aboutGrandCentralOnly(text)));
 
 // Amtrak publishes notices per train; list each train's once.
 function amtrakNotices(rows) {
@@ -391,7 +397,8 @@ function amtrakNotices(rows) {
 // are optional { data, error } results that only the server can supply.
 async function board(extra = {}) {
   const force = !!extra.force;
-  const [l, a, s, sa, la] = await Promise.all([lirr(force), amtrak(force), subway(force), subwayAlerts(), lirrAlerts()]);
+  const fastAlerts = force && FAST_ALERTS;
+  const [l, a, s, sa, la] = await Promise.all([lirr(force), amtrak(force), subway(force), subwayAlerts(fastAlerts), lirrAlerts(fastAlerts)]);
   const n = extra.njt || { data: null, error: null };
   const p = extra.path || { data: null, error: null };
   const t = now();

@@ -77,6 +77,16 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   the 2 from about 23:03 to 05:47. Plan: precompute these per line and day
   into `subway-data.json` to drive the countdowns.
 
+## Deploying changes (cache busting)
+
+GitHub Pages lets browsers keep files for 10 minutes. `docs/index.html` loads
+`style.css`, `config.js`, `feeds.js` and `app.js` with `?v=<stamp>`; bump the
+stamp whenever any of them changes, e.g.
+`V=$(date -u +%Y%m%d%H%M); sed -i -E "s#(style\.css|config\.js|feeds\.js|app\.js)\?v=[0-9]+#\1?v=$V#g" docs/index.html`.
+Worker changes deploy separately (Workers API with the saved token, or the
+dashboard); the board's alerts now come through `/alerts/subway` and
+`/alerts/lirr` on the Worker, refreshed every 20 s.
+
 ## PATH (updated 19 Nov)
 
 - Timetable: `scripts/build-path-schedule.py` now reads PATH's own schedule

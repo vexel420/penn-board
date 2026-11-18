@@ -622,7 +622,7 @@ function renderPath() {
     const dots = (g.colors.length ? g.colors : ['']).map((c) => `<i${c ? ` style="background:#${c}"` : ''}></i>`).join('');
     const pill = pathLateNight(nyNow().mins + (mins[0] || 0)) ? LATE_PILL : '';
     return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
-  }).join('');
+  }).join('') + '<p class="sched-note live-note">Live times from PATH.</p>';
 }
 
 // ---------- PATH timetable, shown when live PATH times aren't available ----------
