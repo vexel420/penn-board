@@ -77,6 +77,27 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   the 2 from about 23:03 to 05:47. Plan: precompute these per line and day
   into `subway-data.json` to drive the countdowns.
 
+## Subway late-night / daytime / weekend: agreed design (19 Nov, not built yet)
+
+Owner decisions so far (see `design/switchover-tags-express-banner.png`):
+- Tags beside the "Subway" heading: "Late-night service" (moon) and
+  "Weekend service" (calendar), both shown together when both apply.
+- Late-night trains carry a pill: moon + "Late night".
+- Banners live inside each station box's Express section; 1 2 3 and A C E
+  follow the same rules.
+- Evening: banner counts down from one hour before the first late-night train
+  ENTERS SERVICE on the line (e.g. A leaves Inwood 22:08 weekdays), then says
+  late-night service has started, and stays until the LAST EXPRESS train has
+  left Penn.
+- Late nights: the Express heading stays with "No express trains late nights.
+  A trains run local until 5:38 AM."
+- Morning: no countdown banner. Express trains simply appear with their
+  normal minute countdowns. A "Daytime service has started" banner shows only
+  until the first express train reaches Penn; late-night trains still at Penn
+  keep their pill.
+- Times come from the MTA GTFS per line and day (weekday / Saturday / Sunday).
+- Still to confirm: when the tags switch on and off, and holiday wording.
+
 ## Service notices (18 Nov, owner chose option A)
 
 - `docs/feeds.js`: MTA alert feeds (`camsys/subway-alerts.json` ~1 MB, read
