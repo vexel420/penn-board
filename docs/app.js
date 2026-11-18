@@ -1,5 +1,5 @@
 const REFRESH_MS = 20000;
-const CARRIERS = { lirr: 'LIRR', njt: 'NJ Transit', amtrak: 'Amtrak' };
+const CARRIERS = { lirr: 'LIRR', njt: 'NJ Transit', amtrak: 'Amtrak', path: 'PATH' };
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -1568,7 +1568,7 @@ function noticeStrip(list, where) {
   let opened = false;
   try { opened = sessionStorage.getItem('opened-' + where) === sig; } catch {}
   const urgent = list.some((n) => n.urgent);
-  const label = where === 'subway' ? 'Subway service notices' : 'Service notices for trains at Penn';
+  const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : 'Service notices for trains at Penn';
   // Notices that close or reroute part of a line open a map.
   const mapBtn = (n) => (typeof changeModel === 'function' && changeModel(n) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
   const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}</p></div>`).join('');
@@ -1578,6 +1578,7 @@ function renderServiceNotices() {
   if (!board || !board.notices) return;
   $('rail-notices').innerHTML = noticeStrip(board.notices.rail, 'rail');
   $('subway-notices').innerHTML = noticeStrip(board.notices.subway, 'subway');
+  $('path-notices').innerHTML = noticeStrip(board.notices.path, 'path');
   renderAlertsTab();
 }
 // Phones: every notice on its own tab, by where it applies, with a count on
@@ -1591,8 +1592,8 @@ function renderAlertsTab() {
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
   $('alerts').innerHTML = group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
     + group('Subway', subway, 'No subway notices for the lines at Penn right now.')
-    + group('PATH', [], 'No PATH notices on this board yet.');
-  const n = rail.length + subway.length;
+    + group('PATH', board.notices.path || [], 'No PATH alerts right now.');
+  const n = rail.length + subway.length + (board.notices.path || []).length;
   $('alerts-count').textContent = n ? String(n) : '';
 }
 document.addEventListener('toggle', (e) => {
@@ -1636,8 +1637,8 @@ async function loadBoard(force) {
     direct = true;
   }
   // No server: read PATH's live times through the relay, if one is set up.
-  const path = window.PENN_RELAY ? await PennFeeds.relayPath(force) : null;
-  return PennFeeds.board({ force, path: path || undefined });
+  const [path, pa] = window.PENN_RELAY ? await Promise.all([PennFeeds.relayPath(force), PennFeeds.relayPathAlerts(force)]) : [null, null];
+  return PennFeeds.board({ force, path: path || undefined, pathAlerts: pa && pa.data ? pa.data : [] });
 }
 
 let loading = null;

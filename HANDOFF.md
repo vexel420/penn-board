@@ -534,3 +534,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   Deploy metadata must include the KV binding and keep_bindings secret_text.
 - Subway slides: renderSubway waits until a destination slide (1 s, SLIDE_MS) has finished before redrawing, so data/tick redraws no longer cut slides short.
 - Subway: if any train in a line/direction/service is rerouted, that line's destinations stop turning and get separate still rows (so the rerouted one shows 'Rerouted, see map').
+- PATH alerts (Nov 18): relay /path-alerts (Port Authority's alerts?agency=PATH&hours=8, a list of messages per incident 'ebid' with state Open/Closed). The board shows each open incident's latest message (time stamp removed) in a 'PATH alerts' strip above PATH times and in the phone Alerts tab.

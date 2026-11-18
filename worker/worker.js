@@ -6,6 +6,7 @@
 //   GET /alerts/subway  MTA subway service notices for lines at Penn (1 2 3 A C E,
 //                       or the Penn stations), in effect now or within the hour
 //   GET /alerts/lirr    LIRR service notices in effect now or within the hour
+//   GET /path-alerts    PATH's alerts from the last 8 hours (Port Authority)
 //   GET /njt            NJ Transit's departures from Penn (station NY), with
 //                       tracks and status, plus its station messages. Uses the
 //                       owner's NJ Transit RailData login, kept as the Worker
@@ -18,6 +19,8 @@
 // asked at most a few times a minute. See worker/README.md for setup.
 
 const PATH_FEED = 'https://www.panynj.gov/bin/portauthority/ridepath.json';
+// PATH's alerts (the Port Authority's site; no CORS header, so relayed too).
+const PATH_ALERTS = 'https://www.panynj.gov/bin/portauthority/alerts?agency=PATH&hours=8';
 const MTA_ALERTS = {
   subway: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json',
   lirr: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Flirr-alerts.json',
@@ -163,6 +166,7 @@ export default {
     const { pathname } = new URL(request.url);
     try {
       if (pathname === '/path') return json(await (await upstream(PATH_FEED, 15)).text(), 15);
+      if (pathname === '/path-alerts') return json(await (await upstream(PATH_ALERTS, 20)).text(), 20);
       if (pathname === '/njt-server') {
         // Which NJ Transit server the relay is using (no data, no secrets).
         await getToken(env, false).catch(() => {});

@@ -560,6 +560,7 @@ async function board(extra = {}) {
         ...njtNoticeList,
       ],
       subway: (sa.data || []).filter((x) => reachableFromPenn(x, s.data)).map((x) => ({ ...x, carrier: 'subway' })),
+      path: extra.pathAlerts || [],
     },
     sources: {
       lirr: { ok: !!l.data && !l.error, error: l.error },
@@ -573,10 +574,35 @@ async function board(extra = {}) {
 
 // Live PATH through the relay (docs/config.js), for the version of the site
 // without its own server.
+// PATH alerts: each incident (ebid) has a series of messages; show its latest,
+// while the incident is open ("Closed" is PATH's final update). The text is
+// PATH's own, minus the time stamp it starts with.
+function parsePathAlerts(list) {
+  const latest = new Map();
+  for (const m of Array.isArray(list) ? list : []) {
+    const at = +(/\d+/.exec(m.sentdate2 || '') || [0])[0];
+    const k = m.ebid || m.messageid;
+    if (!latest.has(k) || latest.get(k).at < at) latest.set(k, { ...m, at });
+  }
+  return [...latest.values()].filter((m) => String(m.state || '').toLowerCase() === 'open')
+    .sort((a, b) => b.at - a.at)
+    .map((m) => {
+      const text = String(m.SentMessage || m.Subject || '').replace(/^\s*\d{1,2}:\d{2}\s*[AP]M:\s*/i, '').replace(/\s+/g, ' ').trim();
+      // A short label like the MTA's ("Delays", "Elevator"); PATH's own words follow.
+      const what = `${m.Subject} ${m.TemplateName}`;
+      const type = /elevator|escalator/i.test(what) ? 'Elevator' : /suspend/i.test(what) ? 'Suspended' : /delay|mechanical|problem|signal/i.test(what) ? 'Delays' : 'Service notice';
+      return { id: `path-${m.ebid || m.messageid}`, carrier: 'path', type, urgent: URGENT.test(`${m.Subject} ${text}`) || /delay|suspend|out of service/i.test(text), lines: [], text };
+    });
+}
+const relayPathAlerts = source('relay-path-alerts', 20, async () => {
+  const base = typeof window !== 'undefined' && window.PENN_RELAY;
+  return parsePathAlerts(await (await get(`${base.replace(/\/$/, '')}/path-alerts`)).json());
+});
+
 const relayPath = source('relay-path', 20, async () => {
   const base = typeof window !== 'undefined' && window.PENN_RELAY;
   return parsePath(await (await get(`${base.replace(/\/$/, '')}/path`)).json());
 });
 
-return { board, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
+return { board, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
 });
