@@ -489,11 +489,15 @@ let subwayData;            // undefined: not loaded yet; null: couldn't load
 let subwayDataLoading = null;
 function loadSubwayData() {
   if (subwayData !== undefined || subwayDataLoading) return;
-  subwayDataLoading = fetch('subway-data.json')
+  // (If it doesn't load, say on a weak phone connection, it's tried again in
+  // 20 s rather than never: line badges and maps depend on it.)
+  subwayDataLoading = fetch(`subway-data.json?v=${document.querySelector('script[src^="app.js"]').src.split('v=')[1] || ''}`)
     .then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((d) => {
-      if (d) for (const r of Object.values(d.routes)) r.normalSet = new Set(r.normal);
-      subwayData = d; subwayDataLoading = null; renderSubway(); renderServiceNotices();
+      subwayDataLoading = null;
+      if (!d) { setTimeout(loadSubwayData, 20000); return; }
+      for (const r of Object.values(d.routes)) r.normalSet = new Set(r.normal);
+      subwayData = d; renderSubway(); renderServiceNotices();
     });
 }
 const lineInfo = (route) => (subwayData && subwayData.routes[route]) || { label: route, color: '#6b7a70', text: '#ffffff' };
@@ -1542,7 +1546,7 @@ const friendlyType = (t) => {
   return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); // sentence case
 };
 function noticeWho(n) {
-  if (n.carrier === 'subway') return n.lines.filter((l) => subwayData && subwayData.routes[l]).slice(0, 4).map((l) => bulletHtml(l, 'tiny')).join('') || bulletHtml('S', 'tiny');
+  if (n.carrier === 'subway') return n.lines.filter((l) => /^[A-Z0-9]{1,2}$/.test(l)).slice(0, 4).map((l) => bulletHtml(l, 'tiny')).join('') || bulletHtml('S', 'tiny');
   return `<span class="plate ${n.carrier}">${CARRIERS[n.carrier]}</span>`;
 }
 // The MTA writes symbols into notice text: "[1]" is a line, "[SIR]" the
@@ -1558,7 +1562,9 @@ const noticeIcon = ([label, path]) => `<svg class="ic notice-ic" viewBox="0 0 24
 const noticeText = (t) => esc(t)
   .replace(/\[([a-z ]+?) icon\]/gi, (m, name) => (NOTICE_ICONS[name.toLowerCase()] ? noticeIcon(NOTICE_ICONS[name.toLowerCase()]) : ''))
   .replace(/\[SIR\]/g, () => (subwayData && subwayData.routes.SI ? bulletHtml('SI', 'tiny') : 'SIR'))
-  .replace(/\[([A-Z0-9]{1,2})\]/g, (m, l) => (subwayData && subwayData.routes[l] ? bulletHtml(l, 'tiny') : m))
+  // A line in brackets ("[1]") is its badge; until line colours have loaded,
+  // just the line's name, never the brackets.
+  .replace(/\[([A-Z0-9]{1,2})\]/g, (m, l) => (subwayData && subwayData.routes[l] ? bulletHtml(l, 'tiny') : `<b>${l}</b>`))
   .replace(/ {2,}/g, ' ').trim();
 function noticeStrip(list, where) {
   if (!list || !list.length) return '';
