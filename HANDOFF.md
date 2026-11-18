@@ -515,3 +515,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   commercial purposes" (owner asked about ads: ask passcomm@njtransit.com first). Blank NJT status shows
   "On time" or "N min late"; NJT's own status text is shown as-is. NJT's list
   includes Amtrak trains (ids "A2127") with tracks, merged into Amtrak rows.
+- Nov 18 check: on the TEST server none of getTrainSchedule, getTrainSchedule19Rec or getStationSchedule carry tracks or statuses (0 of 19 / 474 trains). Production access is needed for tracks.
