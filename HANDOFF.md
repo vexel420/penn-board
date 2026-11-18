@@ -505,7 +505,13 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   only works there). Swap order/remove the test host once NJ Transit moves the
   account to production.
 - The page reads `${PENN_RELAY}/njt` (`relayNjt` in docs/feeds.js);
-  `parseNjt` / `njtNotices` are shared with server.js. Destinations: "-SEC"
-  removed, "&#9992" shown as ✈ (Newark Airport stop). Blank NJT status shows
+  `parseNjt` / `njtNotices` are shared with server.js. NJ Transit's agreement
+  requires data "as-is": destinations and line names are shown exactly as
+  sent ("Trenton -SEC", "Northeast Corrdr Line"); only "&#9992" is rendered
+  as ✈. Footer says the data "may not be real-time" (required when latency
+  can exceed 1 min). Agreement also: data only from our own server (relay ✓),
+  no implying NJT licence or accuracy, max 100,000 requests/day (relay: ~2
+  calls per 30 s per Cloudflare location), and "not to be relied on for any
+  commercial purposes" (owner asked about ads: ask passcomm@njtransit.com first). Blank NJT status shows
   "On time" or "N min late"; NJT's own status text is shown as-is. NJT's list
   includes Amtrak trains (ids "A2127") with tracks, merged into Amtrak rows.

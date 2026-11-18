@@ -454,9 +454,10 @@ function njtTime(s) { // "17-Nov-2026 10:05:00 PM"
   const h = (+m[4] % 12) + (m[7] === 'PM' ? 12 : 0);
   return nyToEpoch(+m[3], NJT_MONTHS[m[2]], +m[1], h, +m[5], +m[6]);
 }
-// NJ Transit writes extra marks into destinations: "-SEC" (the train stops at
-// Secaucus, as nearly all do) and "&#9992" (a plane: it stops at Newark Airport).
-const njtPlace = (d) => String(d || '').replace(/&nbsp;/g, ' ').replace(/&#9992;?/g, '✈').replace(/\s*-SEC\b/g, '').replace(/\s+/g, ' ').trim();
+// NJ Transit's agreement says its data must be used as-is, so destinations are
+// shown exactly as sent ("Trenton -SEC"); only its HTML codes are displayed as
+// the characters they stand for ("&#9992" is ✈, a Newark Airport stop).
+const njtPlace = (d) => String(d || '').replace(/&nbsp;/g, ' ').replace(/&#9992;?/g, '✈').trim();
 // getTrainSchedule ITEMS -> board rows. Its Penn Station list includes Amtrak
 // trains (ids "A2127") with their tracks, which Amtrak doesn't publish.
 function parseNjt(items) {
@@ -483,7 +484,7 @@ function parseNjt(items) {
       leaves: sched + lateSec, // when it should leave, delay included
       lateMin,
       place: njtPlace(it.DESTINATION),
-      line: String(it.LINE || '').replace(/Corrdr/, 'Corridor').replace(/^No Jersey/, 'North Jersey'),
+      line: String(it.LINE || ''), // as sent ("Northeast Corrdr Line")
       train: String(it.TRAIN_ID || '').replace(/^A(?=\d)/, ''),
       track: String(it.TRACK || '').trim(),
       trackLikely: '',
