@@ -1388,7 +1388,7 @@ function renderPathSchedule() {
 
 // ---------- service notices ----------
 // One strip per place: railroads above the train list, the subway in its
-// panel. It starts open; closing it is remembered for this visit until a new
+// panel. It starts collapsed; opening it is remembered for this visit until
 // notice arrives.
 const friendlyType = (t) => {
   const x = t.replace(/^Planned - /, 'Planned work, ');
@@ -1416,14 +1416,16 @@ const noticeText = (t) => esc(t)
 function noticeStrip(list, where) {
   if (!list || !list.length) return '';
   const sig = list.map((n) => n.id).join('|');
-  let closed = false;
-  try { closed = sessionStorage.getItem('closed-' + where) === sig; } catch {}
+  // Starts collapsed (owner's choice); opening it is remembered for this visit
+  // until the set of notices changes.
+  let opened = false;
+  try { opened = sessionStorage.getItem('opened-' + where) === sig; } catch {}
   const urgent = list.some((n) => n.urgent);
   const label = where === 'subway' ? 'Subway service notices' : 'Service notices for trains at Penn';
   // Notices that close or reroute part of a line open a map.
   const mapBtn = (n) => (typeof changeModel === 'function' && changeModel(n) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
   const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}</p></div>`).join('');
-  return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${closed ? '' : ' open'}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
+  return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${opened ? ' open' : ''}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
 }
 function renderServiceNotices() {
   if (!board || !board.notices) return;
@@ -1449,7 +1451,7 @@ function renderAlertsTab() {
 document.addEventListener('toggle', (e) => {
   const d = e.target;
   if (!d.classList || !d.classList.contains('al-strip')) return;
-  try { d.open ? sessionStorage.removeItem('closed-' + d.dataset.where) : sessionStorage.setItem('closed-' + d.dataset.where, d.dataset.sig); } catch {}
+  try { d.open ? sessionStorage.setItem('opened-' + d.dataset.where, d.dataset.sig) : sessionStorage.removeItem('opened-' + d.dataset.where); } catch {}
 }, true);
 
 function renderNotices() {
