@@ -402,3 +402,20 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - The relay now passes subway notices' full text (`description_text`); about 30 KB.
 - Map: Leaflet + OpenStreetMap tiles, made pale in CSS (`.cm-tiles`); labels are
   placed to avoid overlaps (`placeLabels`) and re-placed on zoom.
+
+## Fixes (Nov 18, 2026, afternoon)
+- Subway rows: one row per destination (`route|dir|svc|last stop`), so a line
+  with two destinations during a service change no longer flips between them.
+- Rerouted-train map note names the line borrowed: "running via the A line from
+  59 St-Columbus Circle to Inwood-207 St" (the line normally serving most of the
+  unusual stops).
+- Late-night pill is per train (`lateNightTrain`): a train at Penn before the
+  station's switching line's first daytime express (2 for 1 2 3, A for A C E),
+  or after its last evening express. It stays on each train until it leaves.
+- "Daytime service has started on the C/3" banners: `nightGaps` now has
+  `firstStart` (first morning train leaves its terminal); the banner shows from
+  then until a train of that line shows "now" at Penn (or 30 min after due).
+- LIRR: its Penn feed never says DEPARTED; it drops a train ~30 s after it
+  really leaves (watched 18 Nov). The board treats that as Departed. The clock
+  fallback now waits 10 min (`departGrace`), so a late train whose delay hasn't
+  reached the feed keeps showing Final call (2 min past) then Boarding.

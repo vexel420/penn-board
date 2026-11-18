@@ -133,15 +133,20 @@ const subway = source('subway', 20, async () => {
     const route = trip.route.replace(/X$/, '');
     const stops = trip.stops.slice(at).map((s) => s.id.slice(0, -1));
     const svc = serviceFromPenn(route, stops);
-    const key = route + dir + svc;
-    if (!groups.has(key)) groups.set(key, { route, dir, svc, trains: [] });
+    // One row per destination: during a service change trains of the same
+    // line can end at different places (A to Far Rockaway, A to Chambers St),
+    // and each needs its own row rather than one row that flips between them.
+    const last = stops[stops.length - 1];
+    const key = `${route}|${dir}|${svc}|${last}`;
+    if (!groups.has(key)) groups.set(key, { route, dir, svc, dest: last, trains: [] });
     groups.get(key).trains.push({ time: stop.time, stops });
   }
   return [...groups.values()].map((g) => {
     g.trains.sort((a, b) => a.time - b.time);
     g.trains = g.trains.slice(0, 4);
     return g;
-  }).sort((a, b) => (a.route + a.dir + a.svc).localeCompare(b.route + b.dir + b.svc));
+  // Lines in order; a line's destinations by its next train.
+  }).sort((a, b) => (a.route + a.dir + a.svc).localeCompare(b.route + b.dir + b.svc) || a.trains[0].time - b.trains[0].time);
 });
 
 // ---------- PATH (Port Authority feed; 33 St station, a block east of Penn) ----------
@@ -227,6 +232,12 @@ const lirr = source('lirr', 20, async () => {
       // fallback (its listed time may not include a delay, so add it).
       departed: leaving && departed,
       leaves: a.time + delaySec,
+      // LIRR's feed drops a train from Penn's list about half a minute after it
+      // really leaves (it never says "departed" here); the page shows that as
+      // Departed. A delay can reach the feed late, so the clock only takes
+      // over 10 min after `leaves`: a late train still at the platform keeps
+      // boarding instead of showing as gone.
+      departGrace: 600,
       via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(stationName),
       viaCodes: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined), // to match LIRR's per-train progress
     });

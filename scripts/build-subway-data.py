@@ -78,7 +78,12 @@ def night_gap(trips_at_penn):
         return None
     gaps = [((times[(i + 1) % len(times)] - t) % 1440, t, times[(i + 1) % len(times)]) for i, t in enumerate(times)]
     size, after, until = max(gaps)
-    return {'after': after, 'until': until} if size > NIGHT_GAP_MIN else None
+    if size <= NIGHT_GAP_MIN:
+        return None
+    # When the first train after the break sets off from its terminal: the
+    # board says "Daytime service has started" from then until it reaches Penn.
+    first = min((t for t in trips_at_penn if t[0] % 1440 == until), key=lambda t: t[1])
+    return {'after': after, 'until': until, 'firstStart': first[1] % 1440}
 
 
 def simplify(p, eps):

@@ -77,7 +77,7 @@ function departedAt(r) {
   }
   if (r.departsByFeed) return null; // Amtrak: only its own report counts
   const leaves = r.leaves ?? r.time;
-  return leaves <= nowS ? leaves : null;
+  return leaves + (r.departGrace || 0) <= nowS ? leaves : null;
 }
 
 // A departed train stays on the board for DEPARTED_SHOWN_S from when the
@@ -151,7 +151,9 @@ const isDelayed = (r) => (r.lateMin || 0) >= 2;
 function finalCall(r, kind) {
   if (kind !== 'departures' || r.tone !== 'go' || isStale()) return false;
   const left = (r.leaves ?? r.time) - Date.now() / 1000;
-  return left > 0 && left <= (isDelayed(r) ? 120 : 60);
+  // Past its time but still in LIRR's feed (it hasn't left): final call for
+  // 2 more minutes, then plain boarding until it goes.
+  return left > (r.departGrace ? -120 : 0) && left <= (isDelayed(r) ? 120 : 60);
 }
 
 function shownStatus(r, kind) {
@@ -377,7 +379,10 @@ function switchState(stationId, line, dir) {
 
 // Lines with no trains from Penn late at night (the C; the 3 downtown, which
 // ends at Penn), from the timetable: subway-data.json "nightGaps" holds the
-// last train before the break, the first after it, and the line to take.
+// last train before the break, the first after it, and when that first
+// morning train sets off. Phases: 'night' (no trains), then 'morning' from
+// when the first train sets off until one shows "now" at Penn ("Daytime
+// service has started on the C").
 function nightGapState(stationId, line, dir) {
   const g = subwayData && subwayData.nightGaps && ((subwayData.nightGaps[stationId] || {})[line] || {})[dir];
   if (!g) return null;
@@ -385,9 +390,28 @@ function nightGapState(stationId, line, dir) {
   const T = g[scheduleToday(today.day)], N = g[tom.day] || T;
   if (!T) return null;
   const m = today.mins;
-  if (m >= 12 * 60 && m > T.after) return { ...T, until: N.until };
-  if (m < 12 * 60 && m < T.until) return T;
+  const key = `${today.date}|${stationId}|${line}|${dir}|gap`;
+  if (m >= 12 * 60 && m > T.after) return { ...T, until: N.until, phase: 'night', key };
+  if (m < 12 * 60 && m < (T.firstStart ?? T.until)) return { ...T, phase: 'night', key };
+  if (m < 12 * 60 && !morningReached.has(key) && m < T.until + 30) return { ...T, phase: 'morning', key };
   return null;
+}
+// A train at Penn at this time (epoch seconds) is a late-night train: before
+// the first daytime express reaches Penn in the morning, or after the last
+// express leaves at night, by the timetable of the station's switching line
+// (the 2 for the 1 2 3, the A for the A C E). Every line there gets the pill,
+// and it stays on each train until it leaves.
+const SWITCH_LINE = { '128': '2', A28: 'A' };
+function lateNightTrain(stationId, dir, epoch) {
+  const sw = subwayData && subwayData.switches && ((subwayData.switches[stationId] || {})[SWITCH_LINE[stationId]] || {})[dir];
+  if (!sw) return false;
+  const p = {};
+  nyParts.formatToParts(new Date(epoch * 1000)).forEach((x) => { p[x.type] = x.value; });
+  const day = p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday';
+  const m = +p.hour * 60 + +p.minute;
+  const T = sw[day === nyNow().day ? scheduleToday(day) : day];
+  if (!T) return false;
+  return m < 12 * 60 ? m < T.firstExpressPenn : m >= T.lastExpress;
 }
 
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
@@ -491,15 +515,17 @@ function renderSubway() {
       states.push(x.st);
     }
     const lateNight = (route) => switching.some((x) => x.line === route) && (switching.find((x) => x.line === route).st.phase !== 'day' || morningNow);
-    // This platform direction is on its late-night schedule: no more express
-    // trains until morning. Every train here then gets the pill, locals too,
-    // because late-night service runs less often.
-    const dirNight = switching.some((x) => x.st.phase === 'night' || x.st.phase === 'morning');
     const parts = ['express', 'local'].map((svc) => {
     let notes = '';
     // A line that isn't running late at night says which train to take.
     const gaps = stn.lines.map((line) => {
-      const g = nightGapState(stn.id, line, dir);
+      let g = nightGapState(stn.id, line, dir);
+      // The first morning train showing "now" at Penn ends "Daytime service has started".
+      if (g && g.phase === 'morning' && here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time - nowS < 30))) {
+        morningReached.add(g.key);
+        g = nightGapState(stn.id, line, dir);
+      }
+      if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${esc(lineInfo(line).label)}.</b></span></p>`;
       if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
       // The other lines at this station still running this way (C: A or E; 3: 1 or 2).
       const alts = stn.lines.filter((l) => l !== line && !nightGapState(stn.id, l, dir)).map((l) => esc(lineInfo(l).label));
@@ -531,9 +557,12 @@ function renderSubway() {
     }
     notes += gaps;
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
-      const pill = (svc === 'local' && lateNight(g.route)) || dirNight ? LATE_PILL : '';
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
       if (!trains.length) return '';
+      // Late-night pill by the next train's own time (stays until it leaves);
+      // in the evening, the switching line's locals get it as soon as
+      // late-night service has started.
+      const pill = lateNightTrain(stn.id, dir, trains[0].time) || (svc === 'local' && lateNight(g.route) && !morningNow) ? LATE_PILL : '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = trains[0];
       const last = first.stops && first.stops[first.stops.length - 1];
@@ -597,7 +626,16 @@ async function openReroute({ route, svc, train }) {
   const unusual = new Set(unusualStops(route, train));
   const dest = stationName(stops[stops.length - 1]);
   $('reroute-h').innerHTML = `${bulletHtml(route)}<span>${esc(l.label)} train to ${esc(dest)}</span>`;
-  $('reroute-note').textContent = `This ${l.label} train is running on a different route from normal, ${svc === 'express' ? 'express' : 'local'} from Penn. ` +
+  // The line it's borrowing: the one that normally stops at most of the
+  // unusual stations (the E to Inwood runs via the A), and where it joins and leaves it.
+  const odd = stops.filter((id) => unusual.has(id));
+  const via = Object.keys(subwayData.routes).filter((r) => r !== route)
+    .map((r) => ({ r, n: odd.filter((id) => subwayData.routes[r].normalSet.has(id)).length }))
+    .sort((a, b) => b.n - a.n)[0];
+  const viaText = via && via.n >= Math.ceil(odd.length / 2)
+    ? `running via the ${lineInfo(via.r).label} line from ${stationName(odd[0])} to ${stationName(odd[odd.length - 1])}`
+    : 'running on a different route from normal';
+  $('reroute-note').textContent = `This ${l.label} train is ${viaText}, ${svc === 'express' ? 'express' : 'local'} from Penn. ` +
     `${unusual.size === 1 ? 'The station in gold is one' : `The ${unusual.size} stations in gold are ones`} the ${l.label} doesn’t usually stop at.`;
   $('reroute-stops').innerHTML = stops.map((id) => unusual.has(id)
     ? `<li class="unusual">${esc(stationName(id))} <small>not usual for the ${esc(l.label)}</small></li>`
