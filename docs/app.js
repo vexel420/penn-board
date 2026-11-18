@@ -364,19 +364,64 @@ const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 // Journal Square via Hoboken (about 11 PM to 6 AM). PATH trains leaving in
 // those hours get the pill on any day; weekend daytime via-Hoboken trains are
 // the weekend pattern, not late night.
-function pathNightWindow() {
-  const wk = pathSchedule && pathSchedule.days && pathSchedule.days.weekday;
-  if (!wk) return null;
-  const via = wk.filter((d) => /via/i.test(d.to)).map((d) => d.t);
-  const evening = via.filter((t) => t >= 18 * 60), morning = via.filter((t) => t < 12 * 60);
-  if (!evening.length || !morning.length) return null;
-  return { start: Math.min(...evening), end: Math.max(...morning) };
+// PATH's day and late-night patterns from 33 St, per day, from PATH's
+// timetable: direct Journal Square trains by day, Journal Square via Hoboken
+// late at night (weekdays about 10:40 PM to 6 AM; weekends 9 PM to 10 AM).
+function pathDay(day) {
+  const list = pathSchedule && pathSchedule.days && pathSchedule.days[day];
+  if (!list) return null;
+  const direct = list.filter((d) => d.to === 'Journal Square').map((d) => d.t);
+  const via = list.filter((d) => /via/i.test(d.to)).map((d) => d.t);
+  if (!direct.length || !via.length) return null;
+  const lastDirect = Math.max(...direct);
+  const viaAfter = via.filter((t) => t > lastDirect);
+  return {
+    firstDirect: Math.min(...direct),
+    lastDirect,
+    nightStart: viaAfter.length ? Math.min(...viaAfter) : null, // first via-Hoboken train of the night
+  };
 }
+// Where PATH stands now: 'countdown' (last direct train within the hour),
+// 'night' (no direct Journal Square trains until morning) or 'day'.
+function pathState() {
+  const now = nyNow(), T = pathDay(now.day);
+  if (!T) return null;
+  const m = now.mins;
+  if (m < T.firstDirect) return { phase: 'night', until: T.firstDirect };
+  if (m > T.lastDirect) {
+    const N = pathDay(nyNow(1).day);
+    return { phase: 'night', until: N ? N.firstDirect : T.firstDirect };
+  }
+  if (m >= T.lastDirect - 60) return { phase: 'countdown', lastDirect: T.lastDirect, nightStart: T.nightStart, left: T.lastDirect - m };
+  return { phase: 'day' };
+}
+// A PATH train leaving at this time (minutes after midnight, today) runs in
+// the late-night pattern: after the last direct Journal Square train, or
+// before the first one.
 function pathLateNight(minsAfterMidnight) {
-  const w = pathNightWindow();
-  if (!w) return false;
+  const T = pathDay(nyNow().day);
+  if (!T) return false;
   const m = ((minsAfterMidnight % 1440) + 1440) % 1440;
-  return m >= w.start || m <= w.end;
+  return m > T.lastDirect || m < T.firstDirect;
+}
+// Tags beside the PATH heading, and what goes above the train rows.
+function renderPathPattern() {
+  const st = pathState();
+  const tags = [];
+  const day = nyNow().day;
+  if (day === 'saturday' || day === 'sunday') tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
+  if (st && st.phase === 'night') tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
+  $('path-h').innerHTML = `PATH${tags.join('')}<span>33 St station, Sixth Av at 32 St</span>`;
+  if (!st) return '';
+  if (st.phase === 'countdown') {
+    const starts = st.nightStart != null ? `Late-night service starts at ${fmtClock(st.nightStart)}. ` : '';
+    return `<p class="svc-line night">${ICON.moon}<span>${starts}<b>The last direct Journal Square train leaves in ${st.left} min</b>, at ${fmtClock(st.lastDirect)}.</span></p>`;
+  }
+  if (st.phase === 'night') {
+    const dots = '<span class="pdots" aria-hidden="true" style="opacity:.35"><i style="background:#ff9900"></i></span>';
+    return `<div class="none-row">${dots}<span>No direct Journal Square trains late nights. Trains run to Journal Square via Hoboken until ${fmtClock(st.until)}.</span></div>`;
+  }
+  return '';
 }
 
 let subwayShown = [];      // the groups drawn, so a tap can find its train
@@ -552,7 +597,8 @@ function renderPath() {
     byDest.get(x.dest).mins.push(m);
   }
   if (!byDest.size) { renderPathSchedule(); return; }
-  $('path').innerHTML = [...byDest].map(([dest, g]) => {
+  loadPathSchedule(); // its switch times drive the tags and banner
+  $('path').innerHTML = renderPathPattern() + [...byDest].map(([dest, g]) => {
     const mins = g.mins.slice(0, 3);
     const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
     const rest = mins.length > 1 ? `, ${mins.slice(1).join(', ')}` : '';
@@ -625,7 +671,7 @@ function renderPathSchedule() {
     const every = gaps.length ? `<span class="every-sub">About every ${gaps[Math.floor(gaps.length / 2)]} min</span>` : '';
     return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}${every}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
   }).join('');
-  $('path').innerHTML = (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>') + note;
+  $('path').innerHTML = renderPathPattern() + (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>') + note;
 }
 
 // ---------- service notices ----------

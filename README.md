@@ -43,11 +43,11 @@ This also fills in Amtrak track numbers, which NJ Transit's Penn Station feed ca
 | Subway | MTA GTFS-realtime | Not applicable. |
 
 PATH: when live PATH times aren't available, the board shows scheduled times
-from `docs/path-schedule.json`. Rebuild it from PATH's latest timetable with:
+from `docs/path-schedule.json`, read from the timetables on PATH's own website
+(panynj.gov). Rebuild it whenever PATH changes its timetable:
 
 ```bash
-curl -L -o path-gtfs.zip https://data.trilliumtransit.com/gtfs/path-nj-us/path-nj-us.zip
-python3 scripts/build-path-schedule.py path-gtfs.zip
+python3 scripts/build-path-schedule.py
 ```
 
 Subway: line colours, station names and each line's normal stops come from

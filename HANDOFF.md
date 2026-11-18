@@ -77,6 +77,32 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   the 2 from about 23:03 to 05:47. Plan: precompute these per line and day
   into `subway-data.json` to drive the countdowns.
 
+## PATH (updated 19 Nov)
+
+- Timetable: `scripts/build-path-schedule.py` now reads PATH's own schedule
+  pages (`/content/path/en/schedules-maps/weekday-schedules.model.json` and
+  `weekend-schedules.model.json` on panynj.gov; only the "Saturday Schedule" /
+  "Sunday Schedule" lists, not the old dated special weekends). The weekday
+  timetable is effective 16 Nov 2026 and the pages give no end date. The old
+  Trillium GTFS was a May 2025 copy and missed PATH's new weekend service
+  (direct Journal Square trains 10 AM to 9 PM on weekends).
+- Weekday from 33 St: last direct Journal Square 10:30 PM, via Hoboken from
+  10:42 PM, last Hoboken 10:47 PM, first direct Journal Square 6:03 AM.
+  Weekends: direct Journal Square 10:10 AM to 9:00 PM, Hoboken 10:15 AM to
+  9:27 PM, via Hoboken otherwise.
+- Display (owner-approved): option B (next scheduled times plus "About every N
+  min"); tags beside the PATH heading (Weekend service, Late-night service); a
+  countdown banner from one hour before the last direct Journal Square train;
+  late at night "No direct Journal Square trains late nights. Trains run to
+  Journal Square via Hoboken until <first direct>"; Late night pill on trains
+  in that period. No morning banner. `pathDay`, `pathState`,
+  `renderPathPattern` in `docs/app.js`.
+- Live PATH (`/bin/portauthority/ridepath.json`) works again as of 19 Nov but
+  sends no CORS header, so only `server.js` can use it.
+- PATH alerts: the site uses `/bin/portauthority/alerts?agency=PATH&hours=8`
+  (Everbridge). It returned [] for every query on 19 Nov and sends no CORS
+  header; its item format is unknown, so it isn't wired in yet.
+
 ## How Amtrak's data behaves at Penn (observed 17-19 Nov)
 
 Watched Amtraker (`api-v3.amtraker.com/v3/trains`) once a minute:

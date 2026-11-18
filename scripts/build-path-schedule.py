@@ -1,89 +1,128 @@
 #!/usr/bin/env python3
-"""Build docs/path-schedule.json, PATH's timetable for trains leaving 33 St.
+"""Build docs/path-schedule.json: PATH's timetable for trains leaving 33 St.
 
-The board shows these scheduled times when live PATH times aren't available.
-Run it again whenever PATH publishes a new timetable:
+The board shows these scheduled times when live PATH times aren't available
+(always on the GitHub Pages version, which can't read PATH's live feed).
 
-    curl -L -o path-gtfs.zip https://data.trilliumtransit.com/gtfs/path-nj-us/path-nj-us.zip
-    python3 scripts/build-path-schedule.py path-gtfs.zip
+The timetables come straight from PATH's own schedule pages, which are kept
+up to date (PATH's GTFS file stopped being updated in 2025):
+  weekday  https://www.panynj.gov/path/en/schedules-maps/weekday-schedules.html
+  weekend  https://www.panynj.gov/path/en/schedules-maps/weekend-schedules.html
+  (the pages' data is read from their ".model.json" versions)
 
-Only the regular weekday, Saturday and Sunday timetables are used; PATH's
-one-off construction and holiday timetables are ignored.
+Run it again whenever PATH changes its timetable:
+
+    python3 scripts/build-path-schedule.py
+
+Only the regular weekday, Saturday and Sunday timetables are used. The weekend
+page also carries old special-weekend pages (for construction), which are skipped.
 """
-import csv, io, json, sys, zipfile
+import html, json, re, sys, urllib.request
 from pathlib import Path
 
-STATION = '33rd Street'
 OUT = Path(__file__).resolve().parent.parent / 'docs' / 'path-schedule.json'
+BASE = 'https://www.panynj.gov/content/path/en/schedules-maps/'
+COLORS = {'Journal Square': '#ff9900', 'Hoboken': '#4d92fb', 'Journal Square via Hoboken': '#ff9900'}
+TIME = re.compile(r'^(\d{1,2}):(\d{2})\s*([AP])\.?M\.?$', re.I)
 
 
-def table(z, name):
-    with z.open(name) as f:
-        return list(csv.DictReader(io.TextIOWrapper(f, encoding='utf-8-sig')))
+def fetch(page):
+    req = urllib.request.Request(BASE + page + '.model.json', headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, timeout=60) as r:
+        return json.load(r)
 
 
-def main(zip_path):
-    z = zipfile.ZipFile(zip_path)
-    info = table(z, 'feed_info.txt')[0]
-    stops = table(z, 'stops.txt')
-    station_ids = {s['stop_id'] for s in stops if s['stop_name'] == STATION}
-    station_ids |= {s['stop_id'] for s in stops if s.get('parent_station') in station_ids}
+def clean(cell):
+    return re.sub(r'\s+', ' ', html.unescape(re.sub(r'<[^>]+>', ' ', cell))).strip()
 
-    # The regular timetables are the ones that run on ordinary days of the week.
-    days = {}
-    for c in table(z, 'calendar.txt'):
-        if c['monday'] == '1' and c['friday'] == '1' and c['saturday'] == '0':
-            days['weekday'] = c['service_id']
-        elif c['saturday'] == '1' and c['monday'] == '0':
-            days['saturday'] = c['service_id']
-        elif c['sunday'] == '1' and c['monday'] == '0':
-            days['sunday'] = c['service_id']
-    if len(days) != 3:
-        sys.exit(f'Expected weekday, Saturday and Sunday timetables, found {sorted(days)}')
-    service_day = {v: k for k, v in days.items()}
 
-    routes = {r['route_id']: '#' + (r['route_color'] or '888888') for r in table(z, 'routes.txt')}
-    trips = {t['trip_id']: t for t in table(z, 'trips.txt') if t['service_id'] in service_day}
+def tables_in(node):
+    """Every timetable table (as HTML) in a page's component tree, in order."""
+    out = []
+    if isinstance(node, dict):
+        text = node.get('text')
+        if isinstance(text, str):
+            out += re.findall(r'<table.*?</table>', text, flags=re.S)
+        for v in node.values():
+            if isinstance(v, (dict, list)):
+                out += tables_in(v)
+    elif isinstance(node, list):
+        for v in node:
+            out += tables_in(v)
+    return out
 
-    # Last stop of each trip, so trains that end at 33 St are left out.
-    last_seq = {}
-    at_station = []
-    for st in table(z, 'stop_times.txt'):
-        tid = st['trip_id']
-        if tid not in trips:
+
+def find(node, test):
+    """Components in the tree matching test()."""
+    out = []
+    if isinstance(node, dict):
+        if test(node):
+            out.append(node)
+        for v in node.values():
+            if isinstance(v, (dict, list)):
+                out += find(v, test)
+    elif isinstance(node, list):
+        for v in node:
+            out += find(v, test)
+    return out
+
+
+def from_33st(tables):
+    """Departures from 33 St in these tables, as (minutes after midnight, destination)."""
+    trips = []
+    for t in tables:
+        heads = [clean(h).lower() for h in re.findall(r'<b>(.*?)</b>', t, flags=re.S)]
+        if not heads or not heads[0].startswith('33 st'):
             continue
-        seq = int(st['stop_sequence'])
-        last_seq[tid] = max(last_seq.get(tid, 0), seq)
-        if st['stop_id'] in station_ids:
-            at_station.append((tid, seq, st['departure_time']))
-
-    out = {k: [] for k in days}
-    for tid, seq, dep in at_station:
-        if seq == last_seq[tid]:
+        if any(h.startswith('hoboken') for h in heads[1:]) and not any('arrival at hoboken' in h for h in heads):
+            dest = 'Journal Square via Hoboken'
+        elif any('arrival at hoboken' in h for h in heads):
+            dest = 'Hoboken'
+        elif any('jsq' in h or 'journal' in h or 'grove' in h for h in heads):
+            dest = 'Journal Square'
+        else:
             continue
-        h, m, s = (int(x) for x in dep.split(':'))
-        t = trips[tid]
-        out[service_day[t['service_id']]].append({
-            't': h * 60 + m,  # minutes after midnight; can pass 24:00 for late trains
-            'to': t['trip_headsign'],
-            'color': routes.get(t['route_id'], '#888888'),
-        })
-    for k in out:
-        out[k].sort(key=lambda d: d['t'])
+        for row in re.findall(r'<tr.*?</tr>', t, flags=re.S):
+            cells = re.findall(r'<td.*?>(.*?)</td>', row, flags=re.S)
+            if not cells:
+                continue
+            m = TIME.match(clean(cells[0]))
+            if not m:
+                continue
+            h, mi, ap = int(m.group(1)) % 12, int(m.group(2)), m.group(3).upper()
+            trips.append((h * 60 + mi + (720 if ap == 'P' else 0), dest))
+    return sorted(set(trips))
 
-    end = info.get('feed_end_date', '')
+
+def effective(page):
+    text = ' '.join(clean(n['text']) for n in find(page, lambda n: isinstance(n.get('text'), str)))
+    m = re.search(r'Effective\s+([A-Z][a-z]+ \d{1,2}, \d{4})', text)
+    return m.group(1) if m else ''
+
+
+def main():
+    weekday_page = fetch('weekday-schedules')
+    weekend_page = fetch('weekend-schedules')
+    days = {'weekday': from_33st(tables_in(weekday_page))}
+    # The regular weekend timetables are the accordion lists titled "Saturday
+    # Schedule" and "Sunday Schedule"; dated lists belong to old special weekends.
+    for day in ('saturday', 'sunday'):
+        lists = find(weekend_page, lambda n: str(n.get('title', '')).lower().startswith(day + ' schedule'))
+        days[day] = from_33st(tables_in(lists[0])) if lists else []
+    for day, trips in days.items():
+        if not trips:
+            sys.exit(f'No {day} departures from 33 St found: PATH may have changed its pages.')
     doc = {
         'station': '33 St',
-        'source': 'PATH timetable (GTFS) via Trillium',
-        'published': info.get('feed_version', ''),
-        'validUntil': f'{end[:4]}-{end[4:6]}-{end[6:]}' if len(end) == 8 else '',
-        'days': out,
+        'source': 'PATH schedule pages, panynj.gov',
+        'published': f"Weekday timetable effective {effective(weekday_page)}" if effective(weekday_page) else '',
+        'validUntil': '',  # PATH's pages give no end date
+        'days': {day: [{'t': t, 'to': dest, 'color': COLORS[dest]} for t, dest in trips] for day, trips in days.items()},
     }
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
-    print(f'Wrote {OUT}: ' + ', '.join(f'{k} {len(v)} departures' for k, v in out.items()))
+    summary = ', '.join(f"{day} {len(t)}" for day, t in days.items())
+    print(f'Wrote {OUT}: {summary} departures from 33 St. {doc["published"]}')
 
 
 if __name__ == '__main__':
-    if len(sys.argv) != 2:
-        sys.exit(__doc__)
-    main(sys.argv[1])
+    main()
