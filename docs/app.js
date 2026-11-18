@@ -44,6 +44,7 @@ const fromNjt = (r) => String(r.id).startsWith('njt-'); // NJ Transit text is sh
 const DEPARTED_SHOWN_S = 3 * 60;
 const AMTRAK_DEPARTED_SHOWN_S = 5 * 60; // owner's choice: Amtrak gets longer
 const shownFor = (r) => (r.carrier === 'amtrak' ? AMTRAK_DEPARTED_SHOWN_S : DEPARTED_SHOWN_S);
+const REPORT_LAG_S = 4 * 60; // the most a feed's "departed" report lags in practice
 // Amtrak trains leave the board only when Amtrak reports them gone. If its
 // estimate passes with no word, the train stays (it is running late) until
 // the estimate is this old, which means the data has stopped updating.
@@ -104,7 +105,9 @@ function visibleRows(rows, kind) {
   return all.filter((r) => {
     if (r.tone === 'stop') return r.time > nowS - 5 * 60; // keep a cancellation up a while
     const at = departedAt(r);
-    if (at !== null) return nowS - shownSince(r, at) < shownFor(r);
+    // ...but never more than REPORT_LAG_S beyond its window after it really
+    // left (otherwise opening the page would revive long-gone trains).
+    if (at !== null) return nowS - shownSince(r, at) < shownFor(r) && nowS - at < shownFor(r) + REPORT_LAG_S;
     if (r.departsByFeed) return r.time > nowS - AMTRAK_SILENT_S;
     return true;
   });

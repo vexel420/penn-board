@@ -34,12 +34,12 @@
     </div>
   </nav>
 
-  <div id="notices" class="notices"></div>
-  <div id="rail-notices"></div>
-
   <div class="layout">
     <section class="rail" aria-labelledby="rail-h">
       <h2 id="rail-h" class="sr">Trains</h2>
+      <!-- Notices sit in the train column, so the subway panel starts at the top beside them. -->
+      <div id="notices" class="notices"></div>
+      <div id="rail-notices"></div>
       <div class="cols" aria-hidden="true">
         <span>Time</span><span></span><span id="col-place">To</span><span>Status</span><span class="col-track">Track</span>
       </div>
