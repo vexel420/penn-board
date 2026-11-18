@@ -742,10 +742,15 @@ function renderPathPattern() {
 // share one row, whatever their last stop: Far Rockaway, Lefferts Blvd, a
 // short trip to Euclid Av, or a service change like A to Chambers St. When
 // they go to more than one place, the row takes turns (see renderSubway).
+// ...except when any of those trains is rerouted: then the turning stops and
+// each destination gets its own still row, so a rerouted one can show
+// "Rerouted, see map".
 function mergeScheduled(groups) {
   const out = [], merged = new Map();
+  const rerouted = new Set(groups.filter((g) => g.trains.some((t) => unusualStops(g.route, t).length)).map((g) => `${g.route}|${g.dir}|${g.svc}`));
   for (const g of groups) {
     const k = `${g.route}|${g.dir}|${g.svc}`;
+    if (rerouted.has(k)) { out.push(g); continue; }
     if (!merged.has(k)) { const m = { ...g, scheduled: true, trains: [] }; merged.set(k, m); out.push(m); }
     merged.get(k).trains.push(...g.trains);
   }
