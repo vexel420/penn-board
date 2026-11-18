@@ -756,7 +756,7 @@ function mergeScheduled(groups) {
 // next train now goes somewhere else).
 const destShown = new Map();
 const minsShown = new Map(); // what each row's times showed, to slide out on a turn
-const ROTATE_MS = 5000;      // how long each end of the line shows (4 turns per 20 s refresh)
+const ROTATE_MS = 8000;      // how long each end of the line shows
 let subwayTurning = false;   // a row is taking turns (redraw on each turn)
 function destName(key, name) {
   const before = destShown.get(key);
