@@ -146,8 +146,10 @@ In a Claude cloud container, Node's fetch ignores the proxy unless you run
 - **No scraping NJ Transit's public DepartureVision site or reusing its embedded
   credentials.** That was attempted once and blocked; use the developer account.
 - **Design:** Pennsylvania Railroad palette (Brunswick green ground, Tuscan red
-  masthead, gold-leaf track plates, ivory text), one typeface (Archivo, using its
-  width axis). The gold track plate is the one loud element; it flips once when a
+  masthead, gold-leaf track plates, ivory text), Archivo (using its width axis)
+  for everything except the masthead, which the owner chose on 18 Nov from five
+  options (`design/`): option D, "Penn Station" in Limelight with "departures"
+  in light Archivo and a triple gold rule. The gold track plate is the one loud element; it flips once when a
   track is newly posted. Subway and PATH are side panels, not rows in the rail list,
   because they would flood it. On phones they become a third tab.
 - **PATH is included with an explicit note** that it is not in Penn Station (33 St
