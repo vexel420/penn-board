@@ -26,13 +26,104 @@ function countdown(epoch) {
   return `in ${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
+// ---------- flip board style ----------
+// An optional look (Board style, at the bottom of the page): the masthead,
+// clock and each train's time, destination, status and track are drawn as
+// split-flap tiles. Rows are redrawn often, so the page remembers what each
+// field last showed (`flipShown`) and, after a redraw, turns over only the
+// tiles whose character changed, stepping through a few letters between as a
+// real board does. People who ask their device for less motion get the new
+// text without the flipping.
+let flipMode = false;
+try { flipMode = localStorage.getItem('boardStyle') === 'flip'; } catch {}
+const flipShown = new Map(); // field key -> text it shows now
+const FLIP_CHARS = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:';
+const lessMotion = matchMedia('(prefers-reduced-motion: reduce)');
+const tileHtml = (c) => `<span class="f"><span class="t"><b>${esc(c)}</b></span><span class="bt"><b>${esc(c)}</b></span></span>`;
+// Tiles for `text`, showing what the field showed before; runFlips() turns them.
+function flipText(key, text, cls = '') {
+  const to = String(text ?? '').toUpperCase();
+  if (!flipMode) return esc(text);
+  const from = flipShown.has(key) ? flipShown.get(key) : '';
+  const n = Math.max(from.length, to.length, 1);
+  const cells = [...from.padEnd(n)].slice(0, n);
+  // Words wrap as whole groups, at the spaces of the new text.
+  let html = '<span class="fw">';
+  for (let i = 0; i < n; i++) {
+    html += tileHtml(cells[i]);
+    if (to[i] === ' ' && i < n - 1) html += '</span><span class="fw">';
+  }
+  html += '</span>';
+  return `<span class="fl ${cls}" data-k="${esc(key)}" data-to="${esc(to)}" role="text" aria-label="${esc(text)}">${html}</span>`;
+}
+function runFlips(root) {
+  if (!flipMode) return;
+  root.querySelectorAll('.fl[data-to]').forEach((el) => {
+    const to = el.dataset.to;
+    const tiles = el.querySelectorAll('.f');
+    tiles.forEach((f, i) => {
+      const from = f.querySelector('.t b').textContent;
+      const ch = to[i] || ' ';
+      if (from !== ch) flipTile(f, from, ch, i * 30);
+    });
+    flipShown.set(el.dataset.k, to);
+    delete el.dataset.to;
+  });
+}
+function flipTile(f, from, ch, delay) {
+  if (lessMotion.matches) { f.querySelectorAll('b').forEach((b) => { b.textContent = ch; }); return; }
+  const a = FLIP_CHARS.indexOf(from), b = FLIP_CHARS.indexOf(ch);
+  const steps = [];
+  if (a >= 0 && b >= 0) {
+    const dist = (b - a + FLIP_CHARS.length) % FLIP_CHARS.length, n = Math.min(4, dist);
+    for (let k = 1; k < n; k++) steps.push(FLIP_CHARS[(a + Math.round((k * dist) / n)) % FLIP_CHARS.length]);
+  }
+  steps.push(ch);
+  let prev = from, t = delay;
+  for (const c of steps) { const was = prev; setTimeout(() => turnTile(f, was, c), t); t += 90; prev = c; }
+}
+function turnTile(f, from, to) {
+  if (!f.isConnected) return;
+  const top = f.querySelector('.t b'), bot = f.querySelector('.bt b');
+  top.textContent = to;
+  const ft = document.createElement('span'); ft.className = 'ft'; ft.innerHTML = `<b>${esc(from)}</b>`;
+  const fb = document.createElement('span'); fb.className = 'fb'; fb.innerHTML = `<b>${esc(to)}</b>`;
+  fb.style.transform = 'rotateX(90deg)';
+  f.append(ft, fb);
+  ft.animate([{ transform: 'rotateX(0)' }, { transform: 'rotateX(-90deg)' }], { duration: 45, easing: 'ease-in', fill: 'forwards' });
+  fb.animate([{ transform: 'rotateX(90deg)' }, { transform: 'rotateX(0)' }], { duration: 45, delay: 45, easing: 'ease-out', fill: 'forwards' })
+    .finished.then(() => { bot.textContent = to; ft.remove(); fb.remove(); }, () => {});
+}
+// Masthead and clock.
+function renderMastFlip() {
+  const h = document.querySelector('.mast h1');
+  if (flipMode) {
+    h.innerHTML = `<span class="mast-flip">${flipText('mast', 'Penn Station')}</span> <span class="h1-sub" id="h1-sub"></span>`;
+    runFlips(h);
+  } else {
+    h.innerHTML = 'Penn Station <span class="h1-sub" id="h1-sub"></span>';
+    flipShown.delete('mast');
+  }
+  setHeading();
+}
+function setBoardStyle(flip) {
+  flipMode = flip;
+  try { localStorage.setItem('boardStyle', flip ? 'flip' : 'standard'); } catch {}
+  document.body.classList.toggle('flipboard', flip);
+  document.querySelectorAll('.style-seg button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.style === 'flip') === flip)));
+  for (const k of [...flipShown.keys()]) if (k !== 'mast') flipShown.delete(k); // rows flip in fresh
+  lastClock = '';
+  renderMastFlip(); tick(); render();
+}
+let lastClock = '';
+
 function trackCell(r, extra = '') {
   if (r.track) {
     const fresh = seenTracks.has(r.id) && seenTracks.get(r.id) !== r.track;
-    return `<div class="track${fresh ? ' flip' : ''}${extra}" aria-label="Track ${esc(r.track)}"><b>${esc(r.track)}</b></div>`;
+    return `<div class="track${fresh && !flipMode ? ' flip' : ''}${extra}" aria-label="Track ${esc(r.track)}"><b>${flipText(`${r.id}|k`, r.track)}</b></div>`;
   }
-  if (r.trackLikely) return `<div class="track likely" aria-label="Track not posted, usually ${esc(r.trackLikely)}"><b>${esc(r.trackLikely)}</b><small>usual</small></div>`;
-  return '<div class="track none" aria-label="Track not posted"><b>–</b></div>';
+  if (r.trackLikely) return `<div class="track likely" aria-label="Track not posted, usually ${esc(r.trackLikely)}"><b>${flipText(`${r.id}|k`, r.trackLikely)}</b><small>usual</small></div>`;
+  return `<div class="track none" aria-label="Track not posted"><b>${flipMode ? flipText(`${r.id}|k`, '') : '–'}</b></div>`;
 }
 
 const STALE_AFTER_MS = 90 * 1000;
@@ -264,10 +355,10 @@ function rowHtml(r) {
   const sched = notes.length ? `<small>${notes.join(', ')}</small>` : '';
   const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
   return `<li class="row ${r.tone}${left === 'gone' && !gone && !due ? ' gone' : ''}">
-    <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
+    <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
-    <div class="dest"><div class="place">${esc(r.place)}</div>${via}</div>
-    <div class="status ${r.tone}">${esc(r.status)}${sched}</div>
+    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}</div>
+    <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${sched}</div>
     ${trackCell(r, r.tone === 'final' ? ' ring' : '')}
   </li>`;
 }
@@ -284,11 +375,12 @@ function emptyMessage() {
 }
 
 function renderRail() {
-  if (!board || view === 'subway') return;
+  if (!board || view === 'subway' || view === 'alerts') return;
   const rows = visibleRows(board[view], view).filter((r) => carrier === 'all' || r.carrier === carrier);
   $('col-place').textContent = view === 'arrivals' ? 'From' : 'To';
   $('rows').innerHTML = rows.length ? rows.map(rowHtml).join('') : `<li class="empty">${esc(emptyMessage())}</li>`;
   for (const r of rows) seenTracks.set(r.id, r.track);
+  runFlips($('rows'));
   refreshOpenProgress();
 }
 
@@ -1174,6 +1266,10 @@ $('change').addEventListener('click', (e) => {
   if (v && changeOpen) openChange(changeOpen.id, +v.dataset.view);
 });
 $('chg-close').addEventListener('click', closeChange);
+$('alerts').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-change]');
+  if (b) openChange(b.dataset.change);
+});
 $('subway-notices').addEventListener('click', (e) => {
   const b = e.target.closest('[data-change]');
   if (b) openChange(b.dataset.change);
@@ -1312,6 +1408,22 @@ function renderServiceNotices() {
   if (!board || !board.notices) return;
   $('rail-notices').innerHTML = noticeStrip(board.notices.rail, 'rail');
   $('subway-notices').innerHTML = noticeStrip(board.notices.subway, 'subway');
+  renderAlertsTab();
+}
+// Phones: every notice on its own tab, by where it applies, with a count on
+// the tab. (Computers keep the strips above the trains and in the subway panel.)
+function renderAlertsTab() {
+  const rail = board.notices.rail || [], subway = board.notices.subway || [];
+  const card = (n) => {
+    const map = typeof changeModel === 'function' && changeModel(n) ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
+    return `<div class="al-card${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${map ? `<br>${map}` : ''}</p></div>`;
+  };
+  const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
+  $('alerts').innerHTML = group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
+    + group('Subway', subway, 'No subway notices for the lines at Penn right now.')
+    + group('PATH', [], 'No PATH notices on this board yet.');
+  const n = rail.length + subway.length;
+  $('alerts-count').textContent = n ? String(n) : '';
 }
 document.addEventListener('toggle', (e) => {
   const d = e.target;
@@ -1393,7 +1505,7 @@ document.querySelector('.seg').addEventListener('click', (e) => {
 });
 
 // The masthead names the view: Penn Station departures, arrivals, or subway and PATH.
-const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: 'subway and PATH' };
+const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: 'subway and PATH', alerts: 'service alerts' };
 function setHeading() {
   $('h1-sub').textContent = HEADINGS[view];
   document.title = `Penn Station ${HEADINGS[view]}`;
@@ -1411,11 +1523,18 @@ $('rows').addEventListener('toggle', (e) => {
 }, true);
 // The Subway tab only exists on narrow screens; fall back when the window widens.
 matchMedia('(min-width: 961px)').addEventListener('change', (e) => {
-  if (e.matches && view === 'subway') document.querySelector('.seg button[data-view="departures"]').click();
+  if (e.matches && (view === 'subway' || view === 'alerts')) document.querySelector('.seg button[data-view="departures"]').click();
 });
 
 function tick() {
   const t = clock(Date.now() / 1000);
+  if (flipMode) {
+    // Tiles turn only when the minute changes.
+    if (lastClock !== t.hm + t.ap) { $('clock').innerHTML = flipText('clock', t.hm); $('clock-ap').innerHTML = flipText('clock-ap', t.ap); runFlips($('clock').parentNode); lastClock = t.hm + t.ap; }
+    $('clock-s').textContent = ':' + nySecs.format(new Date()).padStart(2, '0');
+    renderStamp();
+    return;
+  }
   $('clock').textContent = t.hm;
   $('clock-s').textContent = ':' + nySecs.format(new Date()).padStart(2, '0');
   $('clock-ap').textContent = t.ap;
@@ -1424,6 +1543,13 @@ function tick() {
 // Tick on the second, so the seconds never skip or stall.
 function everySecond() { setTimeout(() => { tick(); everySecond(); }, 1000 - (Date.now() % 1000) + 5); }
 setPressed('.chips', 'carrier', carrier);
+document.querySelector('.style-seg').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-style]');
+  if (b) setBoardStyle(b.dataset.style === 'flip');
+});
+document.body.classList.toggle('flipboard', flipMode);
+document.querySelectorAll('.style-seg button').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.style === 'flip') === flipMode)));
+renderMastFlip();
 tick(); everySecond();
 refresh(true); setInterval(() => refresh(), REFRESH_MS); everyMinute();
 setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000); // keep countdowns moving between refreshes

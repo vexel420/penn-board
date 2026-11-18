@@ -443,3 +443,16 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   (`reachableFromPenn`, using the notice's per-stop direction_id: 0 uptown,
   1 downtown); kept if that line/direction has no trains listed. Suspensions,
   reroutes and delays on Penn lines always show.
+
+## Flip board style and phone Alerts tab (Nov 18, 2026)
+- "Board style: Standard | Flip board" switch above the footer (owner chose
+  style B: dark green tiles, ivory/gold letters; masthead and clock on the red
+  masthead as red tiles with gold letters). Choice kept in localStorage
+  `boardStyle`. Flip mode turns the masthead, clock (hh:mm and AM/PM; seconds
+  stay plain) and each train's time, destination, status and track into tiles.
+  `flipText(key, text)` draws tiles showing the field's previous text
+  (`flipShown`), and `runFlips(root)` turns changed tiles after each redraw.
+  prefers-reduced-motion: no flipping. Subway and PATH panels stay standard.
+- Phones (≤960px): an "Alerts" tab with a count; notices grouped Trains at
+  Penn / Subway / PATH (`renderAlertsTab`). The notice strips are hidden on
+  phones; computers keep them.

@@ -351,3 +351,70 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 /* The title bar with Close stays on screen while the map and text scroll. */
 .cm-head { position: sticky; top: 0; z-index: 1100; padding-bottom: .5rem; box-shadow: 0 1px 0 var(--line); }
 .cm-top { padding-top: .2rem; }
+
+/* ---------- board style switch (bottom of the page) ---------- */
+.style-bar { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: .6rem .9rem; margin-top: 2rem; padding-top: 1.1rem; border-top: 1px solid var(--line); color: var(--dim); font-size: .9rem; }
+.style-seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.style-seg button { display: inline-flex; align-items: center; gap: .45rem; background: none; border: 0; padding: .5rem 1rem; font-weight: 600; color: var(--dim); }
+.style-seg button + button { border-left: 1px solid var(--line); }
+.style-seg button[aria-pressed="true"] { background: var(--gold); color: #1b1a12; }
+.ic-lines { display: inline-grid; gap: 2px; } .ic-lines i { width: 14px; height: 2px; border-radius: 1px; background: currentColor; }
+.ic-tiles { display: inline-flex; gap: 2px; } .ic-tiles i { width: 7px; height: 11px; border-radius: 1.5px; background: currentColor; position: relative; }
+.ic-tiles i::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: rgba(0, 0, 0, .55); }
+.foot { margin-top: 1.4rem; }
+
+/* ---------- split-flap tiles (Board style: Flip board) ---------- */
+.fl { display: inline-flex; flex-wrap: wrap; gap: .18em 0; vertical-align: middle; line-height: 1; }
+.fw { display: inline-flex; white-space: nowrap; }
+.f { --tile: #1b2b22; --tile-top: #22362b; --seam: #08100c;
+  position: relative; display: inline-block; width: .9em; height: 1.32em; margin-right: .12em; perspective: 12em;
+  font-weight: 700; font-stretch: 90%; text-align: center; border-radius: .14em; }
+.f > span { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; background: var(--tile); backface-visibility: hidden; }
+.f > span b { position: absolute; left: 0; right: 0; height: 1.32em; line-height: 1.32em; font-weight: inherit; color: inherit; font-size: 1em; }
+.f .t, .f .ft { top: 0; background: var(--tile-top); border-radius: .14em .14em 0 0; }
+.f .bt, .f .fb { bottom: 0; border-radius: 0 0 .14em .14em; }
+.f .t b, .f .ft b { top: 0; }
+.f .bt b, .f .fb b { bottom: 0; }
+.f .ft { transform-origin: bottom; z-index: 2; }
+.f .fb { transform-origin: top; z-index: 2; }
+.f::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% - .5px); height: 1px; background: var(--seam); z-index: 3; }
+/* in the train list */
+.flipboard .time b { color: var(--gold); }
+.flipboard .time b .fl { font-size: .82em; }
+.flipboard .place { color: var(--ivory); }
+.flipboard .place .fl { font-size: .78em; }
+.flipboard .status .fl { font-size: .85em; }
+.flipboard .status { font-weight: 700; }
+.flipboard .track b { background: none; box-shadow: none; padding: 0; color: var(--gold); }
+.flipboard .track b .fl { font-size: .7em; }
+.flipboard .track.likely b, .flipboard .track.none b { color: var(--dim); box-shadow: none; }
+.flipboard .track.ring b { animation: none; }
+.flipboard .track.ring .f { box-shadow: 0 0 0 2px var(--alarm); }
+.flipboard .row.departed .f, .flipboard .row.stop .f { opacity: .65; }
+.flipboard .row.stop .place, .flipboard .row.stop .time b { text-decoration: none; }
+/* masthead and clock: red tiles, gold letters */
+.mast-flip .f, .flipboard .clock .f { --tile: #5a2019; --tile-top: #662620; --seam: #2c0d09; color: var(--gold); }
+.mast-flip .fl { font-size: .74em; font-family: "Archivo", sans-serif; letter-spacing: 0; }
+.flipboard .clock .fl { font-size: .8em; }
+.flipboard .clock .ap .fl { font-size: 1em; }
+@media (max-width: 640px) {
+  .mast-flip .fl { font-size: .62em; }
+}
+
+/* ---------- Alerts tab (phones) ---------- */
+.alerts-tab, .tab-count:empty { display: none; }
+.tab-count { display: inline-grid; place-items: center; min-width: 1.25rem; height: 1.25rem; margin-left: .35rem; padding: 0 .3rem; border-radius: 99px; background: var(--gold); color: var(--enamel); font-size: .75rem; font-weight: 800; vertical-align: .05em; }
+.al-h { margin: 1.1rem 0 .5rem; font-size: 1rem; color: var(--dim); font-weight: 650; }
+.al-card { display: grid; grid-template-columns: auto 1fr; gap: .65rem; padding: .75rem .85rem; margin-bottom: .55rem; border: 1px solid #6a5226; border-radius: 8px; background: #221d12; }
+.al-card.urgent { border-color: var(--late); }
+.al-card p { margin: 0; line-height: 1.4; }
+.al-card .kind { display: block; color: var(--gold); font-weight: 700; font-size: .85rem; margin-bottom: .15rem; }
+.al-card .al-map { margin: .5rem 0 0; }
+.al-card .bullet.tiny { display: inline-grid; width: 1.2rem; height: 1.2rem; font-size: .72rem; vertical-align: -.2em; }
+.al-none { color: var(--dim); margin: 0 0 .5rem; }
+@media (max-width: 960px) {
+  /* Notices live on their own tab here. */
+  #rail-notices, #subway-notices { display: none; }
+  body[data-view="alerts"] .alerts-tab { display: block; }
+  body[data-view="alerts"] .layout, body[data-view="alerts"] .chips, body[data-view="alerts"] .style-bar { display: none; }
+}

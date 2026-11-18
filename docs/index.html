@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Limelight&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611181939">
+<link rel="stylesheet" href="style.css?v=202611181950">
 </head>
 <body data-view="departures">
 
@@ -25,6 +25,7 @@
       <button type="button" data-view="departures" aria-pressed="true">Departures</button>
       <button type="button" data-view="arrivals" aria-pressed="false">Arrivals</button>
       <button type="button" data-view="subway" aria-pressed="false" class="only-narrow">Subway, PATH</button>
+      <button type="button" data-view="alerts" aria-pressed="false" class="only-narrow">Alerts<span class="tab-count" id="alerts-count"></span></button>
     </div>
     <div class="chips" role="group" aria-label="Railroad">
       <button type="button" data-carrier="all" aria-pressed="true">All railroads</button>
@@ -55,6 +56,16 @@
       <p class="walk">Outside Penn Station: a 5-minute walk east, with its own fare.</p>
       <div id="path"><p class="empty">Loading PATH times…</p></div>
     </aside>
+  </div>
+
+  <section id="alerts" class="alerts-tab" aria-label="Service alerts"></section>
+
+  <div class="style-bar">
+    <span>Board style</span>
+    <div class="style-seg" role="group" aria-label="Board style">
+      <button type="button" data-style="standard" aria-pressed="true"><span class="ic-lines" aria-hidden="true"><i></i><i></i><i></i></span>Standard</button>
+      <button type="button" data-style="flip" aria-pressed="false"><span class="ic-tiles" aria-hidden="true"><i></i><i></i><i></i></span>Flip board</button>
+    </div>
   </div>
 
   <footer class="foot">
@@ -89,8 +100,8 @@
   </div>
 </dialog>
 
-<script src="config.js?v=202611181939"></script>
-<script src="feeds.js?v=202611181939"></script>
-<script src="app.js?v=202611181939"></script>
+<script src="config.js?v=202611181950"></script>
+<script src="feeds.js?v=202611181950"></script>
+<script src="app.js?v=202611181950"></script>
 </body>
 </html>
