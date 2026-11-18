@@ -101,8 +101,13 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   sends no CORS header, so only `server.js` can use it.
   The GitHub Pages version can use it through a Cloudflare Worker relay
   (`worker/worker.js`, setup in `worker/README.md`): set its address in
-  `docs/config.js` (`window.PENN_RELAY`). Tested with a local stand-in; not yet
-  deployed (needs the owner's Cloudflare account). The same Worker is the
+  `docs/config.js` (`window.PENN_RELAY`). Deployed 17 Nov as `penn-board-relay` on the
+  owner's Cloudflare account: https://penn-board-relay.pennstationboard.workers.dev
+  (set in `docs/config.js`). Redeploy by uploading `worker/worker.js` (module
+  syntax) via the dashboard or the Workers API; a Cloudflare API token for
+  api.cloudflare.com is saved as a network secret on the `penn-board` cloud
+  environment (expires; make a new one with the "Edit Cloudflare Workers"
+  template if it has). The same Worker is the
   intended home for NJ Transit, with the login as a Worker secret.
 - PATH alerts: the site uses `/bin/portauthority/alerts?agency=PATH&hours=8`
   (Everbridge). It returned [] for every query on 19 Nov and sends no CORS
