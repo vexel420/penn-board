@@ -437,6 +437,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - PATH's late-night banner ends when the night's last via-Hoboken train has
   left (`lastNight` in the timetable), or sooner if live PATH data has no
   via-Hoboken trains left in the last hour of night service.
-- Subway notices: stops-skipped, station, boarding-change and elevator notices
-  show only if they name a Penn station (128/A28); suspensions, reroutes and
-  delays on Penn lines always show.
+- Subway notices: station, boarding-change and elevator notices show only if
+  they name a Penn station (128/A28). Skipped-stop notices show only if a live
+  train leaving Penn in that direction calls at a skipped station
+  (`reachableFromPenn`, using the notice's per-stop direction_id: 0 uptown,
+  1 downtown); kept if that line/direction has no trains listed. Suspensions,
+  reroutes and delays on Penn lines always show.

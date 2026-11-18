@@ -364,6 +364,9 @@ function parseAlerts(feed, keep) {
     // ids, without the N/S platform letter), and the full text with its line
     // breaks, which holds the MTA's alternatives.
     const affected = {};
+    // Stations named per line and direction (0 uptown/north, 1 downtown/south).
+    const where = ents.filter((x) => x.route_id && x.stop_id && x.direction_id != null)
+      .map((x) => ({ route: x.route_id, stop: x.stop_id.replace(/[NS]$/, ''), dir: +x.direction_id === 0 ? 'N' : 'S' }));
     for (const x of ents) {
       if (!x.route_id || !x.stop_id) continue;
       const id = x.stop_id.replace(/[NS]$/, '');
@@ -371,7 +374,7 @@ function parseAlerts(feed, keep) {
     }
     const tr = (a.description_text && a.description_text.translation) || [];
     const desc = ((tr.find((x) => x.language === 'en') || {}).text || '').trim();
-    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc });
+    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc, where });
   }
   out.sort((x, y) => y.urgent - x.urgent);
   const byText = new Map();
@@ -382,6 +385,25 @@ function parseAlerts(feed, keep) {
     else byText.set(key, n);
   }
   return [...byText.values()];
+}
+
+// A skipped-stop notice matters only if a train leaving Penn that way calls
+// there: "uptown 2 skips 79 St" yes, "downtown 1 skips 125 St" no (downtown
+// trains from Penn never reach it). Checked against the live trains' stops
+// from Penn; a line and direction with no trains listed right now keeps it.
+function reachableFromPenn(n, groups) {
+  if (!/stops skipped/i.test(n.type) || !n.where || !n.where.length) return true;
+  const reach = new Map();
+  for (const g of groups || []) for (const t of g.trains) {
+    const k = g.route + g.dir;
+    if (!reach.has(k)) reach.set(k, new Set());
+    t.stops.forEach((id) => reach.get(k).add(id));
+  }
+  return n.where.some((w) => {
+    if (!PENN_LINES.has(w.route)) return false;
+    const r = reach.get(w.route + w.dir);
+    return !r || r.has(w.stop);
+  });
 }
 
 // Notices refresh as often as trains (every 20 s and on the minute) wherever
@@ -396,10 +418,10 @@ const subwayAlerts = source('subway-alerts', FAST_ALERTS ? 20 : 180, async () =>
   parseAlerts(await (await get(alertUrl('subway'))).json(), (lines, stops, text, type) => {
     if (stops.some((s) => /^(128|A28)[NS]?$/.test(s))) return true; // about Penn itself
     if (!lines.some((l) => PENN_LINES.has(l))) return false;
-    // Skipped stops and station notices only matter at those stations (the
-    // downtown 1 skipping 125 St doesn't affect anyone leaving Penn);
-    // suspensions, reroutes, delays and the like change the trip itself.
-    return !/stops skipped|station notice|boarding change|extra transfer|elevator|escalator/i.test(type);
+    // Station notices only matter at those stations; suspensions, reroutes,
+    // delays and the like change the trip itself. (Skipped stops are checked
+    // against where trains from Penn go: see reachableFromPenn.)
+    return !/station notice|boarding change|extra transfer|elevator|escalator/i.test(type);
   }));
 // LIRR notices about branches and stations apply to trains from Penn too;
 // leave out ones about Grand Central only, which LIRR trains from Penn
@@ -469,7 +491,7 @@ async function board(extra = {}) {
         ...amtrakNotices(a.data),
         ...(extra.njtNotices || []),
       ],
-      subway: (sa.data || []).map((x) => ({ ...x, carrier: 'subway' })),
+      subway: (sa.data || []).filter((x) => reachableFromPenn(x, s.data)).map((x) => ({ ...x, carrier: 'subway' })),
     },
     sources: {
       lirr: { ok: !!l.data && !l.error, error: l.error },
@@ -488,5 +510,5 @@ const relayPath = source('relay-path', 20, async () => {
   return parsePath(await (await get(`${base.replace(/\/$/, '')}/path`)).json());
 });
 
-return { board, source, get, now, nyToEpoch, parsePath, relayPath };
+return { board, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
 });
