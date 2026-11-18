@@ -187,6 +187,22 @@ details.via .checking { display: block; color: var(--dim); font-size: .8rem; }
 .sched-note { margin: .4rem 0 .5rem; color: var(--dim); font-size: .82rem; }
 .pdots i { width: .8rem; height: 1.6rem; border-radius: 3px; background: #6b7a70; }
 .svc h4 { margin: .55rem 0 .1rem; font-size: .8rem; font-weight: 700; font-stretch: 110%; color: var(--ivory); }
+/* Subway service pattern: tags beside the heading, banners in the Express
+   section, a pill on late-night trains. */
+.ic { width: 1em; height: 1em; vertical-align: -.15em; }
+.subway h2 .tag { display: inline-flex; align-items: center; gap: .3rem; margin: 0 0 0 .45rem; padding: .1rem .5rem; vertical-align: 4px; border-radius: 99px; font-size: .75rem; font-weight: 700; font-stretch: 100%; color: inherit; }
+.subway h2 .tag.night { background: #1b2440; color: #c9d3ff; }
+.subway h2 .tag.wknd { background: #2a2333; color: #e3c6f0; }
+.subway h2 .tag.hol { background: #332a17; color: var(--gold); }
+.subway h2 .tag.wx { background: #3a1f1a; color: var(--late); }
+.svc-line { display: flex; gap: .5rem; align-items: center; margin: .3rem 0 .35rem; padding: .45rem .65rem; border-radius: 6px; background: var(--enamel-3); font-size: .85rem; color: var(--ivory); }
+.svc-line .ic { flex: none; color: var(--gold); }
+.svc-line.night { background: #1b2440; }
+.svc-line.night .ic { color: #c9d3ff; }
+.none-row { display: grid; grid-template-columns: 2rem minmax(0, 1fr); gap: .7rem; align-items: center; padding: .4rem 0; color: var(--dim); font-size: .88rem; }
+.none-row .bullet { opacity: .35; }
+.late-pill { display: flex; align-items: center; gap: .25rem; width: max-content; margin-top: .15rem; padding: .05rem .45rem; border-radius: 99px; background: #1b2440; color: #c9d3ff; font-size: .72rem; font-weight: 700; }
+.late-pill .ic { width: .95em; height: .95em; }
 .stn { margin-top: .9rem; padding: .7rem .8rem .5rem; border: 1px solid var(--line); border-radius: 8px; }
 .stn-lines { display: flex; gap: .3rem; }
 .stn .dir:first-of-type h3 { margin-top: .6rem; }

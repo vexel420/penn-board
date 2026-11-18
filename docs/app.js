@@ -270,6 +270,66 @@ function bulletHtml(route, extraClass = '') {
   return `<span class="bullet ${extraClass}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
 }
 
+// ---------- subway service pattern: late nights, weekends, holidays, weather ----------
+// The A (8 Av) and the 2 (7 Av) run express through Penn by day and local
+// late at night. When they switch, per direction and day, comes from the MTA
+// timetable (subway-data.json "switches", minutes after the service day's
+// midnight). Phases for one line in one direction:
+//   day      normal daytime service
+//   started  the first late-night train has set off; express trains still due
+//            (banner: late-night service has started, last express leaves at...)
+//   night    no more express trains until morning ("No express trains late nights")
+//   morning  the first daytime express has set off but hasn't reached Penn
+//            (banner: daytime service has started)
+const ICON = {
+  moon: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" fill="currentColor"/></svg>',
+  sun: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8"/></g></svg>',
+  cal: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M3.5 10h17M8 3v4M16 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="7" y="13" width="4" height="4" rx=".5" fill="currentColor"/></svg>',
+  star: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="currentColor"/></svg>',
+  snow: '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v20M3.3 7l17.4 10M3.3 17l17.4-10M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5"/></g></svg>',
+};
+const subwayNoticeText = () => ((board && board.notices && board.notices.subway) || []).map((n) => `${n.type} ${n.text}`).join('\n');
+const holidayNotice = () => /holiday/i.test(subwayNoticeText());
+const weatherNotice = () => /severe weather|winter weather|snow|storm|hurricane|flood/i.test(subwayNoticeText());
+// On a holiday the MTA says which schedule runs; use that day's switch times.
+function scheduleToday(day) {
+  if (!holidayNotice()) return day;
+  const t = subwayNoticeText();
+  return /sunday schedule/i.test(t) ? 'sunday' : /saturday schedule/i.test(t) ? 'saturday' : day;
+}
+const fmtClock = (t) => {
+  const m = ((t % 1440) + 1440) % 1440, h = Math.floor(m / 60);
+  return `${h % 12 || 12}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+};
+const morningReached = new Set(); // date|station|line|dir once the first daytime express shows "now"
+
+function switchState(stationId, line, dir) {
+  const sw = subwayData && subwayData.switches && ((subwayData.switches[stationId] || {})[line] || {})[dir];
+  if (!sw) return null;
+  const today = nyNow(), yest = nyNow(-1), tom = nyNow(1);
+  const T = sw[scheduleToday(today.day)], Y = sw[yest.day], N = sw[tom.day];
+  if (!T) return null;
+  const m = today.mins;
+  const key = `${today.date}|${stationId}|${line}|${dir}`;
+  let phase, lastExpress, until;
+  if (m >= 12 * 60) {
+    phase = m < T.nightStart ? 'day' : m < T.lastExpress ? 'started' : 'night';
+    lastExpress = T.lastExpress;
+    until = N ? N.firstExpressPenn : T.firstExpressPenn;
+  } else if (Y && m + 1440 < Y.lastExpress) {
+    // Just after midnight, yesterday's express trains can still be due.
+    phase = m + 1440 >= Y.nightStart ? 'started' : 'day';
+    lastExpress = Y.lastExpress;
+    until = T.firstExpressPenn;
+  } else {
+    until = T.firstExpressPenn;
+    if (m < T.firstExpressStart) phase = 'night';
+    else if (!morningReached.has(key) && m < T.firstExpressPenn + 30) phase = 'morning';
+    else phase = 'day';
+  }
+  return { phase, lastExpress, until, key };
+}
+
 let subwayShown = [];      // the groups drawn, so a tap can find its train
 const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
 function renderSubway() {
@@ -288,11 +348,37 @@ function renderSubway() {
   // A train belongs to the station it calls at, so a rerouted train lands
   // in the right box.
   const STATIONS = [{ id: '128', lines: ['1', '2', '3'] }, { id: 'A28', lines: ['A', 'C', 'E'] }];
+  const states = [];
+  const morningNow = nyNow().mins < 12 * 60;
   $('subway').innerHTML = STATIONS.map((stn) => {
   const here = board.subway.filter((g) => (g.trains[0] && g.trains[0].stops ? g.trains[0].stops[0] : '') === stn.id);
   const dirs = ['N', 'S'].map((dir) => {
+    // Lines at this station that switch between express and local, and where
+    // each stands right now.
+    const switching = stn.lines.map((line) => ({ line, st: switchState(stn.id, line, dir) })).filter((x) => x.st);
+    for (const x of switching) {
+      // The first daytime express showing "now" at Penn ends the morning.
+      if (x.st.phase === 'morning' && here.some((g) => g.route === x.line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time - nowS < 30))) {
+        morningReached.add(x.st.key);
+        x.st = switchState(stn.id, x.line, dir);
+      }
+      states.push(x.st);
+    }
+    const lateNight = (route) => switching.some((x) => x.line === route) && (switching.find((x) => x.line === route).st.phase !== 'day' || morningNow);
     const parts = ['express', 'local'].map((svc) => {
+    let notes = '';
+    if (svc === 'express') {
+      notes = switching.map(({ line, st }) => {
+        const label = esc(lineInfo(line).label);
+        if (st.phase === 'started') return `<p class="svc-line night">${ICON.moon}<span><b>Late-night service has started on the ${label}.</b> The last express train leaves at ${fmtClock(st.lastExpress)}.</span></p>`;
+        if (st.phase === 'morning') return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${label}.</b></span></p>`;
+        const expressDue = here.some((g) => g.route === line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time >= nowS - 30));
+        if (st.phase === 'night' && !expressDue) return `<div class="none-row">${bulletHtml(line)}<span>No express trains late nights. ${label} trains run local until ${fmtClock(st.until)}.</span></div>`;
+        return '';
+      }).join('');
+    }
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
+      const pill = svc === 'local' && lateNight(g.route) ? `<span class="late-pill">${ICON.moon}Late night</span>` : '';
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
       if (!trains.length) return '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
@@ -303,18 +389,32 @@ function renderSubway() {
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
       const rerouted = trains.find((x) => unusualStops(g.route, x).length);
       if (!rerouted) {
-        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}</span><span class="smins">${firstMin}${rest}</span></div>`;
+        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
       }
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
     }).join('');
-      return lines ? `<div class="svc"><h4>${SVC[svc]}</h4>${lines}</div>` : '';
+      return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
     return parts ? `<div class="dir"><h3>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
   }).join('');
   const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('');
   return `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
   }).join('');
+  renderSubwayTags(states);
+}
+
+// Tags beside the Subway heading. Late-night service shows once no more
+// daytime express trains are due on any switching line, and goes in the
+// morning when the first daytime express shows "now" at Penn.
+function renderSubwayTags(states) {
+  const tags = [];
+  if (states.length && states.every((st) => st.phase === 'night' || st.phase === 'morning')) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
+  const day = nyNow().day;
+  if (holidayNotice()) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
+  else if (day === 'saturday' || day === 'sunday') tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
+  if (weatherNotice()) tags.push(`<span class="tag wx">${ICON.snow}Severe weather service</span>`);
+  $('sub-h').innerHTML = `Subway${tags.join('')}<span>34 St–Penn Station</span>`;
 }
 
 // ---------- reroute map ----------

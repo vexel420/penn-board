@@ -77,7 +77,7 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   the 2 from about 23:03 to 05:47. Plan: precompute these per line and day
   into `subway-data.json` to drive the countdowns.
 
-## Subway late-night / daytime / weekend: agreed design (19 Nov, not built yet)
+## Subway late-night / daytime / weekend (built 19 Nov)
 
 Owner decisions so far (see `design/switchover-tags-express-banner.png`):
 - Tags beside the "Subway" heading: "Late-night service" (moon) and
@@ -85,12 +85,18 @@ Owner decisions so far (see `design/switchover-tags-express-banner.png`):
 - Late-night trains carry a pill: moon + "Late night".
 - Banners live inside each station box's Express section; 1 2 3 and A C E
   follow the same rules.
-- Evening: the banner counts down the END OF DAYTIME EXPRESS SERVICE ("The
-  last express A leaves Penn in N min"). It appears one hour before the first
-  late-night train enters service on the line (A leaves Inwood 22:08
-  weekdays), says late-night service has started from then, and is removed
-  once the last express train has left Penn (A ~22:33). After that, the normal
-  late-night layout. See `design/evening-switchover-v3.png`.
+- Evening: NO countdown phase (owner removed it). The banner appears when the
+  first late-night train sets off from its terminal (A leaves Inwood 22:08
+  weekdays): "Late-night service has started on the A. The last express train
+  leaves at 10:33 PM." It goes once the last express has left Penn; then the
+  normal late-night layout.
+- Implementation: `switches` in `docs/subway-data.json` (built by
+  `scripts/build-subway-data.py`: nightStart, lastExpress, firstExpressStart,
+  firstExpressPenn per station/line/direction/day, minutes after the service
+  day's midnight); `switchState`, `renderSubwayTags` and the Express-section
+  notes in `docs/app.js`. Holiday notices that name a Saturday/Sunday schedule
+  switch the times used. Tested with a simulated clock at 9:30 PM, 10:15 PM,
+  10:40 PM, 1:12 AM, 5:20 AM, 5:37 AM and Saturday 1 PM.
 - Late nights: the Express heading stays with "No express trains late nights.
   A trains run local until 5:38 AM."
 - Morning: no countdown banner. Express trains simply appear with their
