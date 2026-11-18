@@ -241,7 +241,18 @@ const amtrak = source('amtrak', 60, async () => {
   const epoch = (iso) => (iso ? Math.floor(Date.parse(iso) / 1000) : 0);
   for (const list of Object.values(trains)) {
     for (const tr of list) {
-      if (tr.trainState === 'Completed') continue;
+      // Amtrak never reports a train ending at Penn as "at the station": it
+      // marks the whole trip Completed, a few minutes after arrival. Show it
+      // as Arrived until 5 minutes after it got in.
+      if (tr.trainState === 'Completed') {
+        const end = (tr.stations || []).find((s) => s.code === 'NYP');
+        const got = end && epoch(end.arr || end.schArr);
+        if (tr.destCode === 'NYP' && got && got > t - 300) {
+          rows.arrivals.push({ carrier: 'amtrak', line: tr.routeName, train: tr.trainNum, track: '', trackLikely: '', via: [],
+            id: `amtk-${tr.trainID}-arrivals`, time: got, sched: epoch(end.schArr), place: tr.origName, status: 'Arrived', tone: 'go', leaves: got });
+        }
+        continue;
+      }
       const stop = (tr.stations || []).find((s) => s.code === 'NYP');
       if (!stop) continue;
       // Stops along the way, as LIRR rows have them: trains only (no
@@ -270,7 +281,8 @@ const amtrak = source('amtrak', 60, async () => {
       const throughTo = tr.origCode !== 'NYP' && tr.destCode !== 'NYP' ? tr.destName : '';
       const depSched = epoch(stop.schDep);
       const depWhen = depSched ? Math.max(epoch(stop.dep) || depSched, depSched) : 0;
-      const atPenn = stop.status === 'Station';
+      const arrivedByTime = tr.origCode !== 'NYP' && epoch(stop.arr || stop.schArr) <= t;
+      const atPenn = stop.status === 'Station'; // as Amtrak reports it
       const row = (kind, sched, est, place) => {
         if (!sched) return;
         // A train can reach Penn early, but it won't leave before its
@@ -284,7 +296,8 @@ const amtrak = source('amtrak', 60, async () => {
         const late = Math.max(0, Math.round((when - sched) / 60));
         let status = 'On time', tone = 'ok';
         // A delayed train at Penn, or with its track posted, is boarding.
-        if (kind === 'departures' && (atPenn || stop.platform)) { status = 'Boarding'; tone = 'go'; }
+        // Departures: a through train due in, or reported at Penn, is boarding.
+        if (kind === 'departures' && (atPenn || arrivedByTime || stop.platform)) { status = 'Boarding'; tone = 'go'; }
         else if (kind === 'arrivals' && atPenn) { status = throughTo ? 'At Penn' : 'Arrived'; tone = 'go'; }
         else if (late >= 5) { status = `${late} min late`; tone = 'late'; }
         rows[kind].push({ ...base, via: kind === 'departures' ? viaOut : viaIn, viaState: kind === 'arrivals' ? viaInState : undefined,

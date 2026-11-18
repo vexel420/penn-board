@@ -45,6 +45,7 @@ const DEPARTED_SHOWN_S = 3 * 60;
 const AMTRAK_DEPARTED_SHOWN_S = 5 * 60; // owner's choice: Amtrak gets longer
 const shownFor = (r) => (r.carrier === 'amtrak' ? AMTRAK_DEPARTED_SHOWN_S : DEPARTED_SHOWN_S);
 const REPORT_LAG_S = 4 * 60; // the most a feed's "departed" report lags in practice
+const AWAITING_MAX_S = 45 * 60; // an Amtrak train with no news this long past its time comes off
 // Amtrak trains leave the board only when Amtrak reports them gone. If its
 // estimate passes with no word, the train stays (it is running late) until
 // the estimate is this old, which means the data has stopped updating.
@@ -87,10 +88,19 @@ function noteVanished(prev, next) {
   for (const r of prev ? prev.departures : []) {
     if (still.has(r.id) || vanished.has(r.id) || r.tone === 'stop') continue;
     if ((r.leaves ?? r.time) > nowS + 180) continue; // far from due: a feed glitch, not a departure
+    if (r.departsByFeed) {
+      // Amtrak drops a train that starts at Penn from its data while it's
+      // delayed, and brings it back only once it has left. Until then, keep
+      // it listed and say there's no news, rather than calling it departed.
+      vanished.set(r.id, { ...r, awaiting: true, status: 'No update from Amtrak', tone: 'late' });
+      continue;
+    }
     const at = departedAt(r) ?? nowS;
     vanished.set(r.id, { ...r, departed: true, departedAt: Math.min(at, nowS) });
   }
-  for (const [id, r] of vanished) if (nowS - shownSince(r, r.departedAt) > shownFor(r)) vanished.delete(id);
+  for (const [id, r] of vanished) {
+    if (r.awaiting ? nowS - (r.leaves ?? r.time) > AWAITING_MAX_S : nowS - shownSince(r, r.departedAt) > shownFor(r)) vanished.delete(id);
+  }
 }
 
 function visibleRows(rows, kind) {
@@ -108,6 +118,7 @@ function visibleRows(rows, kind) {
     // ...but never more than REPORT_LAG_S beyond its window after it really
     // left (otherwise opening the page would revive long-gone trains).
     if (at !== null) return nowS - shownSince(r, at) < shownFor(r) && nowS - at < shownFor(r) + REPORT_LAG_S;
+    if (r.awaiting) return nowS - (r.leaves ?? r.time) < AWAITING_MAX_S;
     if (r.departsByFeed) return r.time > nowS - AMTRAK_SILENT_S;
     return true;
   });
@@ -131,6 +142,8 @@ function shownStatus(r, kind) {
   // A delayed train whose track is posted is boarding (NJ Transit's own text stays).
   if (kind === 'departures' && r.tone === 'late' && r.track && !fromNjt(r)) r = { ...r, status: 'Boarding', tone: 'go' };
   if (finalCall(r, kind)) return { status: fromNjt(r) ? r.status : 'Final call', tone: 'final' };
+  // An Amtrak train past its time that Amtrak hasn't reported boarding or gone.
+  if (kind === 'departures' && r.departsByFeed && r.tone !== 'go' && r.tone !== 'stop' && (r.leaves ?? r.time) <= Date.now() / 1000) return { status: 'No update from Amtrak', tone: 'late' };
   if (r.tone !== 'go') return { status: r.status, tone: r.tone };
   if (kind === 'arrivals' && r.time <= Date.now() / 1000 && !r.continuesTo) return { status: r.status, tone: 'quiet' };
   if (isStale()) return { status: r.status, tone: 'quiet' };
