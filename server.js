@@ -69,6 +69,7 @@ const njt = source('njt', 30, async () => {
       carrier: isAmtrak ? 'amtrak' : 'njt',
       time: sched,
       leaves: sched + Math.max(0, +it.SEC_LATE || 0), // when it should have left, delay included
+      lateMin: Math.max(0, lateMin),
       place: (it.DESTINATION || '').replace(/&nbsp;/g, ' ').trim(),
       line: it.LINE || '',
       train: String(it.TRAIN_ID || '').replace(/^A(?=\d)/, ''),

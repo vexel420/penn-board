@@ -81,7 +81,9 @@ function noteVanished(prev, next) {
 
 function visibleRows(rows, kind) {
   const nowS = Date.now() / 1000;
-  if (kind === 'arrivals') return rows.filter((r) => r.time > nowS - 5 * 60);
+  // Arrivals go 5 min after arriving, except a through train, which stays
+  // until it has left Penn (its feed row disappears then).
+  if (kind === 'arrivals') return rows.filter((r) => (r.continuesTo ? r.departsAt > nowS - 30 * 60 : r.time > nowS - 5 * 60));
   // Ordered by real departure: when a train left, or when it's now expected
   // to leave (delay included), so a delayed train moves down the board.
   const when = (r) => departedAt(r) ?? r.leaves ?? r.time;
@@ -99,24 +101,96 @@ function visibleRows(rows, kind) {
 // data never keeps the green boarding highlight.
 // Final call: a boarding train in its last minute. NJ Transit rows keep NJ
 // Transit's own wording (its terms ask for as-is text); the row still turns red.
+// A delayed train's final call starts 2 minutes before its estimated
+// departure, so no one misses it; an on-time train's, 1 minute before.
+const isDelayed = (r) => (r.lateMin || 0) >= 2;
 function finalCall(r, kind) {
   if (kind !== 'departures' || r.tone !== 'go' || isStale()) return false;
   const left = (r.leaves ?? r.time) - Date.now() / 1000;
-  return left > 0 && left <= 60;
+  return left > 0 && left <= (isDelayed(r) ? 120 : 60);
 }
 
 function shownStatus(r, kind) {
   if (kind === 'departures' && departedAt(r) !== null) return { status: 'Departed', tone: 'departed' };
+  // A delayed train whose track is posted is boarding (NJ Transit's own text stays).
+  if (kind === 'departures' && r.tone === 'late' && r.track && !fromNjt(r)) r = { ...r, status: 'Boarding', tone: 'go' };
   if (finalCall(r, kind)) return { status: fromNjt(r) ? r.status : 'Final call', tone: 'final' };
   if (r.tone !== 'go') return { status: r.status, tone: r.tone };
-  if (kind === 'arrivals' && r.time <= Date.now() / 1000) return { status: r.status, tone: 'quiet' };
+  if (kind === 'arrivals' && r.time <= Date.now() / 1000 && !r.continuesTo) return { status: r.status, tone: 'quiet' };
   if (isStale()) return { status: r.status, tone: 'quiet' };
   return { status: r.status, tone: r.tone };
+}
+
+function finalLeft(r) {
+  const s = (r.leaves ?? r.time) - Date.now() / 1000;
+  return s > 60 ? 'in 2 min' : 'under 1 min';
 }
 
 function agoText(epoch) {
   const m = Math.floor((Date.now() / 1000 - epoch) / 60);
   return m < 1 ? 'left just now' : `left ${m} min ago`;
+}
+
+// ---------- arriving trains: cross off the stations already passed ----------
+// Amtrak's feed marks each station a train has left. For LIRR the board asks
+// LIRR about one train at a time, only while its list of stops is open.
+const lirrProgress = new Map(); // train id -> { at, passed: Set of codes, loading }
+function loadLirrProgress(id) {
+  const p = lirrProgress.get(id);
+  if (p && (p.loading || Date.now() - p.at < 20000)) return;
+  lirrProgress.set(id, { ...(p || { passed: new Set(), at: 0 }), loading: true });
+  fetch(`https://backend-unified.mylirr.org/locations/${encodeURIComponent(id)}`, { headers: { 'accept-version': '3.0' }, cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((d) => {
+      const stops = (d.details && d.details.stops) || [];
+      lirrProgress.set(id, { at: Date.now(), loading: false, known: true,
+        passed: new Set(stops.filter((s) => s.stop_status === 'DEPARTED').map((s) => s.code)) });
+    })
+    .catch(() => lirrProgress.set(id, { ...(lirrProgress.get(id) || {}), at: Date.now(), loading: false }))
+    .then(() => renderRail());
+}
+// Keep open LIRR arrival lists current (called on every redraw).
+function refreshOpenProgress() {
+  if (view !== 'arrivals' || !board) return;
+  for (const r of board.arrivals) if (r.carrier === 'lirr' && r.viaCodes && openRows.has(r.id)) loadLirrProgress(r.id);
+}
+
+// Each stop on the way: 'passed', 'here' (at the station now) or ''. Null if unknown.
+function viaStates(r) {
+  if (view !== 'arrivals') return null;
+  if (r.viaState) return r.viaState;
+  if (r.carrier === 'lirr' && r.viaCodes) {
+    const p = lirrProgress.get(r.id);
+    return p && p.known ? r.viaCodes.map((c) => (p.passed.has(c) ? 'passed' : '')) : null;
+  }
+  return null;
+}
+
+function viaHtml(r) {
+  const states = viaStates(r);
+  const open = openRows.has(r.id);
+  const next = states ? r.via.find((_, i) => states[i] !== 'passed') : null;
+  const allPassed = states && !next;
+  let where = '';
+  if (states && states.some((s) => s)) where = allPassed ? ', next stop Penn Station' : `, next stop ${esc(next)}`;
+  const names = r.via.map((name, i) => {
+    const s = states && states[i];
+    if (s === 'passed') return `<s><span class="sr">passed: </span>${esc(name)}</s>`;
+    if (s === 'here') return `<b class="here">${esc(name)}<span class="sr">, at the station now</span></b>`;
+    return esc(name);
+  }).join(', ');
+  const prog = lirrProgress.get(r.id);
+  const failed = prog && !prog.loading && !prog.known && prog.at;
+  const checking = open && !states && view === 'arrivals' && r.carrier === 'lirr'
+    ? `<small class="checking">${failed ? 'LIRR didn’t say where this train is. Trying again shortly.' : 'Checking where the train is…'}</small>` : '';
+  // The list always ends with where the train finishes. An arriving train
+  // finishes at Penn, unless it carries on (an Amtrak through train).
+  let tail = '', last = r.place;
+  if (view === 'arrivals') {
+    last = r.continuesTo || 'Penn Station';
+    if (r.continuesTo) tail = ', Penn Station';
+  }
+  return `<details class="via" data-id="${esc(r.id)}"${open ? ' open' : ''}><summary>${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stops</u>${where}</summary><p>${names}${tail}</p><p class="last-stop">Last stop: <b>${esc(last)}</b></p>${checking}</details>`;
 }
 
 function rowHtml(r) {
@@ -127,12 +201,16 @@ function rowHtml(r) {
   // A late train counts down to when it is now expected to leave.
   const left = gone ? agoText(departedAt(r) ?? r.time) : countdown(r.tone === 'stop' ? r.time : (r.leaves ?? r.time));
   const due = !gone && left === 'gone' && r.departsByFeed; // late Amtrak, still expected
-  const sched = r.sched && Math.abs(r.sched - r.time) >= 120 ? `<small>scheduled ${clock(r.sched).hm}</small>` : '';
-  const via = r.via && r.via.length
-    ? `<details class="via" data-id="${esc(r.id)}"${openRows.has(r.id) ? ' open' : ''}><summary>${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stops</u></summary><p>${r.via.map(esc).join(', ')}</p></details>`
-    : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}</div>`;
+  // Under the status: how late (when the status itself doesn't say) and the
+  // scheduled time, so a delayed train that is boarding still reads as delayed.
+  const notes = [];
+  if (isDelayed(r) && !/late/i.test(r.status) && !gone) notes.push(`${r.lateMin} min late`);
+  if (r.sched && Math.abs(r.sched - r.time) >= 120) notes.push(`scheduled ${clock(r.sched).hm}`);
+  if (view === 'arrivals' && r.continuesTo) notes.push(`continues to ${esc(r.continuesTo)}, leaves ${clock(r.departsAt).hm}`);
+  const sched = notes.length ? `<small>${notes.join(', ')}</small>` : '';
+  const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}</div>`;
   return `<li class="row ${r.tone}${left === 'gone' && !gone && !due ? ' gone' : ''}">
-    <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? 'under 1 min' : left === 'gone' ? '' : left}</span></div>
+    <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
     <div class="dest"><div class="place">${esc(r.place)}</div>${via}</div>
     <div class="status ${r.tone}">${esc(r.status)}${sched}</div>
@@ -158,6 +236,7 @@ function renderRail() {
   $('col-place').textContent = view === 'arrivals' ? 'From' : 'To';
   $('rows').innerHTML = rows.length ? rows.map(rowHtml).join('') : `<li class="empty">${esc(emptyMessage())}</li>`;
   for (const r of rows) seenTracks.set(r.id, r.track);
+  refreshOpenProgress();
 }
 
 // ---------- subway lines: colours, station names, reroutes ----------
@@ -199,8 +278,12 @@ function renderSubway() {
   }
   const nowS = Date.now() / 1000;
   subwayShown = [];
+  // Each direction splits into express and local, by how each train is
+  // actually running from Penn (night service and reroutes included).
+  const SVC = { express: ['Express', 'fewer stops'], local: ['Local', 'every stop'] };
   $('subway').innerHTML = ['N', 'S'].map((dir) => {
-    const lines = board.subway.filter((g) => g.dir === dir).map((g) => {
+    const parts = ['express', 'local'].map((svc) => {
+    const lines = board.subway.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
       if (!trains.length) return '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
@@ -213,10 +296,12 @@ function renderSubway() {
       if (!rerouted) {
         return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}</span><span class="smins">${firstMin}${rest}</span></div>`;
       }
-      const i = subwayShown.push({ route: g.route, dir, train: rerouted }) - 1;
+      const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
       return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
     }).join('');
-    return lines ? `<div class="dir"><h3>${DIRS[dir]}</h3>${lines}</div>` : '';
+      return lines ? `<div class="svc"><h4>${SVC[svc][0]} <span>${SVC[svc][1]}</span></h4>${lines}</div>` : '';
+    }).join('');
+    return parts ? `<div class="dir"><h3>${DIRS[dir]}</h3>${parts}</div>` : '';
   }).join('');
 }
 
@@ -241,13 +326,13 @@ function loadLeaflet() {
 }
 
 let rerouteMap = null;
-async function openReroute({ route, train }) {
+async function openReroute({ route, svc, train }) {
   const l = lineInfo(route);
   const stops = train.stops.filter((id) => subwayData.stops[id]);
   const unusual = new Set(unusualStops(route, train));
   const dest = stationName(stops[stops.length - 1]);
   $('reroute-h').innerHTML = `${bulletHtml(route)}<span>${esc(l.label)} train to ${esc(dest)}</span>`;
-  $('reroute-note').textContent = `This ${l.label} train is running on a different route from normal. ` +
+  $('reroute-note').textContent = `This ${l.label} train is running on a different route from normal, ${svc === 'express' ? 'express' : 'local'} from Penn. ` +
     `${unusual.size === 1 ? 'The station in gold is one' : `The ${unusual.size} stations in gold are ones`} the ${l.label} doesn’t usually stop at.`;
   $('reroute-stops').innerHTML = stops.map((id) => unusual.has(id)
     ? `<li class="unusual">${esc(stationName(id))} <small>not usual for the ${esc(l.label)}</small></li>`
@@ -456,6 +541,7 @@ document.querySelector('.chips').addEventListener('click', (e) => {
 $('rows').addEventListener('toggle', (e) => {
   const id = e.target.dataset && e.target.dataset.id; if (!id) return;
   e.target.open ? openRows.add(id) : openRows.delete(id);
+  if (e.target.open) refreshOpenProgress();
 }, true);
 // The Subway tab only exists on narrow screens; fall back when the window widens.
 matchMedia('(min-width: 961px)').addEventListener('change', (e) => {

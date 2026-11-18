@@ -129,6 +129,12 @@ details.via summary { cursor: pointer; color: var(--dim); font-size: .88rem; lis
 details.via summary::-webkit-details-marker { display: none; }
 details.via summary u { text-decoration-color: var(--line); text-underline-offset: 3px; }
 details.via p { margin: .35rem 0 .1rem; color: var(--ivory); font-size: .9rem; max-width: 60ch; }
+/* Arrivals: stations the train has already passed are crossed off. */
+details.via s { color: var(--dim); text-decoration-thickness: 1.5px; }
+details.via .here { color: var(--gold); font-weight: 650; }
+details.via p.last-stop { margin: .2rem 0 .1rem; color: var(--dim); }
+details.via p.last-stop b { color: var(--ivory); font-weight: 650; }
+details.via .checking { display: block; color: var(--dim); font-size: .8rem; }
 
 .status { font-weight: 650; font-stretch: 95%; }
 .status small { display: block; font-weight: 400; color: var(--dim); font-size: .82rem; }
@@ -164,6 +170,8 @@ details.via p { margin: .35rem 0 .1rem; color: var(--ivory); font-size: .9rem; m
 .pdots { display: flex; gap: 3px; justify-content: center; }
 .sched-note { margin: .4rem 0 .5rem; color: var(--dim); font-size: .82rem; }
 .pdots i { width: .8rem; height: 1.6rem; border-radius: 3px; background: #6b7a70; }
+.svc h4 { margin: .55rem 0 .1rem; font-size: .8rem; font-weight: 700; font-stretch: 110%; color: var(--ivory); }
+.svc h4 span { font-weight: 400; color: var(--dim); }
 .dir h3 { margin: 1rem 0 .3rem; font-size: .85rem; font-weight: 500; color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
 .sline { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .7rem; align-items: center; padding: .4rem 0; }
 .bullet { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff; background: #6b7a70; box-shadow: 0 0 0 1px rgba(242, 234, 216, .2); }

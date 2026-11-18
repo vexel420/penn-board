@@ -55,6 +55,26 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   allows the transit hosts, including `data.trilliumtransit.com` and
   `path.api.razza.dev`.
 
+## Changes of 18 Nov (evening)
+
+- Arrivals: stations an arriving train has passed are crossed off, with "next
+  stop" in the summary. Amtrak: from its per-station status (`viaState`). LIRR:
+  `backend-unified.mylirr.org/locations/{train_id}` (~9 KB, CORS open), fetched
+  only while that train's stop list is open, every 20 s (`lirrProgress`).
+- Every stop list ends with "Last stop: X" (Penn Station for arrivals, or the
+  onward destination for an Amtrak through train).
+- Amtrak through trains stay on arrivals ("At Penn, continues to X, leaves
+  h:mm") until they leave Penn (`continuesTo`, `departsAt`).
+- A delayed LIRR or Amtrak train with its track posted (or an Amtrak train at
+  Penn) shows "Boarding" with "N min late" underneath. Final call starts 2 min
+  before the estimated departure for delayed trains (`lateMin` >= 2), 1 min
+  for on-time ones.
+- Subway panel splits each direction into Express and Local, decided per train
+  from its next stops after Penn (`serviceFromPenn` in `docs/feeds.js`), so
+  night service and reroutes sort themselves. No diamond symbols (owner's
+  request). LIRR/Amtrak/NJ Transit have no reliable express flag, so rail rows
+  aren't labelled.
+
 ## Ordering by real departure (18 Nov)
 
 - Rows are ordered by when each train is really expected to leave (`leaves`,

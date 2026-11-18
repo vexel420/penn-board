@@ -101,6 +101,19 @@ const SUBWAY_FEEDS = [
 ];
 const PENN_STOPS = new Set(['128', 'A28']); // 34 St-Penn Station: 7 Av line and 8 Av line
 
+// Express or local from Penn, by the stops the train actually makes next:
+// a local calls at 28 St or 50 St (7 Av line) or 23 St or 50 St (8 Av line),
+// an express runs past them. Works for night service (the 2 and 3 go local)
+// and for rerouted trains. Too few stops to tell: the line's usual service.
+const LOCAL_NEXT = new Set(['129', '126', 'A30', 'A25']);
+const USUALLY_EXPRESS = new Set(['2', '3', 'A']);
+function serviceFromPenn(route, stops) {
+  const next = stops.slice(1, 4);
+  if (next.some((s) => LOCAL_NEXT.has(s))) return 'local';
+  if (next.length >= 2) return 'express';
+  return USUALLY_EXPRESS.has(route) ? 'express' : 'local';
+}
+
 // Each train keeps the stations it will call at from Penn onwards (station
 // ids). The page names them, colours each line and spots reroutes using
 // docs/subway-data.json.
@@ -116,15 +129,17 @@ const subway = source('subway', 20, async () => {
     if (!stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
     const dir = stop.id.slice(-1); // N = uptown, S = downtown
     const route = trip.route.replace(/X$/, '');
-    const key = route + dir;
-    if (!groups.has(key)) groups.set(key, { route, dir, trains: [] });
-    groups.get(key).trains.push({ time: stop.time, stops: trip.stops.slice(at).map((s) => s.id.slice(0, -1)) });
+    const stops = trip.stops.slice(at).map((s) => s.id.slice(0, -1));
+    const svc = serviceFromPenn(route, stops);
+    const key = route + dir + svc;
+    if (!groups.has(key)) groups.set(key, { route, dir, svc, trains: [] });
+    groups.get(key).trains.push({ time: stop.time, stops });
   }
   return [...groups.values()].map((g) => {
     g.trains.sort((a, b) => a.time - b.time);
     g.trains = g.trains.slice(0, 4);
     return g;
-  }).sort((a, b) => (a.route + a.dir).localeCompare(b.route + b.dir));
+  }).sort((a, b) => (a.route + a.dir + a.svc).localeCompare(b.route + b.dir + b.svc));
 });
 
 // ---------- PATH (Port Authority feed; 33 St station, a block east of Penn) ----------
@@ -187,8 +202,8 @@ const lirr = source('lirr', 20, async () => {
     if (a.status && a.status.canceled) { status = 'Cancelled'; tone = 'stop'; }
     else if (leaving && departed) { status = 'Departed'; tone = 'quiet'; }
     else if (a.status && a.status.held) { status = 'Held'; tone = 'late'; }
+    else if (leaving && a.track) { status = 'Boarding'; tone = 'go'; } // even if late
     else if (lateMin >= 2) { status = `${lateMin} min late`; tone = 'late'; }
-    else if (leaving && a.track) { status = 'Boarding'; tone = 'go'; }
     else if (a.stop_status === 'DEPARTED') { status = 'Departed'; tone = 'quiet'; }
     else if (a.stop_status === 'ARRIVED') { status = 'Arrived'; tone = 'go'; }
     rows[leaving ? 'departures' : 'arrivals'].push({
@@ -198,6 +213,7 @@ const lirr = source('lirr', 20, async () => {
       // seconds, negative = late): show and sort by the real expected time.
       time: a.time + delaySec,
       sched: a.time,
+      lateMin,
       place: stationName(leaving ? stops[stops.length - 1] : stops[0]),
       line: `${LIRR_BRANCHES[a.branch] || a.branch} Branch`,
       train: a.train_num,
@@ -209,6 +225,7 @@ const lirr = source('lirr', 20, async () => {
       departed: leaving && departed,
       leaves: a.time + delaySec,
       via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(stationName),
+      viaCodes: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined), // to match LIRR's per-train progress
     });
   }
   return rows;
@@ -233,6 +250,9 @@ const amtrak = source('amtrak', 60, async () => {
       const names = (list) => list.filter((x) => !x.bus).map((x) => x.name);
       const viaOut = names(stations.slice(at + 1)).slice(0, -1);
       const viaIn = names(stations.slice(0, at)).slice(1);
+      // How far an arriving train has got: Amtrak marks each station it has left.
+      const viaInState = stations.slice(0, at).filter((x) => !x.bus).slice(1)
+        .map((x) => (x.status === 'Departed' ? 'passed' : x.status === 'Station' ? 'here' : ''));
       const base = { carrier: 'amtrak', departsByFeed: true, line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '' };
       if (stop.status === 'Departed') {
         // Keep a train that has just left Penn, so the board can say so.
@@ -243,19 +263,31 @@ const amtrak = source('amtrak', 60, async () => {
         }
         continue;
       }
+      // A through train (say Boston to Washington) arrives and then departs:
+      // its arrival stays listed until it has left Penn.
+      const throughTo = tr.origCode !== 'NYP' && tr.destCode !== 'NYP' ? tr.destName : '';
+      const depSched = epoch(stop.schDep);
+      const depWhen = depSched ? Math.max(epoch(stop.dep) || depSched, depSched) : 0;
+      const atPenn = stop.status === 'Station';
       const row = (kind, sched, est, place) => {
         if (!sched) return;
         // A train can reach Penn early, but it won't leave before its
         // scheduled time; arrivals can be early.
         const when = kind === 'departures' ? Math.max(est || sched, sched) : (est || sched);
         // A departure stays until Amtrak reports it gone (the page drops one
-        // whose estimate is 30 min stale); an arrival goes 5 min after it's due.
-        if (when < t - (kind === 'departures' ? 1800 : 300) || when > t + 8 * 3600) return;
-        const late = Math.round((when - sched) / 60);
+        // whose estimate is 30 min stale); an arrival goes 5 min after it's
+        // due, unless it continues on, when it stays until it leaves.
+        const keepUntil = kind === 'departures' ? when + 1800 : throughTo ? depWhen + 1800 : when + 300;
+        if (keepUntil < t || when > t + 8 * 3600) return;
+        const late = Math.max(0, Math.round((when - sched) / 60));
         let status = 'On time', tone = 'ok';
-        if (late >= 5) { status = `${late} min late`; tone = 'late'; }
-        else if (stop.status === 'Station') { status = kind === 'departures' ? 'Boarding' : 'Arrived'; tone = 'go'; }
-        rows[kind].push({ ...base, via: kind === 'departures' ? viaOut : viaIn, id: `amtk-${tr.trainID}-${kind}`, time: when, sched, place, status, tone, leaves: when });
+        // A delayed train at Penn, or with its track posted, is boarding.
+        if (kind === 'departures' && (atPenn || stop.platform)) { status = 'Boarding'; tone = 'go'; }
+        else if (kind === 'arrivals' && atPenn) { status = throughTo ? 'At Penn' : 'Arrived'; tone = 'go'; }
+        else if (late >= 5) { status = `${late} min late`; tone = 'late'; }
+        rows[kind].push({ ...base, via: kind === 'departures' ? viaOut : viaIn, viaState: kind === 'arrivals' ? viaInState : undefined,
+          id: `amtk-${tr.trainID}-${kind}`, time: when, sched, place, status, tone, leaves: when, lateMin: late,
+          ...(kind === 'arrivals' && throughTo ? { continuesTo: throughTo, departsAt: depWhen } : {}) });
       };
       if (tr.destCode !== 'NYP') row('departures', epoch(stop.schDep), epoch(stop.dep), tr.destName);
       if (tr.origCode !== 'NYP') row('arrivals', epoch(stop.schArr), epoch(stop.arr), tr.origName);
