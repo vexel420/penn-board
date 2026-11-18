@@ -1389,7 +1389,7 @@ function renderPathSchedule() {
 // ---------- service notices ----------
 // One strip per place: railroads above the train list, the subway in its
 // panel. It starts collapsed; opening it is remembered for this visit until
-// notice arrives.
+// the set of notices changes.
 const friendlyType = (t) => {
   const x = t.replace(/^Planned - /, 'Planned work, ');
   return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); // sentence case
