@@ -349,7 +349,15 @@ function parseAlerts(feed, keep) {
     const type = meta.alert_type || 'Service notice';
     out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more });
   }
-  return out.sort((x, y) => y.urgent - x.urgent);
+  out.sort((x, y) => y.urgent - x.urgent);
+  const byText = new Map();
+  for (const n of out) {
+    const key = n.text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    const seen = byText.get(key);
+    if (seen) seen.lines = [...new Set([...seen.lines, ...n.lines])];
+    else byText.set(key, n);
+  }
+  return [...byText.values()];
 }
 
 // The subway notices file is about 1 MB, so it is read every 3 minutes, and

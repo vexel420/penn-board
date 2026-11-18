@@ -52,6 +52,18 @@ const AWAITING_MAX_S = 45 * 60; // an Amtrak train with no news this long past i
 const AMTRAK_SILENT_S = 30 * 60;
 const flaggedAt = new Map(); // train id -> when we first saw its feed call it departed
 const vanished = new Map();  // train id -> row for a train that left the feed as it was due out
+const CANCELLED_SHOWN_S = 5 * 60; // a cancelled train stays until this long past its time
+const cancelledGone = { departures: new Map(), arrivals: new Map() }; // cancelled trains a feed dropped early
+function keepCancelled(prev, next, kind) {
+  const nowS = Date.now() / 1000;
+  const still = new Set(next[kind].map((r) => r.id));
+  const kept = cancelledGone[kind];
+  for (const id of still) kept.delete(id);
+  for (const r of prev ? prev[kind] : []) {
+    if (r.tone === 'stop' && !still.has(r.id) && r.time > nowS - CANCELLED_SHOWN_S) kept.set(r.id, r);
+  }
+  for (const [id, r] of kept) if (r.time <= nowS - CANCELLED_SHOWN_S) kept.delete(id);
+}
 
 // When a train left, or null if it hasn't. Uses the feed's own word where it
 // has one (LIRR, Amtrak), else the departure time plus any delay.
@@ -83,6 +95,8 @@ function shownSince(r, at) {
 // disappear close to their time, so they still show as departed.
 function noteVanished(prev, next) {
   const nowS = Date.now() / 1000;
+  keepCancelled(prev, next, 'departures');
+  keepCancelled(prev, next, 'arrivals');
   const still = new Set(next.departures.map((r) => r.id));
   for (const id of still) vanished.delete(id);
   for (const r of prev ? prev.departures : []) {
@@ -107,13 +121,16 @@ function visibleRows(rows, kind) {
   const nowS = Date.now() / 1000;
   // Arrivals go 5 min after arriving, except a through train, which stays
   // until it has left Penn (its feed row disappears then).
-  if (kind === 'arrivals') return rows.filter((r) => (r.continuesTo ? r.departsAt > nowS - 30 * 60 : r.time > nowS - 5 * 60));
+  if (kind === 'arrivals') {
+    return [...rows, ...cancelledGone.arrivals.values()].sort((a, b) => a.time - b.time)
+      .filter((r) => (r.continuesTo ? r.departsAt > nowS - 30 * 60 : r.time > nowS - 5 * 60));
+  }
   // Ordered by real departure: when a train left, or when it's now expected
   // to leave (delay included), so a delayed train moves down the board.
   const when = (r) => departedAt(r) ?? r.leaves ?? r.time;
-  const all = [...rows, ...vanished.values()].sort((a, b) => when(a) - when(b));
+  const all = [...rows, ...vanished.values(), ...cancelledGone.departures.values()].sort((a, b) => when(a) - when(b));
   return all.filter((r) => {
-    if (r.tone === 'stop') return r.time > nowS - 5 * 60; // keep a cancellation up a while
+    if (r.tone === 'stop') return r.time > nowS - CANCELLED_SHOWN_S; // keep a cancellation up a while
     const at = departedAt(r);
     // ...but never more than REPORT_LAG_S beyond its window after it really
     // left (otherwise opening the page would revive long-gone trains).
