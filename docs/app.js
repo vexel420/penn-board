@@ -904,8 +904,20 @@ async function openChange(id, view = 1) {
 const liveDirectionsHtml = () => `<p class="cm-live">Live directions from Penn: <a href="${LIVE_DIRECTIONS.google}" target="_blank" rel="noopener">Google Maps</a> · <a href="${LIVE_DIRECTIONS.apple}" target="_blank" rel="noopener">Apple Maps</a></p>`;
 // The MTA's text, line by line, with its symbols drawn; "Transfer stations:"
 // and the like become small headings.
-const mtaTextHtml = (t) => t.split('\n').map((x) => x.trim()).filter(Boolean)
-  .map((x) => (/:$/.test(x) && x.length < 60 ? `<h4>${noticeText(x)}</h4>` : `<p>${noticeText(x)}</p>`)).join('');
+// The MTA numbers its sections ("1. Between Inwood-207 St and Canal St"),
+// which reads like the 1 train beside the line badges: numbered lines become
+// a plain bulleted list instead.
+function mtaTextHtml(t) {
+  let html = '', list = false;
+  for (const x of t.split('\n').map((y) => y.trim()).filter(Boolean)) {
+    const item = x.match(/^\d+[.)]\s+(.*)$/);
+    if (item && !list) { html += '<ul class="cm-list">'; list = true; }
+    if (!item && list) { html += '</ul>'; list = false; }
+    if (item) html += `<li>${noticeText(item[1])}</li>`;
+    else html += /:$/.test(x) && x.length < 60 ? `<h4>${noticeText(x)}</h4>` : `<p>${noticeText(x)}</p>`;
+  }
+  return html + (list ? '</ul>' : '');
+}
 
 function drawChange(map, model, view) {
   const { route, closed, alt } = model;
