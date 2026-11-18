@@ -491,3 +491,13 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   stopping on all times while a train is "now". Express and local stay in
   their own sections. subway-data.json "terminals" (and SHARE_ROW in the build
   script) are no longer used for this; kept in case per-destination rows return.
+
+## NJ Transit (approved Nov 18, 2026)
+- Owner's RailData login is stored as Worker secrets NJT_USERNAME / NJT_PASSWORD
+  on penn-board-relay (redeploy with metadata `keep_bindings: ["secret_text"]`
+  so the secrets survive). Worker route `GET /njt` gets a token (kept in memory
+  and the Cache API for 23 h), then getTrainSchedule (station NY) and
+  getStationMSG, cached 30 s. API docs: raildata.njtransit.com/swagger/index.html.
+- Status on Nov 18: getToken answers 500 "Missing user account." — the saved
+  username isn't recognised; owner is checking the API credentials. The page
+  doesn't read /njt yet (next: parse it in docs/feeds.js like server.js does).
