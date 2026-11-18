@@ -61,9 +61,17 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   headed only by line symbols (owner: no explanatory notes; station signs do
   that). A train goes in the box of the Penn stop it calls at.
 - LIRR rows carry a Peak or Off-peak tag from `peak_code` (P/O).
-- Day/night/weekend indication is for the subway only (owner's choice). A
-  design for the late-night switchover is in
-  `design/subway-night-day-design.png`, awaiting approval. The real switch
+- Day/night/weekend indication is for the subway only (owner's choice).
+  Approved on 19 Nov, not yet built: late-night trains carry a pill with a
+  moon and "Late night"; a banner counts down to late-night service from one
+  hour before; while express and late-night trains overlap in the evening the
+  banner says late-night service has started (and when the last express
+  leaves); late at night the Express heading stays, with "No express trains
+  late nights. A trains run local until 5:38 AM."; in the morning a daytime
+  banner shows only until the first express train leaves, while remaining
+  late-night trains keep their marker. Both station boxes follow the same
+  rules. See `design/switchover-updated.png`. Weekend options in
+  `design/weekend-options.png`, awaiting a choice. The real switch
   times vary by line and day: from the MTA GTFS, downtown A trains run local at
   Penn from about 22:42 to 05:38 on weekdays (Sat from 22:38, Sun until 07:26);
   the 2 from about 23:03 to 05:47. Plan: precompute these per line and day
