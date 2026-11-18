@@ -420,3 +420,4 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 }
 /* Rows off screen skip layout and painting until scrolled to (tile-heavy rows are costly). */
 .flipboard .row { content-visibility: auto; contain-intrinsic-size: auto 110px; }
+.mast h1 { cursor: pointer; -webkit-tap-highlight-color: transparent; }

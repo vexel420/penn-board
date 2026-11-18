@@ -1625,6 +1625,13 @@ function tick() {
 // Tick on the second, so the seconds never skip or stall.
 function everySecond() { setTimeout(() => { tick(); everySecond(); }, 1000 - (Date.now() % 1000) + 5); }
 setPressed('.chips', 'carrier', carrier);
+// Tapping "Penn Station" reloads the page (fresh data and the newest version).
+const mastTitle = document.querySelector('.mast h1');
+mastTitle.setAttribute('role', 'button');
+mastTitle.tabIndex = 0;
+mastTitle.title = 'Reload the board';
+mastTitle.addEventListener('click', () => location.reload());
+mastTitle.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.reload(); } });
 document.querySelector('.style-seg').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-style]');
   if (b) setBoardStyle(b.dataset.style === 'flip');

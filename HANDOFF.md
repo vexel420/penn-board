@@ -463,3 +463,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   auto` on flip rows); only rows whose markup changed are replaced
   (`patchRows`); flaps animate transform only. On a 4x-slowed phone the worst
   freeze on a tab switch went from ~1150 ms to ~120 ms.
+- Tapping "Penn Station" in the masthead reloads the page.
