@@ -452,7 +452,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   stay plain) and each train's time, destination, status and track into tiles.
   `flipText(key, text)` draws tiles showing the field's previous text
   (`flipShown`), and `runFlips(root)` turns changed tiles after each redraw.
-  prefers-reduced-motion: no flipping. Subway and PATH panels stay standard.
+  Flips even with Reduce Motion on (owner's choice). At final call the track
+  tiles flip over and turn red (`flipLook`). Subway and PATH panels stay standard.
 - Phones (≤960px): an "Alerts" tab with a count; notices grouped Trains at
   Penn / Subway / PATH (`renderAlertsTab`). The notice strips are hidden on
   phones; computers keep them.

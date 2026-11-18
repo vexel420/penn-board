@@ -389,7 +389,7 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 .flipboard .track b .fl { font-size: .7em; }
 .flipboard .track.likely b, .flipboard .track.none b { color: var(--dim); box-shadow: none; }
 .flipboard .track.ring b { animation: none; }
-.flipboard .track.ring .f { box-shadow: 0 0 0 2px var(--alarm); }
+.flipboard .track .fl.final { color: var(--alarm); } /* final call: the track turns red */
 .flipboard .row.departed .f, .flipboard .row.stop .f { opacity: .65; }
 .flipboard .row.stop .place, .flipboard .row.stop .time b { text-decoration: none; }
 /* masthead and clock: red tiles, gold letters */

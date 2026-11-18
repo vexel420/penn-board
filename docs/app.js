@@ -32,15 +32,15 @@ function countdown(epoch) {
 // split-flap tiles. Rows are redrawn often, so the page remembers what each
 // field last showed (`flipShown`) and, after a redraw, turns over only the
 // tiles whose character changed, stepping through a few letters between as a
-// real board does. People who ask their device for less motion get the new
-// text without the flipping.
+// real board does. (It flips even with the device's Reduce Motion setting on:
+// the owner's choice, since flipping is the point of this style.)
 let flipMode = false;
 try { flipMode = localStorage.getItem('boardStyle') === 'flip'; } catch {}
 const flipShown = new Map(); // field key -> text it shows now
 const FLIP_CHARS = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:';
-const lessMotion = matchMedia('(prefers-reduced-motion: reduce)');
 const tileHtml = (c) => `<span class="f"><span class="t"><b>${esc(c)}</b></span><span class="bt"><b>${esc(c)}</b></span></span>`;
 // Tiles for `text`, showing what the field showed before; runFlips() turns them.
+const flipLook = new Map(); // field key -> its colour state (e.g. 'final'), so a colour change flips too
 function flipText(key, text, cls = '') {
   const to = String(text ?? '').toUpperCase();
   if (!flipMode) return esc(text);
@@ -54,24 +54,28 @@ function flipText(key, text, cls = '') {
     if (to[i] === ' ' && i < n - 1) html += '</span><span class="fw">';
   }
   html += '</span>';
-  return `<span class="fl ${cls}" data-k="${esc(key)}" data-to="${esc(to)}" role="text" aria-label="${esc(text)}">${html}</span>`;
+  return `<span class="fl ${cls}" data-k="${esc(key)}" data-to="${esc(to)}" data-look="${esc(cls)}" role="text" aria-label="${esc(text)}">${html}</span>`;
 }
 function runFlips(root) {
   if (!flipMode) return;
   root.querySelectorAll('.fl[data-to]').forEach((el) => {
-    const to = el.dataset.to;
+    const to = el.dataset.to, k = el.dataset.k;
+    // A colour change (the track turning red for the final call) turns every
+    // tile over once, even where the character stays the same.
+    const recolour = flipLook.has(k) && flipLook.get(k) !== el.dataset.look;
     const tiles = el.querySelectorAll('.f');
     tiles.forEach((f, i) => {
       const from = f.querySelector('.t b').textContent;
       const ch = to[i] || ' ';
       if (from !== ch) flipTile(f, from, ch, i * 30);
+      else if (recolour && ch !== ' ') setTimeout(() => turnTile(f, ch, ch), i * 30);
     });
-    flipShown.set(el.dataset.k, to);
+    flipShown.set(k, to);
+    flipLook.set(k, el.dataset.look);
     delete el.dataset.to;
   });
 }
 function flipTile(f, from, ch, delay) {
-  if (lessMotion.matches) { f.querySelectorAll('b').forEach((b) => { b.textContent = ch; }); return; }
   const a = FLIP_CHARS.indexOf(from), b = FLIP_CHARS.indexOf(ch);
   const steps = [];
   if (a >= 0 && b >= 0) {
@@ -120,7 +124,7 @@ let lastClock = '';
 function trackCell(r, extra = '') {
   if (r.track) {
     const fresh = seenTracks.has(r.id) && seenTracks.get(r.id) !== r.track;
-    return `<div class="track${fresh && !flipMode ? ' flip' : ''}${extra}" aria-label="Track ${esc(r.track)}"><b>${flipText(`${r.id}|k`, r.track)}</b></div>`;
+    return `<div class="track${fresh && !flipMode ? ' flip' : ''}${extra}" aria-label="Track ${esc(r.track)}"><b>${flipText(`${r.id}|k`, r.track, extra.includes('ring') ? 'final' : '')}</b></div>`;
   }
   if (r.trackLikely) return `<div class="track likely" aria-label="Track not posted, usually ${esc(r.trackLikely)}"><b>${flipText(`${r.id}|k`, r.trackLikely)}</b><small>usual</small></div>`;
   return `<div class="track none" aria-label="Track not posted"><b>${flipMode ? flipText(`${r.id}|k`, '') : '–'}</b></div>`;
