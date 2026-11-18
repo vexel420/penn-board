@@ -358,6 +358,27 @@ function switchState(stationId, line, dir) {
   return { phase, lastExpress, until, key };
 }
 
+const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
+
+// PATH's late-night service: the hours when weekday trains from 33 St run to
+// Journal Square via Hoboken (about 11 PM to 6 AM). PATH trains leaving in
+// those hours get the pill on any day; weekend daytime via-Hoboken trains are
+// the weekend pattern, not late night.
+function pathNightWindow() {
+  const wk = pathSchedule && pathSchedule.days && pathSchedule.days.weekday;
+  if (!wk) return null;
+  const via = wk.filter((d) => /via/i.test(d.to)).map((d) => d.t);
+  const evening = via.filter((t) => t >= 18 * 60), morning = via.filter((t) => t < 12 * 60);
+  if (!evening.length || !morning.length) return null;
+  return { start: Math.min(...evening), end: Math.max(...morning) };
+}
+function pathLateNight(minsAfterMidnight) {
+  const w = pathNightWindow();
+  if (!w) return false;
+  const m = ((minsAfterMidnight % 1440) + 1440) % 1440;
+  return m >= w.start || m <= w.end;
+}
+
 let subwayShown = [];      // the groups drawn, so a tap can find its train
 const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
 function renderSubway() {
@@ -393,6 +414,10 @@ function renderSubway() {
       states.push(x.st);
     }
     const lateNight = (route) => switching.some((x) => x.line === route) && (switching.find((x) => x.line === route).st.phase !== 'day' || morningNow);
+    // This platform direction is on its late-night schedule: no more express
+    // trains until morning. Every train here then gets the pill, locals too,
+    // because late-night service runs less often.
+    const dirNight = switching.some((x) => x.st.phase === 'night' || x.st.phase === 'morning');
     const parts = ['express', 'local'].map((svc) => {
     let notes = '';
     if (svc === 'express') {
@@ -406,7 +431,7 @@ function renderSubway() {
       }).join('');
     }
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
-      const pill = svc === 'local' && lateNight(g.route) ? `<span class="late-pill">${ICON.moon}Late night</span>` : '';
+      const pill = (svc === 'local' && lateNight(g.route)) || dirNight ? LATE_PILL : '';
       const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
       if (!trains.length) return '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
@@ -532,7 +557,8 @@ function renderPath() {
     const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
     const rest = mins.length > 1 ? `, ${mins.slice(1).join(', ')}` : '';
     const dots = (g.colors.length ? g.colors : ['']).map((c) => `<i${c ? ` style="background:#${c}"` : ''}></i>`).join('');
-    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}</span><span class="smins">${firstMin}${rest}</span></div>`;
+    const pill = pathLateNight(nyNow().mins + (mins[0] || 0)) ? LATE_PILL : '';
+    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
   }).join('');
 }
 
@@ -591,7 +617,8 @@ function renderPathSchedule() {
   const lines = [...byDest].map(([dest, g]) => {
     const [first, ...rest] = g.times.slice(0, 3).map(fmtMins);
     const dots = g.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('');
-    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
+    const pill = pathLateNight(g.times[0]) ? LATE_PILL : '';
+    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
   }).join('');
   $('path').innerHTML = (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>') + note;
 }
