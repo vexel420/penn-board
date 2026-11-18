@@ -10,8 +10,8 @@ one that turns up at Penn because of a service change:
   - for lines that run express through Penn by day and local late at night
     (the A and the 2), when that switch happens, per direction and day;
   - for lines that don't leave Penn at all late at night (the C, and the 3
-    going downtown, which ends at Penn), the hours with no trains and the
-    line to take instead.
+    going downtown, which ends at Penn), the hours with no trains (the page
+    suggests the station's other lines running that way).
 
 It also builds docs/subway-shapes.json: the path of every line's tracks
 (simplified to about 100 KB), which the service-change map draws.
@@ -33,9 +33,8 @@ SIMPLIFY = 0.00004  # degrees, about 4 m: drops points that don't change the dra
 # call at (the same rule as serviceFromPenn in docs/feeds.js).
 PENN = {'128', 'A28'}
 LOCAL_NEXT = {'129', '126', 'A30', 'A25'}
-# Late at night, the train to take from Penn when a line isn't running: the A
-# makes the C's stops (it runs local then), and the 2 makes the 3's (local).
-NIGHT_ALTERNATIVE = {'C': 'A', '3': '2'}
+# Lines checked for a break in service from Penn late at night.
+NIGHT_GAP_LINES = {'C', '3'}
 NIGHT_GAP_MIN = 90  # a longer break than this in a line's trains is its night off
 
 
@@ -192,11 +191,11 @@ def main(zip_path):
         sw = switch_times(ts)
         if sw:
             switches.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = sw
-        gap = night_gap(ts) if line in NIGHT_ALTERNATIVE else None
+        gap = night_gap(ts) if line in NIGHT_GAP_LINES else None
         if gap:
             # The section it's shown in: how the line usually runs from Penn.
             express = sum(t[2] for t in ts) * 2 > len(ts)
-            gap.update(alt=NIGHT_ALTERNATIVE[line], svc='express' if express else 'local')
+            gap.update(svc='express' if express else 'local')
             gaps.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = gap
     for line, r in routes.items():
         r['normal'] = sorted(normal[line])

@@ -501,10 +501,18 @@ function renderSubway() {
     const gaps = stn.lines.map((line) => {
       const g = nightGapState(stn.id, line, dir);
       if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
-      // "No downtown 3 trains" when the other direction still runs.
-      const way = nightGapState(stn.id, line, dir === 'N' ? 'S' : 'N') ? '' : (dir === 'N' ? ' uptown' : ' downtown');
-      const alt = esc(lineInfo(g.alt).label);
-      return `<div class="none-row">${bulletHtml(line)}<span>No${way} ${esc(lineInfo(line).label)} trains late nights. Take the ${alt}, running local, until ${fmtClock(g.until)}.</span></div>`;
+      // The other lines at this station still running this way (C: A or E; 3: 1 or 2).
+      const alts = stn.lines.filter((l) => l !== line && !nightGapState(stn.id, l, dir)).map((l) => esc(lineInfo(l).label));
+      const altText = alts.length ? `the ${alts.slice(0, -1).join(', ')}${alts.length > 1 ? ' or ' : ''}${alts[alts.length - 1]}` : '';
+      const way = dir === 'N' ? 'uptown' : 'downtown';
+      const label = esc(lineInfo(line).label);
+      // Short: "No C trains until 5:41 AM. For downtown service, use the A or E."
+      // When only one direction stops (the 3 ends at Penn), say which.
+      const oneWay = !nightGapState(stn.id, line, dir === 'N' ? 'S' : 'N');
+      const say = oneWay
+        ? `No ${label} trains ${way} until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`
+        : `No ${label} trains until ${fmtClock(g.until)}.${altText ? ` For ${way} service, use ${altText}.` : ''}`;
+      return `<div class="none-row">${bulletHtml(line)}<span>${say}</span></div>`;
     }).join('');
     if (svc === 'express') {
       // Other lines still running express in this direction (the 3 uptown, late at night).

@@ -378,7 +378,7 @@ The owner's Default cloud environment had these hosts added for this project:
 
 ## Late-night subway fixes (Nov 18, 2026)
 - Trains that end at Penn (the 3 downtown late nights) are skipped in `docs/feeds.js`.
-- `subway-data.json` now has `nightGaps` (built by `scripts/build-subway-data.py`): the C (both ways) and the 3 downtown have no trains from Penn late nights. The board shows "No C trains late nights. Take the A, running local, until T." in that line's usual section. Alternatives are set in `NIGHT_ALTERNATIVE` in the build script.
+- `subway-data.json` now has `nightGaps` (built by `scripts/build-subway-data.py`): the C (both ways) and the 3 downtown have no trains from Penn late nights. The board shows "No C trains until T. For downtown service, use the A or E." in that line's usual section (the 3: "No 3 trains downtown until T. Use the 1 or 2."). The alternatives are the station's other lines still running that way.
 - Late nights the 3 still runs express uptown from Penn, so the uptown 2 note says "2 trains run local late nights, until T." instead of "No express trains".
 
 ## Service-change map (Nov 18, 2026)
