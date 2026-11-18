@@ -229,11 +229,11 @@ const amtrak = source('amtrak', 60, async () => {
       const names = (list) => list.filter((x) => !x.bus).map((x) => x.name);
       const viaOut = names(stations.slice(at + 1)).slice(0, -1);
       const viaIn = names(stations.slice(0, at)).slice(1);
-      const base = { carrier: 'amtrak', line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '' };
+      const base = { carrier: 'amtrak', departsByFeed: true, line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '' };
       if (stop.status === 'Departed') {
         // Keep a train that has just left Penn, so the board can say so.
         const left = epoch(stop.dep);
-        if (tr.destCode !== 'NYP' && left > t - 600) {
+        if (tr.destCode !== 'NYP' && left > t - 900) {
           rows.departures.push({ ...base, via: viaOut, id: `amtk-${tr.trainID}-departures`, time: left, sched: epoch(stop.schDep), place: tr.destName,
             status: 'Departed', tone: 'quiet', departed: true, departedAt: left, leaves: left });
         }
@@ -242,7 +242,9 @@ const amtrak = source('amtrak', 60, async () => {
       const row = (kind, sched, est, place) => {
         if (!sched) return;
         const when = est || sched;
-        if (when < t - 300 || when > t + 8 * 3600) return;
+        // A departure stays until Amtrak reports it gone (the page drops one
+        // whose estimate is 30 min stale); an arrival goes 5 min after it's due.
+        if (when < t - (kind === 'departures' ? 1800 : 300) || when > t + 8 * 3600) return;
         const late = Math.round((when - sched) / 60);
         let status = 'On time', tone = 'ok';
         if (late >= 5) { status = `${late} min late`; tone = 'late'; }

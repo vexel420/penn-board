@@ -13,6 +13,7 @@ const openRows = new Set();
 try { carrier = localStorage.getItem('carrier') || 'all'; } catch {}
 
 const nyTime = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
+const nySecs = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', second: '2-digit' });
 function clock(epoch) {
   const [hm, ap] = nyTime.format(new Date(epoch * 1000)).split(' ');
   return { hm, ap };
@@ -25,10 +26,10 @@ function countdown(epoch) {
   return `in ${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-function trackCell(r) {
+function trackCell(r, extra = '') {
   if (r.track) {
     const fresh = seenTracks.has(r.id) && seenTracks.get(r.id) !== r.track;
-    return `<div class="track${fresh ? ' flip' : ''}" aria-label="Track ${esc(r.track)}"><b>${esc(r.track)}</b></div>`;
+    return `<div class="track${fresh ? ' flip' : ''}${extra}" aria-label="Track ${esc(r.track)}"><b>${esc(r.track)}</b></div>`;
   }
   if (r.trackLikely) return `<div class="track likely" aria-label="Track not posted, usually ${esc(r.trackLikely)}"><b>${esc(r.trackLikely)}</b><small>usual</small></div>`;
   return '<div class="track none" aria-label="Track not posted"><b>–</b></div>';
@@ -40,7 +41,11 @@ const fromNjt = (r) => String(r.id).startsWith('njt-'); // NJ Transit text is sh
 
 // A departed LIRR, NJ Transit or Amtrak train stays on the board marked
 // "Departed" for this long, then comes off. (Subway and PATH just drop off.)
-const DEPARTED_SHOWN_S = 2 * 60;
+const DEPARTED_SHOWN_S = 5 * 60;
+// Amtrak trains leave the board only when Amtrak reports them gone. If its
+// estimate passes with no word, the train stays (it is running late) until
+// the estimate is this old, which means the data has stopped updating.
+const AMTRAK_SILENT_S = 30 * 60;
 const flaggedAt = new Map(); // train id -> when we first saw its feed call it departed
 const vanished = new Map();  // train id -> row for a train that left the feed as it was due out
 
@@ -54,6 +59,7 @@ function departedAt(r) {
     if (!flaggedAt.has(r.id)) flaggedAt.set(r.id, nowS);
     return flaggedAt.get(r.id);
   }
+  if (r.departsByFeed) return null; // Amtrak: only its own report counts
   const leaves = r.leaves ?? r.time;
   return leaves <= nowS ? leaves : null;
 }
@@ -80,14 +86,25 @@ function visibleRows(rows, kind) {
   return all.filter((r) => {
     if (r.tone === 'stop') return r.time > nowS - 5 * 60; // keep a cancellation up a while
     const at = departedAt(r);
-    return at === null || nowS - at < DEPARTED_SHOWN_S;
+    if (at !== null) return nowS - at < DEPARTED_SHOWN_S;
+    if (r.departsByFeed) return r.time > nowS - AMTRAK_SILENT_S;
+    return true;
   });
 }
 
 // A train that has left says "Departed", whatever its last status was. Stale
 // data never keeps the green boarding highlight.
+// Final call: a boarding train in its last minute. NJ Transit rows keep NJ
+// Transit's own wording (its terms ask for as-is text); the row still turns red.
+function finalCall(r, kind) {
+  if (kind !== 'departures' || r.tone !== 'go' || isStale()) return false;
+  const left = (r.leaves ?? r.time) - Date.now() / 1000;
+  return left > 0 && left <= 60;
+}
+
 function shownStatus(r, kind) {
   if (kind === 'departures' && departedAt(r) !== null) return { status: 'Departed', tone: 'departed' };
+  if (finalCall(r, kind)) return { status: fromNjt(r) ? r.status : 'Final call', tone: 'final' };
   if (r.tone !== 'go') return { status: r.status, tone: r.tone };
   if (kind === 'arrivals' && r.time <= Date.now() / 1000) return { status: r.status, tone: 'quiet' };
   if (isStale()) return { status: r.status, tone: 'quiet' };
@@ -106,16 +123,17 @@ function rowHtml(r) {
   const gone = r.tone === 'departed';
   // A late train counts down to when it is now expected to leave.
   const left = gone ? agoText(departedAt(r) ?? r.time) : countdown(r.tone === 'stop' ? r.time : (r.leaves ?? r.time));
+  const due = !gone && left === 'gone' && r.departsByFeed; // late Amtrak, still expected
   const sched = r.sched && Math.abs(r.sched - r.time) >= 120 ? `<small>scheduled ${clock(r.sched).hm}</small>` : '';
   const via = r.via && r.via.length
     ? `<details class="via" data-id="${esc(r.id)}"${openRows.has(r.id) ? ' open' : ''}><summary>${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stops</u></summary><p>${r.via.map(esc).join(', ')}</p></details>`
     : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}</div>`;
-  return `<li class="row ${r.tone}${left === 'gone' && !gone ? ' gone' : ''}">
-    <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${left === 'gone' ? '' : left}</span></div>
+  return `<li class="row ${r.tone}${left === 'gone' && !gone && !due ? ' gone' : ''}">
+    <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? 'under 1 min' : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
     <div class="dest"><div class="place">${esc(r.place)}</div>${via}</div>
     <div class="status ${r.tone}">${esc(r.status)}${sched}</div>
-    ${trackCell(r)}
+    ${trackCell(r, r.tone === 'final' ? ' ring' : '')}
   </li>`;
 }
 
@@ -436,11 +454,15 @@ matchMedia('(min-width: 961px)').addEventListener('change', (e) => {
 
 function tick() {
   const t = clock(Date.now() / 1000);
-  $('clock').textContent = t.hm; $('clock-ap').textContent = t.ap;
+  $('clock').textContent = t.hm;
+  $('clock-s').textContent = ':' + nySecs.format(new Date()).padStart(2, '0');
+  $('clock-ap').textContent = t.ap;
   renderStamp();
 }
+// Tick on the second, so the seconds never skip or stall.
+function everySecond() { setTimeout(() => { tick(); everySecond(); }, 1000 - (Date.now() % 1000) + 5); }
 setPressed('.chips', 'carrier', carrier);
-tick(); setInterval(tick, 1000);
+tick(); everySecond();
 refresh(true); setInterval(() => refresh(), REFRESH_MS); everyMinute();
 setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000); // keep countdowns moving between refreshes
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });

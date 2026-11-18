@@ -63,7 +63,10 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   open pages can't multiply feed requests (matters for NJ Transit's daily cap).
 - Departed trains (`departedAt`, `noteVanished`, `visibleRows`, `shownStatus` in
   `docs/app.js`): an LIRR, NJ Transit or Amtrak departure shows "Departed" and
-  "left N min ago" for 2 minutes, then comes off. "Departed" comes from the feed
+  "left N min ago" for 5 minutes (owner's choice, 18 Nov), then comes off.
+  Amtrak departs only on Amtrak's own report (`departsByFeed`): a late train
+  whose estimate passes stays, marked "due", until reported gone or the estimate
+  is 30 min stale. "Departed" comes from the feed
   where it says so (LIRR `stop_status: DEPARTED`; Amtrak station status
   `Departed`, kept for 10 min in `docs/feeds.js`), else from the clock using
   `leaves` (departure time plus any delay; NJ Transit `SEC_LATE`). A train that
