@@ -457,3 +457,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Phones (≤960px): an "Alerts" tab with a count; notices grouped Trains at
   Penn / Subway / PATH (`renderAlertsTab`). The notice strips are hidden on
   phones; computers keep them.
+- Flip performance: flips are queued a few rows at a time (`FLIP_ROWS_AT_ONCE`,
+  `flipQueue`); off-screen rows get their new text without animating; rows are
+  measured (not tiles) so off-screen rows aren't laid out (`content-visibility:
+  auto` on flip rows); only rows whose markup changed are replaced
+  (`patchRows`); flaps animate transform only. On a 4x-slowed phone the worst
+  freeze on a tab switch went from ~1150 ms to ~120 ms.

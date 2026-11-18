@@ -56,28 +56,63 @@ function flipText(key, text, cls = '') {
   html += '</span>';
   return `<span class="fl ${cls}" data-k="${esc(key)}" data-to="${esc(to)}" data-look="${esc(cls)}" role="text" aria-label="${esc(text)}">${html}</span>`;
 }
+// Flips run a few rows at a time, top to bottom, so a whole board changing
+// at once (opening the page, switching tabs) never asks the phone to animate
+// hundreds of tiles together. Rows off screen just show their new text.
+const FLIP_ROWS_AT_ONCE = 3;
+const flipQueue = [];
+let flipRunning = 0;
 function runFlips(root) {
   if (!flipMode) return;
-  root.querySelectorAll('.fl[data-to]').forEach((el) => {
+  const groups = new Map(); // row (or masthead/clock) -> its tile changes
+  const vh = innerHeight;
+  // Measure every field first, then change any tiles: measuring after a change
+  // would make the phone redo the page layout once per field.
+  // (Rows are measured, not the tiles inside them: a row off screen isn't laid
+  // out at all, and measuring its tiles would force that.)
+  const els = [...root.querySelectorAll('.fl[data-to]')];
+  const box = new Map();
+  const rects = els.map((el) => {
+    const owner = el.closest('li') || el;
+    if (!box.has(owner)) box.set(owner, owner.getBoundingClientRect());
+    return box.get(owner);
+  });
+  els.forEach((el, n) => {
     const to = el.dataset.to, k = el.dataset.k;
     // A colour change (the track turning red for the final call) turns every
     // tile over once, even where the character stays the same.
     const recolour = flipLook.has(k) && flipLook.get(k) !== el.dataset.look;
-    const tiles = el.querySelectorAll('.f');
-    tiles.forEach((f, i) => {
-      const from = f.querySelector('.t b').textContent;
-      const ch = to[i] || ' ';
-      if (from !== ch) flipTile(f, from, ch, i * 40);
-      else if (recolour && ch !== ' ') setTimeout(() => turnTile(f, ch, ch), i * 40);
-    });
     flipShown.set(k, to);
     flipLook.set(k, el.dataset.look);
     delete el.dataset.to;
+    const r = rects[n];
+    const onScreen = r.bottom > -40 && r.top < vh + 40;
+    const jobs = [];
+    el.querySelectorAll('.f').forEach((f, i) => {
+      const from = f.querySelector('.t b').textContent, ch = to[i] || ' ';
+      if (!onScreen) { if (from !== ch) f.querySelectorAll('b').forEach((b) => { b.textContent = ch; }); return; }
+      if (from !== ch || (recolour && ch !== ' ')) jobs.push([f, from, ch]);
+    });
+    if (!jobs.length) return;
+    const owner = el.closest('li, .mast, .clock') || el;
+    if (!groups.has(owner)) groups.set(owner, []);
+    groups.get(owner).push(...jobs);
   });
+  for (const jobs of groups.values()) flipQueue.push(jobs);
+  pumpFlips();
 }
+function pumpFlips() {
+  while (flipRunning < FLIP_ROWS_AT_ONCE && flipQueue.length) {
+    const jobs = flipQueue.shift();
+    flipRunning++;
+    Promise.all(jobs.map(([f, from, ch], i) => (from === ch ? delayThen(i * 40, () => turnTile(f, ch, ch)) : flipTile(f, from, ch, i * 40))))
+      .finally(() => { flipRunning--; pumpFlips(); });
+  }
+}
+const delayThen = (ms, fn) => new Promise((r) => setTimeout(r, ms)).then(fn);
 // Each change turns the tile over a few times (stepping through letters on
 // the way), one flap after another. Each flap is a real animation on its own
-// layer: the top half falls (getting darker as it tips away), then the new
+// layer: the top half falls (only transforms move, which phones draw cheaply), then the new
 // bottom half drops and settles with a slight bounce, like the real thing.
 const FLAP_FALL = 120, FLAP_DROP = 150;
 async function flipTile(f, from, ch, delay) {
@@ -106,12 +141,12 @@ function turnTile(f, from, to) {
   const fb = document.createElement('span'); fb.className = 'fb'; fb.innerHTML = `<b>${esc(to)}</b>`;
   fb.style.transform = 'rotateX(90deg)';
   f.append(ft, fb);
-  ft.animate([{ transform: 'rotateX(0deg)', filter: 'brightness(1)' }, { transform: 'rotateX(-90deg)', filter: 'brightness(.55)' }],
+  ft.animate([{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-90deg)' }],
     { duration: FLAP_FALL, easing: 'cubic-bezier(.55,0,1,.45)', fill: 'forwards' });
   const drop = fb.animate([
-    { transform: 'rotateX(90deg)', filter: 'brightness(.55)' },
-    { transform: 'rotateX(-8deg)', filter: 'brightness(1)', offset: .78 },
-    { transform: 'rotateX(0deg)', filter: 'brightness(1)' },
+    { transform: 'rotateX(90deg)' },
+    { transform: 'rotateX(-8deg)', offset: .78 },
+    { transform: 'rotateX(0deg)' },
   ], { duration: FLAP_DROP, delay: FLAP_FALL - 10, easing: 'ease-out', fill: 'forwards' });
   return drop.finished.then(() => { bot.textContent = to; ft.remove(); fb.remove(); }, () => {});
 }
@@ -384,6 +419,29 @@ function rowHtml(r) {
   </li>`;
 }
 
+// Flip board: replace only the rows whose content changed (each row's
+// markup, with its tiles' target text, is compared), and keep the rest as
+// they are, so the page isn't rebuilt every few seconds.
+function patchRows(rows) {
+  const ul = $('rows');
+  const old = new Map([...ul.children].filter((li) => li.dataset.rid).map((li) => [li.dataset.rid, li]));
+  const want = rows.map((r) => {
+    const sig = rowHtml(r);
+    const li = old.get(r.id);
+    if (li && li.dataset.sig === sig) { old.delete(r.id); return li; }
+    const t = document.createElement('template');
+    t.innerHTML = sig.trim();
+    const n = t.content.firstElementChild;
+    n.dataset.rid = r.id; n.dataset.sig = sig;
+    // An open list of stops stays open.
+    if (li) { const d = li.querySelector('details[open]'); const nd = n.querySelector('details'); if (d && nd) nd.open = true; old.delete(r.id); li.remove(); }
+    return n;
+  });
+  for (const li of old.values()) li.remove();
+  [...ul.children].forEach((c) => { if (!c.dataset.rid) c.remove(); });
+  want.forEach((n, i) => { if (ul.children[i] !== n) ul.insertBefore(n, ul.children[i] || null); });
+}
+
 function emptyMessage() {
   const s = board.sources;
   if (carrier === 'njt') {
@@ -399,7 +457,8 @@ function renderRail() {
   if (!board || view === 'subway' || view === 'alerts') return;
   const rows = visibleRows(board[view], view).filter((r) => carrier === 'all' || r.carrier === carrier);
   $('col-place').textContent = view === 'arrivals' ? 'From' : 'To';
-  $('rows').innerHTML = rows.length ? rows.map(rowHtml).join('') : `<li class="empty">${esc(emptyMessage())}</li>`;
+  if (flipMode && rows.length) patchRows(rows);
+  else $('rows').innerHTML = rows.length ? rows.map(rowHtml).join('') : `<li class="empty">${esc(emptyMessage())}</li>`;
   for (const r of rows) seenTracks.set(r.id, r.track);
   runFlips($('rows'));
   refreshOpenProgress();
