@@ -478,3 +478,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   (`destName`, `.dname.changing`). A last stop not in the timetable (service
   change) keeps its own row. The weekday rush-hour A to Rockaway Park shares
   the A's row too (`SHARE_ROW` in the build script); Euclid Av A trips stay separate.
+- Trial (owner, Nov 18): a shared row with trains to more than one end (the A
+  downtown) takes turns every 4 s (`ROTATE_MS`), showing each end's own next
+  trains, soonest end first; name and times slide over together. Euclid Av A
+  trips keep their own row.

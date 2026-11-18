@@ -755,6 +755,9 @@ function mergeScheduled(groups) {
 // The destination name, sliding to the next one when it changes (the row's
 // next train now goes somewhere else).
 const destShown = new Map();
+const minsShown = new Map(); // what each row's times showed, to slide out on a turn
+const ROTATE_MS = 4000;      // how long each end of the line shows
+let subwayTurning = false;   // a row is taking turns (redraw on each turn)
 function destName(key, name) {
   const before = destShown.get(key);
   destShown.set(key, name);
@@ -773,6 +776,7 @@ function renderSubway() {
   }
   const nowS = Date.now() / 1000;
   subwayShown = [];
+  subwayTurning = false;
   // Each direction splits into express and local, by how each train is
   // actually running from Penn (night service and reroutes included).
   const SVC = { express: 'Express', local: 'Local' };
@@ -846,7 +850,15 @@ function renderSubway() {
     }
     notes += gaps;
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
-      const trains = g.trains.filter((x) => x.time >= nowS - 30).slice(0, 3);
+      let upcoming = g.trains.filter((x) => x.time >= nowS - 30);
+      // A shared row with trains to more than one end of the line (the A
+      // downtown) takes turns: each end's own next trains for a few seconds,
+      // soonest first, sliding from one to the next.
+      const lastOf = (x) => x.stops && x.stops[x.stops.length - 1];
+      const ends = g.scheduled ? [...new Set(upcoming.map(lastOf))] : [];
+      if (ends.length > 1) subwayTurning = true;
+      if (ends.length > 1) upcoming = upcoming.filter((x) => lastOf(x) === ends[Math.floor(Date.now() / ROTATE_MS) % ends.length]);
+      const trains = upcoming.slice(0, 3);
       if (!trains.length) return '';
       // Late-night pill by the next train's own time and line (stays until it leaves).
       const pill = lateNightTrain(stn.id, g.route, dir, trains[0].time, trains[0].code) ? LATE_PILL : '';
@@ -854,15 +866,20 @@ function renderSubway() {
       const first = trains[0];
       const last = first.stops && first.stops[first.stops.length - 1];
       const dest = stationName(last) || first.dest || (dir === 'N' ? 'Uptown' : 'Downtown');
-      const destHtml = destName(`${stn.id}|${g.route}|${dir}|${g.svc}|${g.scheduled ? 'sched' : last}`, dest);
+      const rowKey = `${stn.id}|${g.route}|${dir}|${g.svc}|${g.scheduled ? 'sched' : last}`;
+      const turned = destShown.has(rowKey) && destShown.get(rowKey) !== dest;
+      const destHtml = destName(rowKey, dest);
+      // The times slide over with the name when the row turns to another end.
+      const minsHtml = (html) => (turned ? `<span class="dname changing"><span class="out" aria-hidden="true">${minsShown.get(rowKey) || ''}</span><span class="in">${html}</span></span>` : html);
       const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
+      minsShown.set(rowKey, firstMin + rest);
       const rerouted = trains.find((x) => unusualStops(g.route, x).length);
       if (!rerouted) {
-        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
+        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
       }
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
@@ -1683,5 +1700,10 @@ document.querySelectorAll('.style-seg button').forEach((b) => b.setAttribute('ar
 renderMastFlip();
 tick(); everySecond();
 refresh(true); setInterval(() => refresh(), REFRESH_MS); everyMinute();
-setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000); // keep countdowns moving between refreshes
+setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000);
+// Rows taking turns between ends of the line move on every few seconds.
+// (Timed to the turn itself, so each end shows for the same few seconds.)
+(function nextTurn() {
+  setTimeout(() => { if (subwayTurning) renderSubway(); nextTurn(); }, ROTATE_MS - (Date.now() % ROTATE_MS) + 20);
+})(); // keep countdowns moving between refreshes
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
