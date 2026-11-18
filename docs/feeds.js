@@ -253,7 +253,8 @@ const amtrak = source('amtrak', 60, async () => {
       // How far an arriving train has got: Amtrak marks each station it has left.
       const viaInState = stations.slice(0, at).filter((x) => !x.bus).slice(1)
         .map((x) => (x.status === 'Departed' ? 'passed' : x.status === 'Station' ? 'here' : ''));
-      const base = { carrier: 'amtrak', departsByFeed: true, line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '' };
+      const notes = (tr.alerts || []).map((x) => (typeof x === 'string' ? x : x && (x.message || x.text || x.header) || '')).filter(Boolean);
+      const base = { carrier: 'amtrak', notes, departsByFeed: true, line: tr.routeName, train: tr.trainNum, track: stop.platform || '', trackLikely: '' };
       if (stop.status === 'Departed') {
         // Keep a train that has just left Penn, so the board can say so.
         const left = epoch(stop.dep);
@@ -297,11 +298,74 @@ const amtrak = source('amtrak', 60, async () => {
 });
 
 
+// ---------- service notices (MTA: subway and LIRR) ----------
+
+const ALERT_FEEDS = {
+  subway: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json',
+  lirr: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Flirr-alerts.json',
+};
+const PENN_LINES = new Set(['1', '2', '3', 'A', 'C', 'E']);
+// Notices people need before they travel: shown first, and the strip opens.
+const URGENT = /delay|suspend|no service|cancel|severe|weather|reduced service|shuttle bus|substitute bus/i;
+
+function alertText(t) {
+  const tr = (t && t.translation) || [];
+  const text = (tr.find((x) => x.language === 'en') || tr.find((x) => !/html/.test(x.language || '')) || {}).text || '';
+  // Lines in a notice are separate sentences; join them as such.
+  return text.split(/\n+/).map((x) => x.trim()).filter(Boolean).join('. ').replace(/([.!?:])\. /g, '$1 ');
+}
+// Notices in effect now (or about to be, if the MTA says to show them early).
+function parseAlerts(feed, keep) {
+  const t = now();
+  const out = [];
+  for (const e of feed.entity || []) {
+    const a = e.alert || {};
+    const meta = a['transit_realtime.mercury_alert'] || {};
+    const early = +meta.display_before_active || 0;
+    const periods = a.active_period || [];
+    const active = !periods.length || periods.some((p) => (+p.start || 0) - early <= t && t <= (+p.end || Infinity));
+    if (!active) continue;
+    const ents = a.informed_entity || [];
+    const lines = [...new Set(ents.map((x) => x.route_id).filter(Boolean))];
+    const stops = ents.map((x) => x.stop_id).filter(Boolean);
+    if (!keep(lines, stops)) continue;
+    const text = alertText(a.header_text);
+    if (!text) continue;
+    const type = meta.alert_type || 'Service notice';
+    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more: alertText(a.description_text) });
+  }
+  return out.sort((x, y) => y.urgent - x.urgent);
+}
+
+// The subway notices file is about 1 MB, so it is read every 3 minutes, and
+// never forced by the on-the-minute refresh.
+const subwayAlerts = source('subway-alerts', 180, async () =>
+  parseAlerts(await (await get(ALERT_FEEDS.subway)).json(), (lines, stops) =>
+    lines.some((l) => PENN_LINES.has(l)) || stops.some((s) => /^(128|A28)[NS]?$/.test(s))));
+// Everything LIRR announces matters at Penn, its main terminal.
+const lirrAlerts = source('lirr-alerts', 120, async () =>
+  parseAlerts(await (await get(ALERT_FEEDS.lirr)).json(), () => true));
+
+// Amtrak publishes notices per train; list each train's once.
+function amtrakNotices(rows) {
+  if (!rows) return [];
+  const seen = new Set(), out = [];
+  for (const r of [...rows.departures, ...rows.arrivals]) {
+    for (const text of r.notes || []) {
+      const key = r.train + text;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ id: `amtk-${key}`, carrier: 'amtrak', type: `Train ${r.train}, ${r.line}`, urgent: URGENT.test(text), lines: [], text });
+    }
+  }
+  return out;
+}
+
 // Combine the sources into the document the page renders. `njt` and `path`
 // are optional { data, error } results that only the server can supply.
 async function board(extra = {}) {
   const force = !!extra.force;
-  const [l, a, s] = await Promise.all([lirr(force), amtrak(force), subway(force)]);
+  const [l, a, s, sa, la] = await Promise.all([lirr(force), amtrak(force), subway(force), subwayAlerts(), lirrAlerts()]);
   const n = extra.njt || { data: null, error: null };
   const p = extra.path || { data: null, error: null };
   const t = now();
@@ -334,6 +398,16 @@ async function board(extra = {}) {
     arrivals: arrivals.filter(live).sort(byTime),
     subway: s.data || [],
     path: p.data || [],
+    // Service notices, by where the page shows them: railroads above the
+    // train list, subway (and PATH, if a source appears) in the subway panel.
+    notices: {
+      rail: [
+        ...(la.data || []).map((x) => ({ ...x, carrier: 'lirr' })),
+        ...amtrakNotices(a.data),
+        ...(extra.njtNotices || []),
+      ],
+      subway: (sa.data || []).map((x) => ({ ...x, carrier: 'subway' })),
+    },
     sources: {
       lirr: { ok: !!l.data && !l.error, error: l.error },
       njt: { ok: !!n.data && !n.error, error: n.error, needsLogin: !!extra.njtNeedsLogin, needsServer: !extra.server },

@@ -85,6 +85,22 @@ h1 {
 .chips button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
 .only-narrow { display: none; }
 
+/* Service notices: one strip, collapsible, urgent ones first. */
+.al-strip { margin: 0 0 .9rem; border: 1px solid #6a5226; border-radius: 8px; background: #221d12; }
+.al-strip summary { list-style: none; cursor: pointer; padding: .65rem .85rem; display: flex; gap: .6rem; align-items: center; font-weight: 650; }
+.al-strip summary::-webkit-details-marker { display: none; }
+.al-strip summary .n { flex: none; min-width: 1.5rem; text-align: center; background: var(--gold); color: var(--enamel); border-radius: 99px; padding: .05rem .45rem; font-size: .85rem; font-weight: 800; }
+.al-strip.urgent { border-color: var(--late); }
+.al-strip.urgent summary .n { background: var(--late); }
+.al-strip summary .more { margin-left: auto; flex: none; color: var(--gold); font-size: .85rem; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+.al-strip[open] summary .show, .al-strip:not([open]) summary .hide { display: none; }
+.al-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .6rem; align-items: start; padding: .6rem .85rem; border-top: 1px solid #3a3220; font-size: .92rem; }
+.al-item .who { display: flex; flex-wrap: wrap; gap: .2rem; max-width: 4.5rem; padding-top: .1rem; }
+.al-item .kind { display: block; color: var(--gold); font-size: .78rem; font-weight: 700; margin-bottom: .1rem; }
+.al-item.urgent .kind { color: var(--late); }
+.al-item .bullet.tiny, .al-item p .bullet.tiny { display: inline-grid; width: 1.15rem; height: 1.15rem; font-size: .7rem; vertical-align: -.15em; box-shadow: none; }
+.subway .al-strip { margin: .2rem 0 .6rem; }
+.subway .al-item .who { max-width: 3rem; }
 .notices p { margin: 0 0 .5rem; padding: .6rem .9rem; background: var(--enamel-2); border-left: 3px solid var(--late); max-width: 70ch; color: var(--ivory); font-size: .95rem; }
 .notices code { font-family: inherit; font-weight: 700; }
 
@@ -171,7 +187,6 @@ details.via .checking { display: block; color: var(--dim); font-size: .8rem; }
 .sched-note { margin: .4rem 0 .5rem; color: var(--dim); font-size: .82rem; }
 .pdots i { width: .8rem; height: 1.6rem; border-radius: 3px; background: #6b7a70; }
 .svc h4 { margin: .55rem 0 .1rem; font-size: .8rem; font-weight: 700; font-stretch: 110%; color: var(--ivory); }
-.svc h4 span { font-weight: 400; color: var(--dim); }
 .dir h3 { margin: 1rem 0 .3rem; font-size: .85rem; font-weight: 500; color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
 .sline { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .7rem; align-items: center; padding: .4rem 0; }
 .bullet { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff; background: #6b7a70; box-shadow: 0 0 0 1px rgba(242, 234, 216, .2); }
@@ -220,7 +235,7 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
   .only-narrow { display: inline-block; }
   .subway { position: static; display: none; }
   body[data-view="subway"] .subway { display: block; }
-  body[data-view="subway"] .rail, body[data-view="subway"] .chips { display: none; }
+  body[data-view="subway"] .rail, body[data-view="subway"] .chips, body[data-view="subway"] #rail-notices { display: none; }
 }
 @media (max-width: 640px) {
   .mast-in, .wrap { padding-inline: 1rem; }

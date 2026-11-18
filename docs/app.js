@@ -251,7 +251,7 @@ function loadSubwayData() {
     .then((r) => (r.ok ? r.json() : null)).catch(() => null)
     .then((d) => {
       if (d) for (const r of Object.values(d.routes)) r.normalSet = new Set(r.normal);
-      subwayData = d; subwayDataLoading = null; renderSubway();
+      subwayData = d; subwayDataLoading = null; renderSubway(); renderServiceNotices();
     });
 }
 const lineInfo = (route) => (subwayData && subwayData.routes[route]) || { label: route, color: '#6b7a70', text: '#ffffff' };
@@ -280,7 +280,7 @@ function renderSubway() {
   subwayShown = [];
   // Each direction splits into express and local, by how each train is
   // actually running from Penn (night service and reroutes included).
-  const SVC = { express: ['Express', 'fewer stops'], local: ['Local', 'every stop'] };
+  const SVC = { express: 'Express', local: 'Local' };
   $('subway').innerHTML = ['N', 'S'].map((dir) => {
     const parts = ['express', 'local'].map((svc) => {
     const lines = board.subway.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
@@ -299,7 +299,7 @@ function renderSubway() {
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
       return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
     }).join('');
-      return lines ? `<div class="svc"><h4>${SVC[svc][0]} <span>${SVC[svc][1]}</span></h4>${lines}</div>` : '';
+      return lines ? `<div class="svc"><h4>${SVC[svc]}</h4>${lines}</div>` : '';
     }).join('');
     return parts ? `<div class="dir"><h3>${DIRS[dir]}</h3>${parts}</div>` : '';
   }).join('');
@@ -455,6 +455,41 @@ function renderPathSchedule() {
   $('path').innerHTML = note + (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>');
 }
 
+// ---------- service notices ----------
+// One strip per place: railroads above the train list, the subway in its
+// panel. It starts open; closing it is remembered for this visit until a new
+// notice arrives.
+const friendlyType = (t) => {
+  const x = t.replace(/^Planned - /, 'Planned work, ');
+  return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); // sentence case
+};
+function noticeWho(n) {
+  if (n.carrier === 'subway') return n.lines.filter((l) => subwayData && subwayData.routes[l]).slice(0, 4).map((l) => bulletHtml(l, 'tiny')).join('') || bulletHtml('S', 'tiny');
+  return `<span class="plate ${n.carrier}">${CARRIERS[n.carrier]}</span>`;
+}
+// "[1]" in MTA text is a line symbol.
+const noticeText = (t) => esc(t).replace(/\[([A-Z0-9]{1,2})\]/g, (m, l) => (subwayData && subwayData.routes[l] ? bulletHtml(l, 'tiny') : m));
+function noticeStrip(list, where) {
+  if (!list || !list.length) return '';
+  const sig = list.map((n) => n.id).join('|');
+  let closed = false;
+  try { closed = sessionStorage.getItem('closed-' + where) === sig; } catch {}
+  const urgent = list.some((n) => n.urgent);
+  const label = where === 'subway' ? 'Subway service notices' : 'Service notices for trains at Penn';
+  const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}</p></div>`).join('');
+  return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${closed ? '' : ' open'}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
+}
+function renderServiceNotices() {
+  if (!board || !board.notices) return;
+  $('rail-notices').innerHTML = noticeStrip(board.notices.rail, 'rail');
+  $('subway-notices').innerHTML = noticeStrip(board.notices.subway, 'subway');
+}
+document.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d.classList || !d.classList.contains('al-strip')) return;
+  try { d.open ? sessionStorage.removeItem('closed-' + d.dataset.where) : sessionStorage.setItem('closed-' + d.dataset.where, d.dataset.sig); } catch {}
+}, true);
+
 function renderNotices() {
   if (!board) return;
   const s = board.sources, out = [];
@@ -476,7 +511,7 @@ function renderStamp() {
     : `Updated ${age < 5 ? 'just now' : age + ' seconds ago'}.`;
 }
 
-function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderStamp(); }
+function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderServiceNotices(); renderStamp(); }
 
 // With server.js running, the server gathers everything. On static hosting
 // (GitHub Pages) there is no server, so the page reads the feeds itself.

@@ -55,6 +55,22 @@ Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
   allows the transit hosts, including `data.trilliumtransit.com` and
   `path.api.razza.dev`.
 
+## Service notices (18 Nov, owner chose option A)
+
+- `docs/feeds.js`: MTA alert feeds (`camsys/subway-alerts.json` ~1 MB, read
+  every 3 min and never forced; `camsys/lirr-alerts.json` every 2 min), both
+  CORS-open. Active notices only (`active_period`, `display_before_active`).
+  Subway: lines 1/2/3/A/C/E or stops 128/A28. LIRR: all. Amtrak: per-train
+  `alerts` from Amtraker. `board().notices = { rail, subway }`; urgent types
+  (delays, suspensions, severe weather...) sort first and turn the strip amber.
+- Page: a collapsible strip above the train list (rail) and one at the top of
+  the subway panel (subway); on phones each sits under its own tab. Closing a
+  strip is remembered for the visit until the set of notices changes.
+- No PATH notice source exists that the site can read (the Port Authority
+  publishes PATH alerts on its app and social media only). NJ Transit notices
+  will need the developer login (`extra.njtNotices` is the hook).
+- Express/local subheadings no longer carry "fewer stops"/"every stop".
+
 ## Changes of 18 Nov (evening)
 
 - Arrivals: stations an arriving train has passed are crossed off, with "next
