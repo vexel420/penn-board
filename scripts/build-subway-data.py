@@ -36,6 +36,9 @@ LOCAL_NEXT = {'129', '126', 'A30', 'A25'}
 # Lines checked for a break in service from Penn late at night.
 NIGHT_GAP_LINES = {'C', '3'}
 NIGHT_GAP_MIN = 90  # a longer break than this in a line's trains is its night off
+# Extra last stops that share the line's main row (owner's choice, Nov 2026):
+# the weekday rush-hour A to Rockaway Park. (Euclid Av A trips stay separate.)
+SHARE_ROW = {('A', 'S'): ['H15']}
 NIGHT_HEADWAY = 15  # minutes: trains this far apart (or more) are late-night service
 
 
@@ -272,7 +275,8 @@ def main(zip_path):
     terminals = {}
     for (line, d), counts in ends.items():
         total = sum(counts.values())
-        terminals.setdefault(line, {})[d] = sorted(k for k, n in counts.items() if n >= 0.1 * total)
+        main = {k for k, n in counts.items() if n >= 0.1 * total} | set(SHARE_ROW.get((line, d), []))
+        terminals.setdefault(line, {})[d] = sorted(main & set(counts))
     doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps, 'night': nights, 'terminals': terminals}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT}: {len(routes)} lines, {len(stops)} stations, {OUT.stat().st_size // 1024} KB')

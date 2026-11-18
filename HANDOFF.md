@@ -476,4 +476,5 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   row (`mergeScheduled`, subway-data.json "terminals"), named by the next
   train's last stop; the name slides to the next one when it changes
   (`destName`, `.dname.changing`). A last stop not in the timetable (service
-  change) keeps its own row.
+  change) keeps its own row. The weekday rush-hour A to Rockaway Park shares
+  the A's row too (`SHARE_ROW` in the build script); Euclid Av A trips stay separate.
