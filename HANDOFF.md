@@ -498,6 +498,14 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   so the secrets survive). Worker route `GET /njt` gets a token (kept in memory
   and the Cache API for 23 h), then getTrainSchedule (station NY) and
   getStationMSG, cached 30 s. API docs: raildata.njtransit.com/swagger/index.html.
-- Status on Nov 18: getToken answers 500 "Missing user account." — the saved
-  username isn't recognised; owner is checking the API credentials. The page
-  doesn't read /njt yet (next: parse it in docs/feeds.js like server.js does).
+- Working since Nov 18: the owner's account exists only on NJ Transit's TEST
+  server (testraildata.njtransit.com; the main server says "Missing user
+  account."), which serves live data. The relay tries the main server, then
+  the test one, and keeps the token with the server that issued it (a token
+  only works there). Swap order/remove the test host once NJ Transit moves the
+  account to production.
+- The page reads `${PENN_RELAY}/njt` (`relayNjt` in docs/feeds.js);
+  `parseNjt` / `njtNotices` are shared with server.js. Destinations: "-SEC"
+  removed, "&#9992" shown as ✈ (Newark Airport stop). Blank NJT status shows
+  "On time" or "N min late"; NJT's own status text is shown as-is. NJT's list
+  includes Amtrak trains (ids "A2127") with tracks, merged into Amtrak rows.

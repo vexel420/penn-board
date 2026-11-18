@@ -65,14 +65,17 @@ async function alerts(feed) {
 }
 
 // ---------- NJ Transit RailData ----------
-const NJT_API = 'https://raildata.njtransit.com/api/TrainData/';
+// NJ Transit sets up new developer accounts on its test server first, then on
+// the main one; the relay uses whichever knows the login.
+const NJT_HOSTS = ['https://raildata.njtransit.com/api/TrainData/', 'https://testraildata.njtransit.com/api/TrainData/'];
+let NJT_API = NJT_HOSTS[0];
 const TOKEN_KEY = 'https://penn-board-relay.internal/njt-token';
 let njtToken = '';
 
-async function njtPost(endpoint, fields) {
+async function njtPost(endpoint, fields, host = NJT_API) {
   const body = new FormData();
   for (const [k, v] of Object.entries(fields)) body.append(k, v);
-  const res = await fetch(NJT_API + endpoint, { method: 'POST', body, headers: { accept: 'application/json' } });
+  const res = await fetch(host + endpoint, { method: 'POST', body, headers: { accept: 'application/json' } });
   if (!res.ok) throw new Error(`NJ Transit answered ${res.status} to ${endpoint}: ${(await res.text()).slice(0, 200)}`);
   return res.json();
 }
@@ -83,19 +86,30 @@ async function getToken(env, fresh) {
   if (!fresh && njtToken) return njtToken;
   if (!fresh) {
     const hit = await cache.match(TOKEN_KEY);
-    if (hit) { njtToken = await hit.text(); if (njtToken) return njtToken; }
+    // Kept with the server that issued it (test or main): a token only works there.
+    if (hit) { const k = await hit.json().catch(() => ({})); if (k.token && k.host) { njtToken = k.token; NJT_API = k.host; return njtToken; } }
   }
-  const r = await njtPost('getToken', { username: String(env.NJT_USERNAME).trim(), password: String(env.NJT_PASSWORD).trim() });
-  if (!r.UserToken) throw new Error(r.errorMessage || 'NJ Transit did not accept the login');
+  const login = { username: String(env.NJT_USERNAME).trim(), password: String(env.NJT_PASSWORD).trim() };
+  let r = null; const tried = [];
+  for (const host of NJT_HOSTS) {
+    try { r = await njtPost('getToken', login, host); } catch (e) { tried.push(`${new URL(host).host}: ${e.message}`); r = null; continue; }
+    if (r && r.UserToken) { NJT_API = host; break; }
+    tried.push(`${new URL(host).host}: ${(r && r.errorMessage) || 'no token'}`);
+  }
+  if (!r || !r.UserToken) throw new Error(`NJ Transit did not accept the login (${tried.join('; ')})`);
   njtToken = r.UserToken;
-  await cache.put(TOKEN_KEY, new Response(njtToken, { headers: { 'cache-control': 'max-age=82800' } }));
+  await cache.put(TOKEN_KEY, new Response(JSON.stringify({ token: njtToken, host: NJT_API }), { headers: { 'cache-control': 'max-age=82800' } }));
   return njtToken;
 }
 async function njtCall(env, endpoint, fields) {
-  let r = await njtPost(endpoint, { token: await getToken(env, false), ...fields });
-  // An expired or unknown token comes back as an error message: get a new one once.
-  if (r && !Array.isArray(r) && r.errorMessage) r = await njtPost(endpoint, { token: await getToken(env, true), ...fields });
-  return r;
+  // An expired or unknown token comes back as an error: get a new one, once.
+  try {
+    const r = await njtPost(endpoint, { token: await getToken(env, false), ...fields });
+    if (!(r && !Array.isArray(r) && r.errorMessage)) return r;
+  } catch (e) {
+    if (!/token/i.test(e.message)) throw e;
+  }
+  return njtPost(endpoint, { token: await getToken(env, true), ...fields });
 }
 async function njt(env) {
   if (!env.NJT_USERNAME || !env.NJT_PASSWORD) throw new Error('NJ Transit login not set');

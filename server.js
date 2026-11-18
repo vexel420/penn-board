@@ -20,14 +20,6 @@ const pathTrains = source('path', 30, async () =>
 
 // ---------- NJ Transit (official RailData API; needs a free developer login) ----------
 
-const MONTHS = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
-function njtTime(s) { // "17-Nov-2026 10:05:00 PM"
-  const m = /^(\d+)-(\w+)-(\d+) (\d+):(\d+):(\d+) (AM|PM)$/.exec(s || '');
-  if (!m) return 0;
-  const h = (+m[4] % 12) + (m[7] === 'PM' ? 12 : 0);
-  return nyToEpoch(+m[3], MONTHS[m[2]], +m[1], h, +m[5], +m[6]);
-}
-
 async function njtPost(endpoint, fields) {
   const body = new FormData();
   for (const [k, v] of Object.entries(fields)) body.append(k, v);
@@ -51,34 +43,7 @@ const njt = source('njt', 30, async () => {
   let r = await njtPost('getTrainSchedule', { token: njtToken, station: 'NY' });
   if (!r.ITEMS) { await njtNewToken(); r = await njtPost('getTrainSchedule', { token: njtToken, station: 'NY' }); }
   if (!r.ITEMS) throw new Error(r.errorMessage || 'NJ Transit sent no departures');
-  return r.ITEMS.map((it) => {
-    const raw = (it.STATUS || '').trim();
-    const lateMin = Math.round((+it.SEC_LATE || 0) / 60);
-    const up = raw.toUpperCase();
-    // NJ Transit's terms ask that its data be shown as-is, so the status text
-    // is passed through untouched; only the row's colour is derived from it.
-    const status = raw;
-    let tone = 'ok';
-    if (up.includes('CANCEL')) tone = 'stop';
-    else if (up.includes('ALL ABOARD') || up.includes('BOARDING')) tone = 'go';
-    else if (up.includes('STAND BY') || up.includes('DELAY') || up.includes('LATE') || lateMin >= 2) tone = 'late';
-    const isAmtrak = /AMTRAK|AMTK/i.test(`${it.LINE} ${it.LINEABBREVIATION}`) || /^A\d/.test(it.TRAIN_ID || '');
-    const sched = njtTime(it.SCHED_DEP_DATE);
-    return {
-      id: `njt-${it.TRAIN_ID}`,
-      carrier: isAmtrak ? 'amtrak' : 'njt',
-      time: sched,
-      leaves: sched + Math.max(0, +it.SEC_LATE || 0), // when it should have left, delay included
-      lateMin: Math.max(0, lateMin),
-      place: (it.DESTINATION || '').replace(/&nbsp;/g, ' ').trim(),
-      line: it.LINE || '',
-      train: String(it.TRAIN_ID || '').replace(/^A(?=\d)/, ''),
-      track: (it.TRACK || '').trim(),
-      trackLikely: '',
-      status, tone,
-      via: (it.STOPS || []).map((s) => s.STATIONNAME).filter(Boolean).slice(0, -1),
-    };
-  });
+  return feeds.parseNjt(r.ITEMS);
 });
 
 async function board(force = false) {

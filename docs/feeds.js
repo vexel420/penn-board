@@ -445,13 +445,79 @@ function amtrakNotices(rows) {
   return out;
 }
 
+// ---------- NJ Transit (RailData API; the relay or server.js signs in) ----------
+
+const NJT_MONTHS = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+function njtTime(s) { // "17-Nov-2026 10:05:00 PM"
+  const m = /^(\d+)-(\w+)-(\d+) (\d+):(\d+):(\d+) (AM|PM)$/.exec(s || '');
+  if (!m) return 0;
+  const h = (+m[4] % 12) + (m[7] === 'PM' ? 12 : 0);
+  return nyToEpoch(+m[3], NJT_MONTHS[m[2]], +m[1], h, +m[5], +m[6]);
+}
+// NJ Transit writes extra marks into destinations: "-SEC" (the train stops at
+// Secaucus, as nearly all do) and "&#9992" (a plane: it stops at Newark Airport).
+const njtPlace = (d) => String(d || '').replace(/&nbsp;/g, ' ').replace(/&#9992;?/g, '✈').replace(/\s*-SEC\b/g, '').replace(/\s+/g, ' ').trim();
+// getTrainSchedule ITEMS -> board rows. Its Penn Station list includes Amtrak
+// trains (ids "A2127") with their tracks, which Amtrak doesn't publish.
+function parseNjt(items) {
+  return (items || []).map((it) => {
+    const raw = String(it.STATUS || '').trim();
+    const lateSec = Math.max(0, +it.SEC_LATE || 0);
+    const lateMin = Math.round(lateSec / 60);
+    const up = raw.toUpperCase();
+    // NJ Transit's terms ask that its data be shown as-is: its status text is
+    // passed through untouched; only when it sends none does the board say
+    // "On time" or how late the train is running.
+    let tone = 'ok';
+    if (up.includes('CANCEL')) tone = 'stop';
+    else if (up.includes('ALL ABOARD') || up.includes('BOARDING')) tone = 'go';
+    else if (up.includes('STAND BY') || up.includes('DELAY') || up.includes('LATE') || lateMin >= 2) tone = 'late';
+    const status = raw || (lateMin >= 2 ? `${lateMin} min late` : 'On time');
+    const isAmtrak = /AMTRAK/i.test(it.LINE || '') || it.LINECODE === 'AM' || /^A\d/.test(it.TRAIN_ID || '');
+    const sched = njtTime(it.SCHED_DEP_DATE);
+    return {
+      id: `njt-${it.TRAIN_ID}`,
+      carrier: isAmtrak ? 'amtrak' : 'njt',
+      time: sched + lateSec,
+      sched,
+      leaves: sched + lateSec, // when it should leave, delay included
+      lateMin,
+      place: njtPlace(it.DESTINATION),
+      line: String(it.LINE || '').replace(/Corrdr/, 'Corridor').replace(/^No Jersey/, 'North Jersey'),
+      train: String(it.TRAIN_ID || '').replace(/^A(?=\d)/, ''),
+      track: String(it.TRACK || '').trim(),
+      trackLikely: '',
+      status, tone,
+      via: (it.STOPS || []).map((x) => x.STATIONNAME).filter(Boolean).slice(0, -1),
+    };
+  });
+}
+function njtNotices(messages) {
+  const seen = new Set();
+  return (messages || []).filter((m) => m && m.MSG_TEXT).map((m) => ({
+    id: `njt-${m.MSG_ID || m.MSG_TEXT.slice(0, 40)}`, carrier: 'njt', type: 'Service notice',
+    urgent: URGENT.test(m.MSG_TEXT) || /cancel/i.test(m.MSG_TEXT), lines: [], text: m.MSG_TEXT.trim(),
+  })).filter((n) => !seen.has(n.text) && seen.add(n.text));
+}
+// In the browser: through the relay, which holds the owner's login.
+const relayNjt = source('relay-njt', 20, async () => {
+  const d = await (await get(`${relayBase()}/njt`)).json();
+  return { rows: parseNjt(d.ITEMS), notices: njtNotices(d.MESSAGES) };
+});
+
 // Combine the sources into the document the page renders. `njt` and `path`
 // are optional { data, error } results that only the server can supply.
 async function board(extra = {}) {
   const force = !!extra.force;
   const fastAlerts = force && FAST_ALERTS;
   const [l, a, s, sa, la] = await Promise.all([lirr(force), amtrak(force), subway(force), subwayAlerts(fastAlerts), lirrAlerts(fastAlerts)]);
-  const n = extra.njt || { data: null, error: null };
+  let n = extra.njt || { data: null, error: null };
+  let njtNoticeList = extra.njtNotices || [];
+  if (!extra.njt && relayBase()) {
+    const r = await relayNjt(force);
+    n = { data: r.data ? r.data.rows : null, error: r.error };
+    njtNoticeList = r.data ? r.data.notices : [];
+  }
   const p = extra.path || { data: null, error: null };
   const t = now();
   const departures = [...(l.data ? l.data.departures : [])];
@@ -489,13 +555,13 @@ async function board(extra = {}) {
       rail: [
         ...(la.data || []).map((x) => ({ ...x, carrier: 'lirr' })),
         ...amtrakNotices(a.data),
-        ...(extra.njtNotices || []),
+        ...njtNoticeList,
       ],
       subway: (sa.data || []).filter((x) => reachableFromPenn(x, s.data)).map((x) => ({ ...x, carrier: 'subway' })),
     },
     sources: {
       lirr: { ok: !!l.data && !l.error, error: l.error },
-      njt: { ok: !!n.data && !n.error, error: n.error, needsLogin: !!extra.njtNeedsLogin, needsServer: !extra.server },
+      njt: { ok: !!n.data && !n.error, error: n.error, needsLogin: !!extra.njtNeedsLogin, needsServer: !extra.server && !relayBase() },
       amtrak: { ok: !!a.data && !a.error, error: a.error },
       subway: { ok: !!s.data && !s.error, error: s.error },
       path: { ok: !!p.data && !p.error, error: p.error, needsServer: !extra.server && !extra.path },
@@ -510,5 +576,5 @@ const relayPath = source('relay-path', 20, async () => {
   return parsePath(await (await get(`${base.replace(/\/$/, '')}/path`)).json());
 });
 
-return { board, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
+return { board, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
 });
