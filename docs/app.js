@@ -38,7 +38,10 @@ let flipMode = false;
 try { flipMode = localStorage.getItem('boardStyle') === 'flip'; } catch {}
 const flipShown = new Map(); // field key -> text it shows now
 const FLIP_CHARS = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789:';
-const tileHtml = (c) => `<span class="f"><span class="t"><b>${esc(c)}</b></span><span class="bt"><b>${esc(c)}</b></span></span>`;
+// A tile: its upper and lower halves, and two flaps that are always there
+// (no elements are made or removed while flipping): the old character's upper
+// half, which folds down, and the new character's lower half, which unfolds.
+const tileHtml = (c) => `<span class="f"><span class="t"><b>${esc(c)}</b></span><span class="bt"><b>${esc(c)}</b></span><span class="ft"><b></b></span><span class="fb"><b></b></span></span>`;
 // Tiles for `text`, showing what the field showed before; runFlips() turns them.
 const flipLook = new Map(); // field key -> its colour state (e.g. 'final'), so a colour change flips too
 function flipText(key, text, cls = '') {
@@ -105,16 +108,47 @@ function pumpFlips() {
   while (flipRunning < FLIP_ROWS_AT_ONCE && flipQueue.length) {
     const jobs = flipQueue.shift();
     flipRunning++;
-    Promise.all(jobs.map(([f, from, ch], i) => (from === ch ? delayThen(i * 40, () => turnTile(f, ch, ch)) : flipTile(f, from, ch, i * 40))))
+    const t0 = performance.now();
+    Promise.all(jobs.map(([f, from, ch], i) => (from === ch ? turnTile(f, ch, ch, t0 + i * 40) : flipTile(f, from, ch, i * 40))))
       .finally(() => { flipRunning--; pumpFlips(); });
   }
 }
-const delayThen = (ms, fn) => new Promise((r) => setTimeout(r, ms)).then(fn);
-// Each change turns the tile over a few times (stepping through letters on
-// the way), one flap after another. Each flap is a real animation on its own
-// layer: the top half falls (only transforms move, which phones draw cheaply), then the new
-// bottom half drops and settles with a slight bounce, like the real thing.
-const FLAP_FALL = 120, FLAP_DROP = 150;
+// One animation loop moves every flap on the board, frame by frame, with
+// flat (2D) folds. Nothing is handed to the graphics layers, so tiles
+// starting and stopping never make the browser rebuild them (that was what
+// made earlier versions stutter on phones).
+const FLAP_MS = 150;
+const flapsMoving = new Set();
+let flapLoop = 0;
+function flapFrame(now) {
+  for (const m of flapsMoving) {
+    const t = Math.min(1, (now - m.start) / FLAP_MS);
+    if (t < 0) continue;
+    // First half: the old top folds down to the hinge. Second: the new bottom unfolds from it.
+    const fall = Math.min(1, t * 2), rise = Math.max(0, t * 2 - 1);
+    m.ft.style.transform = `scaleY(${(1 - fall * fall).toFixed(3)})`;          // speeds up as it falls
+    m.fb.style.transform = `scaleY(${(1 - (1 - rise) * (1 - rise)).toFixed(3)})`; // slows as it lands
+    if (t >= 1) { flapsMoving.delete(m); m.done(); }
+  }
+  flapLoop = flapsMoving.size ? requestAnimationFrame(flapFrame) : 0;
+}
+function turnTile(f, from, to, at) {
+  return new Promise((done) => {
+    if (!f.isConnected) return done();
+    const [up, low, ftb, fbb] = f.querySelectorAll('b');
+    const ft = ftb.parentNode, fb = fbb.parentNode;
+    ftb.textContent = from; fbb.textContent = to;
+    up.textContent = to; // revealed behind the falling flap
+    ft.style.transform = 'scaleY(1)'; fb.style.transform = 'scaleY(0)';
+    ft.style.visibility = fb.style.visibility = 'visible';
+    flapsMoving.add({ ft, fb, start: at ?? performance.now(), done: () => {
+      low.textContent = to; ft.style.visibility = fb.style.visibility = 'hidden'; done();
+    } });
+    if (!flapLoop) flapLoop = requestAnimationFrame(flapFrame);
+  });
+}
+// Each change turns the tile over a few times, stepping through letters on
+// the way, flap after flap with no pause between.
 async function flipTile(f, from, ch, delay) {
   const a = FLIP_CHARS.indexOf(from), b = FLIP_CHARS.indexOf(ch);
   const steps = [];
@@ -123,32 +157,13 @@ async function flipTile(f, from, ch, delay) {
     for (let k = 1; k < n; k++) steps.push(FLIP_CHARS[(a + Math.round((k * dist) / n)) % FLIP_CHARS.length]);
   }
   steps.push(ch);
-  f.dataset.turning = '1';
-  await new Promise((r) => setTimeout(r, delay));
-  let prev = from;
+  let at = performance.now() + (delay || 0), prev = from;
   for (const c of steps) {
     if (!f.isConnected) return;
-    await turnTile(f, prev, c);
+    await turnTile(f, prev, c, at);
+    at += FLAP_MS; // the next flap starts exactly as this one lands
     prev = c;
   }
-  delete f.dataset.turning;
-}
-function turnTile(f, from, to) {
-  if (!f.isConnected) return Promise.resolve();
-  const top = f.querySelector('.t b'), bot = f.querySelector('.bt b');
-  top.textContent = to; // the new top half waits behind the falling flap
-  const ft = document.createElement('span'); ft.className = 'ft'; ft.innerHTML = `<b>${esc(from)}</b>`;
-  const fb = document.createElement('span'); fb.className = 'fb'; fb.innerHTML = `<b>${esc(to)}</b>`;
-  fb.style.transform = 'rotateX(90deg)';
-  f.append(ft, fb);
-  ft.animate([{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-90deg)' }],
-    { duration: FLAP_FALL, easing: 'cubic-bezier(.55,0,1,.45)', fill: 'forwards' });
-  const drop = fb.animate([
-    { transform: 'rotateX(90deg)' },
-    { transform: 'rotateX(-8deg)', offset: .78 },
-    { transform: 'rotateX(0deg)' },
-  ], { duration: FLAP_DROP, delay: FLAP_FALL - 10, easing: 'ease-out', fill: 'forwards' });
-  return drop.finished.then(() => { bot.textContent = to; ft.remove(); fb.remove(); }, () => {});
 }
 // Masthead and clock.
 function renderMastFlip() {

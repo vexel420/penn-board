@@ -367,16 +367,22 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 .fl { display: inline-flex; flex-wrap: wrap; gap: .18em 0; vertical-align: middle; line-height: 1; }
 .fw { display: inline-flex; white-space: nowrap; }
 .f { --tile: #1b2b22; --tile-top: #22362b; --seam: #08100c;
-  position: relative; display: inline-block; width: .9em; height: 1.32em; margin-right: .12em; perspective: 3.5em;
-  font-weight: 700; font-stretch: 90%; text-align: center; border-radius: .14em; }
-.f > span { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; background: var(--tile); backface-visibility: hidden; }
-.f > span b { position: absolute; left: 0; right: 0; height: 1.32em; line-height: 1.32em; font-weight: inherit; color: inherit; font-size: 1em; }
-.f .t, .f .ft { top: 0; background: var(--tile-top); border-radius: .14em .14em 0 0; }
-.f .bt, .f .fb { bottom: 0; border-radius: 0 0 .14em .14em; }
-.f .t b, .f .ft b { top: 0; }
-.f .bt b, .f .fb b { bottom: 0; }
-.f .ft { transform-origin: bottom; z-index: 2; will-change: transform, filter; }
-.f .fb { transform-origin: top; z-index: 2; will-change: transform, filter; }
+  position: relative; display: inline-block; width: .9em; height: 1.32em; margin-right: .12em;
+  font-weight: 700; font-stretch: 90%; text-align: center; border-radius: .14em; contain: layout paint style;
+}
+.f > .t, .f > .bt { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; }
+.f > .t, .f > .bt { background: var(--tile); }
+.f b { position: absolute; left: 0; right: 0; height: 1.32em; line-height: 1.32em; font-weight: inherit; color: inherit; font-size: 1em; }
+.f > .t { top: 0; background: var(--tile-top); border-radius: .14em .14em 0 0; }
+.f > .t b { top: 0; }
+.f > .bt { bottom: 0; border-radius: 0 0 .14em .14em; }
+.f > .bt b { bottom: 0; }
+/* the flaps: folded flat, hinged at the tile's middle */
+.f > .ft, .f > .fb { position: absolute; left: 0; right: 0; height: 50%; overflow: hidden; visibility: hidden; z-index: 2; }
+.f > .ft { top: 0; background: var(--tile-top); border-radius: .14em .14em 0 0; transform-origin: 50% 100%; }
+.f > .ft b { top: 0; }
+.f > .fb { bottom: 0; background: var(--tile); border-radius: 0 0 .14em .14em; transform-origin: 50% 0; }
+.f > .fb b { bottom: 0; }
 .f::after { content: ''; position: absolute; left: 0; right: 0; top: calc(50% - .5px); height: 1px; background: var(--seam); z-index: 3; }
 /* in the train list */
 .flipboard .time b { color: var(--gold); }

@@ -464,3 +464,11 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   (`patchRows`); flaps animate transform only. On a 4x-slowed phone the worst
   freeze on a tab switch went from ~1150 ms to ~120 ms.
 - Tapping "Penn Station" in the masthead reloads the page.
+- Flip animation engine (rewritten for smoothness): each tile has permanent
+  halves and two flat flaps (`.ft` old upper half folds down with scaleY,
+  `.fb` new lower half unfolds); one requestAnimationFrame loop
+  (`flapFrame`) moves every flap; flaps chain back to back (150 ms each).
+  No 3D, no WAAPI, no elements created mid-flip: a trace showed layer
+  rebuilding ("Layerize") was most of the cost before. Tiles use
+  `contain: layout paint style`. On a 4x-slowed phone, stutters (>34 ms
+  frames) in a 40-field change went from 15 to 1.
