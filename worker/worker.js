@@ -65,8 +65,9 @@ async function alerts(feed) {
 }
 
 // ---------- NJ Transit RailData ----------
-// NJ Transit's production and test servers (each with its own login).
-const NJT_HOSTS = ['https://raildata.njtransit.com/api/TrainData/', 'https://testraildata.njtransit.com/api/TrainData/'];
+// NJ Transit's servers, tried in order: raildata.njt.gov (the address in the
+// developer portal's current docs), the older production address, then test.
+const NJT_HOSTS = ['https://raildata.njt.gov/api/TrainData/', 'https://raildata.njtransit.com/api/TrainData/', 'https://testraildata.njtransit.com/api/TrainData/'];
 let NJT_API = NJT_HOSTS[0];
 const TOKEN_BASE = 'https://penn-board-relay.internal/njt-token';
 let njtToken = '', njtTokenFor = '';
@@ -95,15 +96,16 @@ async function getToken(env, fresh) {
   // Production and test have separate logins (NJ Transit emails both):
   // NJT_PROD_USERNAME / NJT_PROD_PASSWORD for production, NJT_USERNAME /
   // NJT_PASSWORD for test. Only test tokens carry no tracks or statuses.
-  const logins = [
-    env.NJT_PROD_USERNAME && [NJT_HOSTS[0], env.NJT_PROD_USERNAME, env.NJT_PROD_PASSWORD],
-    [NJT_HOSTS[1], env.NJT_USERNAME, env.NJT_PASSWORD],
-  ].filter(Boolean);
+  // Each login is tried on each server, production addresses first.
+  const creds = [env.NJT_PROD_USERNAME && [env.NJT_PROD_USERNAME, env.NJT_PROD_PASSWORD], [env.NJT_USERNAME, env.NJT_PASSWORD]].filter(Boolean);
+  const logins = NJT_HOSTS.flatMap((h) => creds.map(([u, p]) => [h, u, p]));
   let r = null; const tried = [];
   for (const [host, user, pass] of logins) {
     const login = { username: String(user).trim(), password: String(pass).trim() };
     try { r = await njtPost('getToken', login, host); } catch (e) { tried.push(`${new URL(host).host}: ${e.message}`); r = null; continue; }
     if (r && r.UserToken) { NJT_API = host; break; }
+    // (A sign-in that fails because of the daily limit isn't retried elsewhere.)
+    if (r && /limit|exceed/i.test(r.errorMessage || '')) break;
     tried.push(`${new URL(host).host}: ${(r && r.errorMessage) || 'no token'}`);
   }
   if (!r || !r.UserToken) throw new Error(`NJ Transit did not accept the login (${tried.join('; ')})`);
@@ -138,6 +140,11 @@ export default {
     const { pathname } = new URL(request.url);
     try {
       if (pathname === '/path') return json(await (await upstream(PATH_FEED, 15)).text(), 15);
+      if (pathname === '/njt-server') {
+        // Which NJ Transit server the relay is using (no data, no secrets).
+        await getToken(env, false).catch(() => {});
+        return json(JSON.stringify({ server: new URL(NJT_API).host }), 0);
+      }
       if (pathname === '/njt') {
         const cache = caches.default;
         const key = new Request(request.url, { method: 'GET' });

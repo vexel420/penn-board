@@ -523,3 +523,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   production has tracks/statuses). getToken + isValidToken: 10 calls a day in
   total, so tokens are cached 23 h per setup (`njt-token-prod` / `-test`).
   Data calls: 40,000 a day.
+- raildata.njt.gov (address in the portal's newer docs) didn't resolve on Nov 18 (Cloudflare 1016); kept first in NJT_HOSTS so it's used if it goes live. /njt-server reports which host the relay uses.
