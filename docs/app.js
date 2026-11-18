@@ -569,15 +569,16 @@ function renderPathSchedule() {
   }
   const { byDest, today } = nextScheduledPath();
   const outdated = pathSchedule.validUntil && today.date > pathSchedule.validUntil;
-  const note = `<p class="sched-note">Live PATH times aren’t available, so these are scheduled times from PATH’s timetable.${outdated
-    ? ' That timetable was last published for service up to ' + new Date(pathSchedule.validUntil + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ', so times may have changed.'
-    : ''} Holiday and weekend construction changes aren’t included.</p>`;
+  // Shown under the times: short, but says they aren't live.
+  const note = `<p class="sched-note">Scheduled times, not live.${outdated
+    ? ' PATH’s timetable ran to ' + new Date(pathSchedule.validUntil + 'T12:00:00').toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) + ', so times may have changed.'
+    : ''}</p>`;
   const lines = [...byDest].map(([dest, g]) => {
     const [first, ...rest] = g.times.slice(0, 3).map(fmtMins);
     const dots = g.colors.map((c) => `<i style="background:${esc(c)}"></i>`).join('');
     return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
   }).join('');
-  $('path').innerHTML = note + (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>');
+  $('path').innerHTML = (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>') + note;
 }
 
 // ---------- service notices ----------
