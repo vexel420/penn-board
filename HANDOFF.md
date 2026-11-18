@@ -100,9 +100,13 @@ Owner decisions so far (see `design/switchover-tags-express-banner.png`):
 - Times come from the MTA GTFS per line and day (weekday / Saturday / Sunday).
 - Tags are specific: "Late-night service", "Weekend service", "Holiday
   service", "Severe weather service" (from MTA schedule/weather notices).
-  See `design/service-tags.png`. Proposed: late-night tag on when the first
-  late-night train enters service, off when the last late-night train has
-  left Penn (not yet confirmed by the owner).
+  See `design/service-tags.png`.
+- The "Late-night service" tag shows only once no more daytime trains are
+  due at Penn (after the last express has left), and is removed in the
+  morning when the first daytime express train's countdown reaches "now" at
+  Penn. (Owner, 19 Nov.)
+- Banner wording once late nights have begun on the line: "Late-night service
+  has started on the [line]. The last express train leaves at [time]."
 
 ## Service notices (18 Nov, owner chose option A)
 
