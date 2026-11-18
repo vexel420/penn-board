@@ -435,8 +435,15 @@ function setPressed(group, attr, value) {
 document.querySelector('.seg').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   view = b.dataset.view; document.body.dataset.view = view;
-  setPressed('.seg', 'view', view); render();
+  setPressed('.seg', 'view', view); setHeading(); render();
 });
+
+// The masthead names the view: Penn Station departures, arrivals, or subway and PATH.
+const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: 'subway and PATH' };
+function setHeading() {
+  $('h1-sub').textContent = HEADINGS[view];
+  document.title = `Penn Station ${HEADINGS[view]}`;
+}
 document.querySelector('.chips').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   carrier = b.dataset.carrier;
