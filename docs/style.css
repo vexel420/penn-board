@@ -348,3 +348,6 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 #change .cm-label .bullet, #change .cm-name .bullet { width: 18px; height: 18px; font-size: 11px; margin-left: 2px; vertical-align: middle; }
 #change .cm-zoom .bullet { width: 20px; height: 20px; font-size: 11.5px; }
 .cm-list { margin: 0 0 .5rem; padding-left: 1.2rem; } .cm-list li { margin: 0 0 .3rem; }
+/* The title bar with Close stays on screen while the map and text scroll. */
+.cm-head { position: sticky; top: 0; z-index: 1100; padding-bottom: .5rem; box-shadow: 0 1px 0 var(--line); }
+.cm-top { padding-top: .2rem; }

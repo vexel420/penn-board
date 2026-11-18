@@ -845,6 +845,13 @@ const textWidth = (s, bullets = 0) => Math.round(String(s).length * 7.4 + bullet
 
 let changeMap = null, changeOpen = null;
 function closeChange() { if ($('change').open) $('change').close(); }
+// On phones the map fills the screen: the phone's Back button or gesture
+// closes it (rather than leaving the board), as people expect.
+window.addEventListener('popstate', () => { if ($('change').open) $('change').close(); });
+$('change').addEventListener('close', () => {
+  changeOpen = null;
+  if (history.state && history.state.changeMap) history.back();
+});
 
 async function openChange(id, view = 1) {
   const model = changeModels().find((m) => m.n.id === id);
@@ -879,7 +886,7 @@ async function openChange(id, view = 1) {
       ${liveDirectionsHtml()}`;
   }
   const dialog = $('change');
-  if (!dialog.open) dialog.showModal();
+  if (!dialog.open) { dialog.showModal(); history.pushState({ changeMap: true }, ''); }
   dialog.querySelector('.cm-body').scrollTop = 0;
 
   const box = $('chg-map');
