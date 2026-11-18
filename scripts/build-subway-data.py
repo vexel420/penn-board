@@ -223,6 +223,7 @@ def main(zip_path):
 
     # Late-night switches at Penn, per station, line, direction and day.
     at_penn = defaultdict(list)  # (station, line, dir, day) -> [(penn min, start min, express?)]
+    ends = defaultdict(lambda: defaultdict(int))  # (line, dir) -> last stop -> trips from Penn
     for tid, cs in calls.items():
         cs.sort()
         names = [c[1] for c in cs]
@@ -236,6 +237,7 @@ def main(zip_path):
                 # start in hundredths of a minute ("033750_1..N03R"); the
                 # timetable's trip id carries the same number.
                 code = re.search(r'_(\d{6})_', tid)
+                ends[(trip_line[tid], c[2])][names[-1]] += 1
                 at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express, code.group(1) if code else ''))
     switches, gaps, nights = {}, {}, {}
     for (station, line, d, day), ts in at_penn.items():
@@ -261,7 +263,15 @@ def main(zip_path):
     SHAPES_OUT.write_text(json.dumps({'version': info.get('feed_version', ''), 'lines': shapes}, separators=(',', ':')))
     print(f'Wrote {SHAPES_OUT}: {sum(len(v) for v in shapes.values())} track paths, {SHAPES_OUT.stat().st_size // 1024} KB')
 
-    doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps, 'night': nights}
+    # Each line's scheduled last stops from Penn, by direction: every last stop
+    # in the timetable (the A downtown: Far Rockaway, Lefferts Blvd, and a few
+    # Rockaway Park and Euclid Av trips). The board shows a line's scheduled
+    # trains on one row, named by the next train's last stop; a last stop not
+    # in the timetable (a service change) gets a row of its own.
+    terminals = {}
+    for (line, d), counts in ends.items():
+        terminals.setdefault(line, {})[d] = sorted(counts)
+    doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps, 'night': nights, 'terminals': terminals}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT}: {len(routes)} lines, {len(stops)} stations, {OUT.stat().st_size // 1024} KB')
     for station, ls in nights.items():

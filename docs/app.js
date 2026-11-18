@@ -736,6 +736,32 @@ function renderPathPattern() {
   return '';
 }
 
+// A line's trains to its scheduled last stops share one row, named by the
+// next train's last stop (the A downtown: Far Rockaway, then Lefferts Blvd...).
+// A last stop that isn't in the timetable (a service change: A to Chambers St)
+// keeps its own row. subway-data.json "terminals" lists the scheduled ones.
+function mergeScheduled(groups) {
+  const out = [], merged = new Map();
+  for (const g of groups) {
+    const ends = subwayData && subwayData.terminals && ((subwayData.terminals[g.route] || {})[g.dir]);
+    if (!ends || !ends.includes(g.dest)) { out.push(g); continue; }
+    const k = `${g.route}|${g.dir}|${g.svc}`;
+    if (!merged.has(k)) { const m = { ...g, scheduled: true, trains: [] }; merged.set(k, m); out.push(m); }
+    merged.get(k).trains.push(...g.trains);
+  }
+  for (const m of merged.values()) m.trains.sort((a, b) => a.time - b.time);
+  return out;
+}
+// The destination name, sliding to the next one when it changes (the row's
+// next train now goes somewhere else).
+const destShown = new Map();
+function destName(key, name) {
+  const before = destShown.get(key);
+  destShown.set(key, name);
+  if (before === undefined || before === name) return `<span class="dname">${esc(name)}</span>`;
+  return `<span class="dname changing"><span class="out" aria-hidden="true">${esc(before)}</span><span class="in">${esc(name)}</span></span>`;
+}
+
 let subwayShown = [];      // the groups drawn, so a tap can find its train
 const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
 function renderSubway() {
@@ -756,7 +782,7 @@ function renderSubway() {
   const STATIONS = [{ id: '128', lines: ['1', '2', '3'] }, { id: 'A28', lines: ['A', 'C', 'E'] }];
   const states = [];
   $('subway').innerHTML = STATIONS.map((stn) => {
-  const here = board.subway.filter((g) => (g.trains[0] && g.trains[0].stops ? g.trains[0].stops[0] : '') === stn.id);
+  const here = mergeScheduled(board.subway.filter((g) => (g.trains[0] && g.trains[0].stops ? g.trains[0].stops[0] : '') === stn.id));
   const dirs = ['N', 'S'].map((dir) => {
     // Lines at this station that switch between express and local, and where
     // each stands right now.
@@ -828,14 +854,15 @@ function renderSubway() {
       const first = trains[0];
       const last = first.stops && first.stops[first.stops.length - 1];
       const dest = stationName(last) || first.dest || (dir === 'N' ? 'Uptown' : 'Downtown');
+      const destHtml = destName(`${stn.id}|${g.route}|${dir}|${g.svc}|${g.scheduled ? 'sched' : last}`, dest);
       const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
       const rerouted = trains.find((x) => unusualStops(g.route, x).length);
       if (!rerouted) {
-        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
+        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
       }
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${esc(dest)}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${firstMin}${rest}</span></button>`;
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');

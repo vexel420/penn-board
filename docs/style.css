@@ -427,3 +427,11 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 /* Rows off screen skip layout and painting until scrolled to (tile-heavy rows are costly). */
 .flipboard .row { content-visibility: auto; contain-intrinsic-size: auto 110px; }
 .mast h1 { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+
+/* Subway: a line's destination changing to its next train's (A to Far Rockaway, then Lefferts Blvd) */
+.dname { display: inline-grid; vertical-align: top; }
+.dname.changing > span { grid-area: 1 / 1; }
+.dname .out { animation: dest-out .45s ease-in forwards; }
+.dname .in { animation: dest-in .45s ease-out .1s both; }
+@keyframes dest-out { to { opacity: 0; transform: translateY(-.6em); } }
+@keyframes dest-in { from { opacity: 0; transform: translateY(.6em); } to { opacity: 1; transform: none; } }
