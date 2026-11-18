@@ -93,6 +93,10 @@ Watched Amtraker (`api-v3.amtraker.com/v3/trains`) once a minute:
   scheduled time, drops out of the data while delayed, and reappears only as
   `Departed` (Keystone 639 on 17 Nov: due 21:00, left 21:47). The board keeps
   such a train as "No update from Amtrak" for up to 45 min past its time.
+- Other Amtrak track sources checked on 19 Nov, none usable: the Moynihan
+  Train Hall website board (Cloudflare blocks automated requests and it isn't
+  open to other sites); LIRR's `backend-unified.mylirr.org/solari/NYK` (the
+  Penn board feed, LIRR trains only). NJ Transit's feed remains the only way.
 - Departed Amtrak trains show for 5 min from when the board learns of it
   (others 3 min), never more than 4 min beyond that after the real departure.
 
