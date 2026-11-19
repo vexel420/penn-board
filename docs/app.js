@@ -430,7 +430,7 @@ function rowHtml(r) {
   return `<li class="row ${r.tone}${left === 'gone' && !gone && !due ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
-    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}</div>
+    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${rowAlertHtml(r)}</div>
     <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${sched}</div>
     ${trackCell(r, r.tone === 'final' ? ' ring' : '')}
   </li>`;
@@ -908,11 +908,13 @@ function renderSubway() {
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
       minsShown.set(rowKey, firstMin + rest);
       const rerouted = trains.find((x) => unusualStops(g.route, x).length);
+      // A delay notice for this line: under the row, with other options.
+      const delayNote = subwayDelays(g.route).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
       if (!rerouted) {
-        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
+        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>${delayNote}`;
       }
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>${delayNote}`;
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
@@ -1257,6 +1259,8 @@ $('change').addEventListener('close', () => {
 });
 
 async function openChange(id, view = 1) {
+  const pm = pathModels().find((m) => m.n.id === id);
+  if (pm) return openPathIssue(pm);
   const lm = lirrModels().find((m) => m.n.id === id);
   if (lm) { changeOpen = { id, view }; return openLirrChange(lm, view); }
   const model = changeModels().find((m) => m.n.id === id);
@@ -1688,6 +1692,318 @@ function drawLirrChange(map, model, view) {
 }
 const lirrModels = () => ((board && board.notices && board.notices.rail) || []).map(lirrModel).filter(Boolean);
 
+// ---------- PATH maps, NJ Transit fallback guides, delay options ----------
+// PATH's stations and lines (stations are fixed; lines drawn station to
+// station, side by side where they share track, like PATH's own map).
+const PATH_STATIONS = {
+  NWK: ['Newark Penn Station', 40.7347, -74.1640], HAR: ['Harrison', 40.7390, -74.1558],
+  JSQ: ['Journal Square', 40.7331, -74.0628], GRV: ['Grove St', 40.7197, -74.0430],
+  EXP: ['Exchange Place', 40.7164, -74.0329], WTC: ['World Trade Center', 40.7118, -74.0110],
+  NEW: ['Newport', 40.7268, -74.0340], HOB: ['Hoboken', 40.7352, -74.0291],
+  CHR: ['Christopher St', 40.7330, -74.0071], '09S': ['9 St', 40.7342, -73.9989],
+  '14S': ['14 St', 40.7374, -73.9969], '23S': ['23 St', 40.7429, -73.9929], '33S': ['33 St', 40.7489, -73.9883],
+};
+const PATH_LINES = [
+  { id: 'NWK-WTC', name: 'Newark–WTC', color: '#D93A30', off: -3, stops: ['NWK', 'HAR', 'JSQ', 'GRV', 'EXP', 'WTC'] },
+  { id: 'HOB-WTC', name: 'Hoboken–WTC', color: '#65C100', off: 3, stops: ['HOB', 'NEW', 'EXP', 'WTC'] },
+  { id: 'JSQ-33', name: 'Journal Square–33 St', color: '#FF9900', off: 3, stops: ['JSQ', 'GRV', 'NEW', 'CHR', '09S', '14S', '23S', '33S'] },
+  { id: 'HOB-33', name: 'Hoboken–33 St', color: '#4D92FB', off: -3, stops: ['HOB', 'CHR', '09S', '14S', '23S', '33S'] },
+];
+const PP = (c) => [PATH_STATIONS[c][1], PATH_STATIONS[c][2]];
+const pathChip = (ln) => `<span class="lchip" style="background:${ln.color};color:${ln.id === 'JSQ-33' ? '#1b1b1b' : '#fff'}">${esc(ln.name)}</span>`;
+
+// A shared map frame for these sheets.
+function openSheet() {
+  const d = $('change');
+  if (!d.open) { d.showModal(); history.pushState({ changeMap: true }, ''); }
+  d.querySelector('.cm-body').scrollTop = 0;
+}
+async function freshMap() {
+  const Lf = await loadLeaflet();
+  const box = $('chg-map');
+  box.hidden = false;
+  if (changeMap) changeMap.remove();
+  changeMap = Lf.map(box, { zoomSnap: 0.25, scrollWheelZoom: false });
+  Lf.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18, className: 'cm-tiles',
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · PATH: Port Authority',
+  }).addTo(changeMap);
+  return changeMap;
+}
+
+// PATH's network with each line in a state: 'run' (normal), 'focus' (the
+// route to take), 'delay', 'off' (no trains), 'faint' (not part of this).
+// `marks`: station code -> label text; flagged stations get a red ring.
+function drawPathMap(map, { state = {}, marks = {}, flagged = [], fit = null }) {
+  // (The map needs its view before anything is drawn on it.)
+  const b = L.latLngBounds([PENN_LL, ...(fit || Object.keys(PATH_STATIONS)).map(PP)]);
+  map.fitBounds(b, { padding: [28, 28] });
+  const lines = L.layerGroup().addTo(map);
+  const draw = () => {
+    lines.clearLayers();
+    for (const ln of PATH_LINES) {
+      const s = state[ln.id] || 'run';
+      const pts = offsetLine(map, ln.stops.map(PP), ln.off);
+      if (s === 'faint') { L.polyline(pts, { color: ln.color, weight: 3, opacity: 0.35, interactive: false }).addTo(lines); continue; }
+      L.polyline(pts, { color: '#fff', weight: s === 'focus' || s === 'delay' ? 11 : 9, interactive: false }).addTo(lines);
+      if (s === 'off') L.polyline(pts, { color: '#8f8f8f', weight: 5, dashArray: '8 7', interactive: false }).addTo(lines);
+      else L.polyline(pts, { color: ln.color, weight: s === 'focus' || s === 'delay' ? 7 : 5, interactive: false }).addTo(lines);
+      if (s === 'delay') L.polyline(pts, { color: '#1b1b1b', weight: 2, dashArray: '1 9', lineCap: 'round', interactive: false }).addTo(lines);
+    }
+  };
+  map.whenReady(draw); map.on('zoomend', draw);
+  // The walk from Penn to PATH's 33 St station.
+  L.polyline([PENN_LL, PP('33S')], { color: '#222', weight: 4, dashArray: '2 7', lineCap: 'round', interactive: false }).addTo(map);
+  for (const c of Object.keys(PATH_STATIONS)) {
+    const red = flagged.includes(c);
+    L.circleMarker(PP(c), { radius: red ? 6 : 4, weight: 2, color: red ? '#c0392b' : '#1b1b1b', fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(map);
+  }
+  // Penn and PATH's 33 St are a block apart: one label for both.
+  const at33 = flagged.includes('33S') ? `PATH 33 St: ${(marks['33S'] || '').toLowerCase()}` : '5 min walk to PATH 33 St';
+  const labels = [{ at: PENN_LL, must: true, cls: 'here', html: `★ Penn Station<small${flagged.includes('33S') ? ' style="color:#c0392b"' : ''}>${esc(at33)}</small>`, w: Math.round(at33.length * 6.2 + 20), h: 36 }];
+  for (const [c, text] of Object.entries(marks)) if (c !== '33S') labels.push({ at: PP(c), must: true, cls: flagged.includes(c) ? 'off' : '', html: `${esc(PATH_STATIONS[c][0])}${text ? `<small${flagged.includes(c) ? ' style="color:#ffd9d3"' : ''}>${esc(text)}</small>` : ''}`, w: textWidth(Math.max(PATH_STATIONS[c][0].length, text.length) > 18 ? text : PATH_STATIONS[c][0]) + 10, h: text ? 36 : 26 });
+  for (const ln of PATH_LINES) {
+    const s = state[ln.id];
+    if (s === 'delay' || s === 'off') { const mid = ln.stops[Math.floor(ln.stops.length / 2)]; labels.push({ at: PP(mid), must: true, cls: 'off', html: `${esc(ln.name)}<small style="color:#ffd9d3">${s === 'off' ? 'No trains' : 'Delays'}</small>`, w: textWidth(ln.name), h: 36 }); }
+  }
+  const layer = L.layerGroup().addTo(map);
+  const sync = () => placeLabels(map, layer, labels);
+  map.on('zoomend moveend', sync); sync();
+  setTimeout(() => { map.invalidateSize(); map.fitBounds(b, { padding: [28, 28] }); sync(); draw(); }, 60);
+}
+
+// ---------- PATH alerts as maps ----------
+// PATH writes its lines as "JSQ-33", "NWK-WTC", "HOB-33", "HOB-WTC"; each
+// sentence says what's happening to the lines it names ("JSQ-33 delayed",
+// "NWK-WTC, HOB-WTC, HOB-33 running"). Station problems (an elevator out of
+// service) name the station in the first sentence.
+const PATH_PAIR = /\b(NWK|JSQ|HOB|33|WTC)\s*-\s*(NWK|JSQ|HOB|33|WTC)\b/g;
+function pathLineFor(a, b) {
+  const ln = PATH_LINES.find((x) => { const [p, q] = x.id.split('-'); return (a === p && b === q) || (a === q && b === p); });
+  return ln ? ln.id : null;
+}
+const PATH_NAMES = [['33S', /\b33(rd)? St/i], ['23S', /\b23(rd)? St/i], ['14S', /\b14(th)? St/i], ['09S', /\b9(th)? St/i], ['CHR', /Christopher/i],
+  ['HOB', /Hoboken/i], ['NEW', /Newport/i], ['EXP', /Exchange P/i], ['GRV', /Grove/i], ['JSQ', /Journal Sq/i], ['HAR', /Harrison/i], ['NWK', /Newark/i], ['WTC', /World Trade|\bWTC\b/i]];
+function pathModel(n) {
+  if (!n || n.carrier !== 'path') return null;
+  const text = String(n.text || '');
+  const state = {};
+  for (const clause of text.split(/[.;]\s+/)) {
+    const ids = [...clause.matchAll(PATH_PAIR)].map((m) => pathLineFor(m[1], m[2])).filter(Boolean);
+    if (!ids.length) continue;
+    const s = /suspend|no service|not running|no trains/i.test(clause) ? 'off' : /delay|slow|congest/i.test(clause) ? 'delay' : /running|resum|normal/i.test(clause) ? 'run' : 'delay';
+    for (const id of ids) if (!state[id] || s !== 'run') state[id] = s;
+  }
+  const first = text.replace(PATH_PAIR, ' ').split(/\.\s/)[0];
+  const issue = /elevator|escalator/i.test(first) ? 'Elevator out of service' : /closed|bypass|skip/i.test(first) ? 'Closed or skipped' : '';
+  const flagged = issue ? PATH_NAMES.filter(([, re]) => re.test(first)).map(([c]) => c) : [];
+  if (!Object.keys(state).length && !flagged.length) return null;
+  return { n, state, flagged, issue };
+}
+const pathModels = () => ((board && board.notices && board.notices.path) || []).map(pathModel).filter(Boolean);
+
+async function openPathIssue(m) {
+  const { n, state, flagged, issue } = m;
+  changeOpen = { id: n.id, view: 1 };
+  $('chg-kind').textContent = `PATH · ${n.type}`;
+  $('chg-h').innerHTML = esc(n.text.split(/\.\s/)[0]);
+  const key = [];
+  if (Object.values(state).includes('delay')) key.push('<li><span class="sw" style="border-color:#888;border-top-style:dotted"></span>Delays</li>');
+  if (Object.values(state).includes('off')) key.push('<li><span class="sw off"></span>No trains</li>');
+  if (flagged.length) key.push(`<li><span class="sw" style="border-color:#c0392b"></span>${esc(issue)}</li>`);
+  $('chg-top').innerHTML = `<ul class="cm-key">${key.join('')}</ul>`;
+  const running = PATH_LINES.filter((ln) => state[ln.id] === 'run');
+  const cards = flagged.map((c) => {
+    const d = directionsTo(PP(c), `PATH ${PATH_STATIONS[c][0]}`);
+    return `<li class="cm-stn"><button type="button" class="cm-zoom" data-pzoom="${c}"><b>${esc(PATH_STATIONS[c][0])}</b></button><span class="cm-dir">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></span></li>`;
+  }).join('');
+  $('chg-below').innerHTML = `${running.length ? `<h3 class="cm-h">Running normally</h3><p class="lchips">${running.map(pathChip).join('')}</p>` : ''}
+    ${cards ? `<h3 class="cm-h">Station</h3><ul class="cm-stns">${cards}</ul>` : ''}
+    <h3 class="cm-h">From PATH</h3><div class="cm-mta"><p>${esc(n.text)}</p></div>${liveDirectionsHtml()}`;
+  openSheet();
+  try {
+    const map = await freshMap();
+    const marks = {};
+    for (const c of flagged) marks[c] = issue;
+    drawPathMap(map, { state, marks, flagged });
+    $('chg-below').onclick = (e) => { const b = e.target.closest('[data-pzoom]'); if (b) map.flyTo(PP(b.dataset.pzoom), 15, { duration: 0.8 }); };
+  } catch (e) { console.warn('PATH map:', e); $('chg-map').hidden = true; }
+}
+
+// ---------- NJ Transit disruption: other ways to New Jersey ----------
+// Ready-made guides to Newark Penn and Hoboken by PATH, offered when NJ
+// Transit trains at Penn are badly delayed or cancelled. The words are the
+// board's own (not NJ Transit's data); NJ Transit's notices stay as sent.
+const NJT_GUIDES = {
+  newark: {
+    title: 'To Newark Penn Station by PATH', dest: 'NWK', live: /journal/i, liveLabel: 'Journal Square trains from 33 St',
+    state: { 'JSQ-33': 'focus', 'NWK-WTC': 'focus', 'HOB-33': 'faint', 'HOB-WTC': 'faint' },
+    marks: { '33S': 'Board a Journal Square train', JSQ: 'Change for Newark', NWK: 'NJ Transit and Amtrak here' },
+    steps: [
+      'Walk to PATH’s 33 St station, at Sixth Av and 32 St (about 5 minutes).',
+      'Take a Journal Square train. Late nights and weekends it runs via Hoboken.',
+      'At Journal Square, change to a Newark train. Newark Penn Station is two stops on, after Harrison.',
+      'Or: take the downtown E to World Trade Center and PATH’s Newark train from there, no change.',
+    ],
+  },
+  hoboken: {
+    title: 'To Hoboken Terminal by PATH', dest: 'HOB', live: /hoboken/i, liveLabel: 'Trains to Hoboken from 33 St',
+    state: { 'HOB-33': 'focus', 'JSQ-33': 'faint', 'NWK-WTC': 'faint', 'HOB-WTC': 'faint' },
+    marks: { '33S': 'Board a Hoboken train', HOB: 'NJ Transit trains here' },
+    steps: [
+      'Walk to PATH’s 33 St station, at Sixth Av and 32 St (about 5 minutes).',
+      'Take a Hoboken train, direct. When it isn’t running (late nights and weekends), take the Journal Square via Hoboken train.',
+      'Hoboken is the last stop. NJ Transit trains leave from the same terminal.',
+    ],
+  },
+};
+async function openGuide(key) {
+  const g = NJT_GUIDES[key];
+  changeOpen = { id: `guide-${key}`, view: 1 };
+  $('chg-kind').textContent = 'Other ways to New Jersey';
+  $('chg-h').innerHTML = esc(g.title);
+  const nowS = Date.now() / 1000;
+  const next = ((board && board.path) || []).filter((x) => g.live.test(x.dest || '') && x.time >= nowS - 30).slice(0, 3)
+    .map((x) => { const m = Math.max(0, Math.round((x.time - nowS) / 60)); return m ? `${m} min` : 'now'; });
+  const other = key === 'newark' ? 'hoboken' : 'newark';
+  $('chg-top').innerHTML = `<ol class="cm-steps">${g.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+    ${next.length ? `<p class="cm-sum"><b>${esc(g.liveLabel)}:</b> ${next.join(', ')}</p>` : ''}
+    <button type="button" class="cm-back" data-guide="${other}">${other === 'hoboken' ? 'To Hoboken instead' : 'To Newark Penn instead'} →</button>`;
+  const d = directionsTo(PP(g.dest), key === 'newark' ? 'Newark Penn Station' : 'Hoboken Terminal');
+  const njtNotes = ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'njt');
+  $('chg-below').innerHTML = `<p class="cm-live">PATH charges its own fare. During major disruptions NJ Transit sometimes accepts its tickets on PATH (cross-honoring); check NJ Transit’s notices before you go.</p>
+    <p class="cm-live">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></p>
+    ${njtNotes.length ? `<h3 class="cm-h">From NJ Transit</h3><div class="cm-mta">${njtNotes.map((n) => `<p>${noticeText(n.text)}</p>`).join('')}</div>` : ''}`;
+  openSheet();
+  try { drawPathMap(await freshMap(), { state: g.state, marks: g.marks, fit: ['33S', g.dest, 'JSQ'] }); } catch (e) { console.warn('guide map:', e); $('chg-map').hidden = true; }
+}
+// When to offer the guides: several NJ Transit trains from Penn cancelled, or
+// most of the next hour's badly late, or an NJ Transit notice about a
+// suspension or major delays at Penn. Always in #preview mode.
+function njtDisrupted() {
+  if (!board) return false;
+  if (typeof PREVIEW !== 'undefined' && PREVIEW) return true;
+  const nowS = Date.now() / 1000;
+  const rows = board.departures.filter((r) => r.carrier === 'njt' && (r.leaves ?? r.time) > nowS - 300 && r.time < nowS + 75 * 60);
+  const cancelled = rows.filter((r) => r.tone === 'stop').length;
+  const late = rows.filter((r) => (r.lateMin || 0) >= 15).length;
+  const notice = (board.notices.rail || []).some((n) => n.carrier === 'njt' && /suspend|no service|major delay|severe delay|significant delay|cross[- ]?honor/i.test(n.text) && /new york|penn station|psny|\bnec\b|northeast corridor|all lines/i.test(n.text));
+  return cancelled >= 3 || (rows.length >= 4 && late >= 3 && late / rows.length >= 0.4) || notice;
+}
+const njtAltHtml = () => (njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transit trains from Penn are delayed or cancelled.</b> Other ways to New Jersey:</p>
+  <div><button type="button" data-guide="newark">To Newark Penn by PATH</button><button type="button" data-guide="hoboken">To Hoboken by PATH</button></div></div>` : '');
+
+// ---------- delays on the trains they affect, with other options ----------
+const NJT_LINE_WORDS = [[/\bNEC\b|Northeast Corridor/i, /Northeast/i], [/North Jersey Coast|\bNJCL\b/i, /Jersey Coast/i], [/Morris (and|&) Essex|\bM&E\b/i, /Morristown|Gladstone/i],
+  [/Montclair-Boonton|\bMOBO\b/i, /Montclair|Boonton/i], [/Raritan Valley/i, /Raritan/i], [/Main\/Bergen|Main Line|Bergen County/i, /Main|Bergen/i], [/Pascack/i, /Pascack/i], [/Gladstone/i, /Gladstone/i]];
+const DELAY_TYPES = /delay|cancel|suspend|single track/i;
+function rowNotices(r) {
+  const all = (board && board.notices && board.notices.rail) || [];
+  if (r.carrier === 'lirr' && lirrData) {
+    const id = Object.keys(lirrData.routes).find((k) => lirrData.routes[k].name === r.line);
+    return id ? all.filter((n) => n.carrier === 'lirr' && DELAY_TYPES.test(n.type) && (n.lines || []).includes(id)) : [];
+  }
+  if (r.carrier === 'njt') {
+    return all.filter((n) => {
+      if (n.carrier !== 'njt') return false;
+      const nums = [...String(n.text).matchAll(/#\s?(\d{3,5})/g)].map((m) => m[1]);
+      if (nums.length) return nums.includes(String(r.train));
+      return NJT_LINE_WORDS.some(([inText, inLine]) => inText.test(n.text) && inLine.test(r.line || ''));
+    });
+  }
+  return [];
+}
+function rowAlertHtml(r) {
+  if (view !== 'departures' || r.tone === 'departed') return '';
+  const ns = rowNotices(r);
+  if (!ns.length) return '';
+  return `<div class="row-alert">${ns.map((n) => `<p>⚠ ${noticeText(n.text)}</p>`).join('')}<button type="button" class="al-map" data-options="${esc(r.id)}">Other options</button></div>`;
+}
+// Subway: delay notices on a line's rows.
+const subwayDelays = (route) => ((board && board.notices && board.notices.subway) || []).filter((n) => /delay/i.test(n.type) && (n.lines || []).includes(route));
+
+// The options sheet: other ways to where the delayed train goes.
+// Stations every train shares (Penn itself, the hubs on the way out): not a reason to switch.
+const SHARED_SKIP = /^(new york penn station|penn station|jamaica|woodside|forest hills|kew gardens|secaucus.*|newark penn station)$/i;
+const normName2 = (s) => String(s || '').toLowerCase().replace(/-sec\b|✈|&#9992;?/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+function openOptions(r) {
+  changeOpen = { id: 'options', view: 1 };
+  $('chg-map').hidden = true;
+  const nowS = Date.now() / 1000;
+  const ns = rowNotices(r);
+  $('chg-kind').textContent = 'Other options';
+  $('chg-h').innerHTML = `${esc(r.line)} to ${esc(r.place)}`;
+  $('chg-top').innerHTML = ns.map((n) => `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`).join('');
+  const mine = new Set([...(r.via || []), r.place].map(normName2));
+  const going = board.departures.filter((x) => x.carrier === r.carrier && x.id !== r.id && x.tone !== 'stop' && x.tone !== 'departed' && (x.leaves ?? x.time) > nowS && x.time < nowS + 3 * 3600 && rowNotices(x).length === 0);
+  // Other trains from Penn (not affected by the notice) calling at stations
+  // this train serves, by line: the next one and the stations they share.
+  const byLine = new Map();
+  for (const x of going) {
+    const shared = [...(x.via || []), x.place].filter((s) => mine.has(normName2(s)) && !SHARED_SKIP.test(normName2(s)));
+    if (!shared.length || x.line === r.line && r.carrier === 'lirr') continue;
+    const k = x.line;
+    if (!byLine.has(k)) byLine.set(k, { line: k, next: x, shared: new Set() });
+    shared.forEach((s) => byLine.get(k).shared.add(s));
+  }
+  // LIRR: branches that serve these stations by the timetable, for when no
+  // such train is on the board yet (later trains, other times of day).
+  let timetable = '';
+  if (r.carrier === 'lirr' && lirrData) {
+    const listed = new Set([...byLine.keys(), r.line]);
+    const rows2 = Object.entries(lirrData.routes).filter(([k, x]) => k !== '12' && !listed.has(x.name)).map(([, x]) => {
+      const names = x.stops.map((id) => lirrData.stops[id] && lirrData.stops[id][0]).filter((nm) => nm && mine.has(normName2(nm)) && !SHARED_SKIP.test(normName2(nm)));
+      return { x, names };
+    }).filter((o) => o.names.length).sort((a, b) => b.names.length - a.names.length).slice(0, 4);
+    if (rows2.length) timetable = `<h3 class="cm-h">Branches that also serve these stations</h3><ul class="cm-stns">${rows2.map((o) => `<li class="cm-stn"><div class="opt-h">${lirrChip(o.x)}<span>check the board for times</span></div><span class="cm-dir">Stops at ${esc(o.names.slice(0, 6).join(', '))}${o.names.length > 6 ? ` and ${o.names.length - 6} more` : ''}</span></li>`).join('')}</ul>`;
+  }
+  const items = [...byLine.values()].sort((a, b) => b.shared.size - a.shared.size).slice(0, 6).map((o) => {
+    const t = clock(o.next.leaves ?? o.next.time);
+    const s = [...o.shared];
+    return `<li class="cm-stn"><div class="opt-h"><b>${esc(o.line)}</b><span>next ${t.hm} ${t.ap}${o.next.track ? `, track ${esc(o.next.track)}` : ''} to ${esc(o.next.place)}</span></div>
+      <span class="cm-dir">Also stops at ${esc(s.slice(0, 6).join(', '))}${s.length > 6 ? ` and ${s.length - 6} more` : ''}</span></li>`;
+  }).join('');
+  $('chg-below').innerHTML = `${items ? `<h3 class="cm-h">Other trains from Penn to the same stations</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other train on the board right now stops at the same stations.</p>'}
+    ${timetable}
+    ${r.carrier === 'njt' ? '<h3 class="cm-h">Or by PATH</h3><p class="lchips"><button type="button" class="cm-back" data-guide="newark">To Newark Penn by PATH</button> <button type="button" class="cm-back" data-guide="hoboken">To Hoboken by PATH</button></p>' : ''}
+    <p class="cm-live">Times and tracks from the live board. Fares and tickets differ by line; check before you board.</p>`;
+  openSheet();
+}
+// Subway delay options: other lines at the same Penn station going the same
+// way that share stations with the delayed one.
+function openSubwayOptions(route, dir, stnId) {
+  changeOpen = { id: 'options', view: 1 };
+  $('chg-map').hidden = true;
+  const nowS = Date.now() / 1000;
+  $('chg-kind').textContent = 'Other options';
+  $('chg-h').innerHTML = `${bulletHtml(route, 'tiny')} ${dir === 'N' ? 'uptown' : 'downtown'} from Penn`;
+  $('chg-top').innerHTML = subwayDelays(route).map((n) => `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`).join('');
+  const mine = subwayData.routes[route].normalSet;
+  const groups = board.subway.filter((g) => g.route !== route && g.dir === dir && g.trains[0] && g.trains[0].stops[0] === stnId);
+  const best = new Map();
+  for (const g of groups) {
+    const shared = subwayData.routes[g.route].normal.filter((id) => mine.has(id) && id !== stnId).length;
+    const t = g.trains.find((x) => x.time >= nowS - 30);
+    if (!shared || !t) continue;
+    if (!best.has(g.route) || best.get(g.route).t.time > t.time) best.set(g.route, { route: g.route, shared, t, svc: g.svc });
+  }
+  const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">Shares ${o.shared} stations with the ${esc(lineInfo(route).label)}</span></li>`).join('');
+  $('chg-below').innerHTML = items ? `<h3 class="cm-h">Other trains from this platform</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other line from this station shares its stops.</p>';
+  openSheet();
+}
+document.addEventListener('click', (e) => {
+  const g = e.target.closest('[data-guide]');
+  if (g) { e.preventDefault(); openGuide(g.dataset.guide); return; }
+  const o = e.target.closest('[data-options]');
+  if (o) { e.preventDefault(); e.stopPropagation(); const r = board.departures.find((x) => x.id === o.dataset.options); if (r) openOptions(r); return; }
+  const s = e.target.closest('[data-sopt]');
+  if (s) { e.preventDefault(); e.stopPropagation(); const [route, dir, stn] = s.dataset.sopt.split('|'); openSubwayOptions(route, dir, stn); }
+}, true);
+$('path-notices').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-change]');
+  if (b) openChange(b.dataset.change);
+});
+
 $('change').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) return closeChange();
   const v = e.target.closest('[data-view]');
@@ -1836,7 +2152,7 @@ function noticeStrip(list, where) {
   const urgent = list.some((n) => n.urgent);
   const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : 'Service notices for trains at Penn';
   // Notices that close or reroute part of a line open a map.
-  const mapBtn = (n) => (typeof changeModel === 'function' && (changeModel(n) || lirrModel(n)) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
+  const mapBtn = (n) => (typeof changeModel === 'function' && (changeModel(n) || lirrModel(n) || pathModel(n)) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
   const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}</p></div>`).join('');
   return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${opened ? ' open' : ''}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
 }
@@ -1860,6 +2176,7 @@ function renderServiceNotices() {
   $('rail-notices').innerHTML = noticeStrip(board.notices.rail, 'rail');
   $('subway-notices').innerHTML = noticeStrip(board.notices.subway, 'subway');
   $('path-notices').innerHTML = noticeStrip(board.notices.path, 'path');
+  $('njt-alt').innerHTML = njtAltHtml();
   renderAlertsTab();
 }
 // Phones: every notice on its own tab, by where it applies, with a count on
@@ -1867,11 +2184,11 @@ function renderServiceNotices() {
 function renderAlertsTab() {
   const rail = board.notices.rail || [], subway = board.notices.subway || [];
   const card = (n) => {
-    const map = typeof changeModel === 'function' && (changeModel(n) || lirrModel(n)) ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
+    const map = typeof changeModel === 'function' && (changeModel(n) || lirrModel(n) || pathModel(n)) ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
     return `<div class="al-card${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${map ? `<br>${map}` : ''}</p></div>`;
   };
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
-  $('alerts').innerHTML = group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
+  $('alerts').innerHTML = njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
     + group('Subway', subway, 'No subway notices for the lines at Penn right now.')
     + group('PATH', board.notices.path || [], 'No PATH alerts right now.');
   const n = rail.length + subway.length + (board.notices.path || []).length;

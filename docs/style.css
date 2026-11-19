@@ -445,3 +445,17 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 /* A rerouted line's badge beside each station it temporarily uses */
 .via-badge { transform: translate(-50%, -150%); }
 #change .via-badge .bullet { width: 18px; height: 18px; font-size: 11px; box-shadow: 0 0 0 2px #fff; }
+
+/* NJ Transit disruption: other ways to New Jersey */
+.njt-alt { margin: 0 0 .9rem; padding: .75rem .9rem; border: 1px solid var(--njt); border-radius: 8px; background: #241a2b; }
+.njt-alt p { margin: 0 0 .55rem; }
+.njt-alt div { display: flex; flex-wrap: wrap; gap: .5rem; }
+.njt-alt button { padding: .45rem .9rem; border: 0; border-radius: 6px; background: var(--gold); color: #1b1a12; font-weight: 700; }
+.cm-steps { margin: .6rem 0 .4rem; padding-left: 1.3rem; display: grid; gap: .35rem; }
+/* Delay notices under the trains they affect */
+.row-alert { margin-top: .35rem; padding: .35rem .55rem; border-left: 3px solid var(--late); background: rgba(240, 169, 74, .08); color: var(--ivory); font-size: .85rem; border-radius: 0 4px 4px 0; }
+.row-alert p { margin: 0 0 .25rem; }
+.row-alert .al-map { margin: 0; }
+.row-alert.sub { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin: -.1rem 0 .3rem 2.7rem; }
+.opt-h { display: flex; justify-content: space-between; gap: .6rem; align-items: center; padding: .55rem .7rem .2rem; }
+.opt-h span { color: var(--dim); font-size: .85rem; text-align: right; }

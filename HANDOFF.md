@@ -555,3 +555,26 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Reroute notices: readVia() reads '[C] runs via the [F] from X to Y and via the [D] to Z'; the map draws the line in its colour over those tracks, with its badge beside each borrowed station (zoom 13-14), a 'C via F D' tag further out, and station names listing it closer in.
 - Reroute maps draw the rerouted line and the line it borrows side by side on the shared stretch (offsetLine, redrawn on zoom), like a subway-map trunk.
 - Subway map: a 'Suspended' (not 'Part Suspended') notice draws the whole line as closed (whole: true); notices may list only the stations the line serves at that time (overnight 3: 34 St-148 St).
+
+## PATH maps, NJ Transit fallback guides, delay options (Nov 19, 2026)
+- PATH alerts get "See map" (`pathModel`, `openPathIssue`, `drawPathMap` in
+  docs/app.js). PATH's network is built in (PATH_STATIONS / PATH_LINES, drawn
+  station to station, lines side by side). Each sentence of the alert sets the
+  lines it names ("JSQ-33 delayed" -> delays, "NWK-WTC ... running" -> running,
+  "suspended" -> no trains); a station named in the first sentence of an
+  elevator/escalator/closed alert is ringed red.
+- NJ Transit disruption guides (`NJT_GUIDES`, `openGuide`): "To Newark Penn by
+  PATH" (33 St -> Journal Square -> Newark; or E to WTC then Newark train) and
+  "To Hoboken by PATH", with live PATH times, cross-honoring caveat and NJT's
+  own notices as sent. A purple banner (#njt-alt, and top of the phone Alerts
+  tab) offers them when `njtDisrupted()`: 3+ NJT cancellations in the next 75
+  min, or 3+ trains 15+ min late making up 40%+ of them, or an NJT notice about
+  a suspension / major delays / cross-honoring at Penn. Always in #preview.
+- Delay notices under the trains they affect (`rowNotices`, `rowAlertHtml`):
+  LIRR by branch (notice route id = lirr-data route), NJT by train number
+  ("#6671") or line words (NEC, Morris & Essex...). Subway delay notices show
+  under that line's rows. "Other options" (`openOptions`, `openSubwayOptions`):
+  other trains on the board (next 3 h, not under a notice) stopping at the
+  same stations, grouped by line; LIRR also lists branches serving those
+  stations by timetable; NJT also links the PATH guides; subway lists other
+  lines from the same platform sharing stations.
