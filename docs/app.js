@@ -508,6 +508,8 @@ function unusualStops(route, train) {
   if (!r || !train.stops) return [];
   return train.stops.filter((id) => subwayData.stops[id] && !r.normalSet.has(id));
 }
+// A line named in a sentence ("Use the 2."): its badge, at text size.
+const lineName = (route) => bulletHtml(route, 'inl');
 function bulletHtml(route, extraClass = '') {
   const l = lineInfo(route);
   return `<span class="bullet ${extraClass}${l.label.length > 2 ? ' wide' : ''}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
@@ -696,13 +698,13 @@ function suspensionNote(stn, here, line, dir, svc, nowS) {
   const g = nightGapState(stn.id, line, dir);
   if (g && g.phase === 'night') return null;
   if (lineSection(here, stn.id, line, dir) !== svc) return '';
-  const label = esc(lineInfo(line).label);
+  const label = lineName(line);
   const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
   // The lines the advisory sends people to ("[2] makes [3] stops..."), at this station.
   const desc = String(s.n.desc || '');
   let alts = [...new Set([...desc.matchAll(/\[([A-Z0-9]{1,2})\]/g)].map((m) => m[1]))].filter((l) => l !== line && stn.lines.includes(l));
   if (!alts.length) alts = stn.lines.filter((l) => l !== line && here.some((x) => x.route === l && x.dir === dir));
-  const altNames = alts.map((l) => esc(lineInfo(l).label));
+  const altNames = alts.map((l) => lineName(l));
   const use = altNames.length ? ` Use the ${altNames.slice(0, -1).join(', ')}${altNames.length > 1 ? ' or ' : ''}${altNames[altNames.length - 1]}.` : '';
   // Just "Use the 2." (owner: the advisory's details stay in the notice).
   const after = use;
@@ -1075,7 +1077,7 @@ function renderSubway() {
         morningReached.add(g.key);
         g = nightGapState(stn.id, line, dir);
       }
-      if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${esc(lineInfo(line).label)}.</b></span></p>`;
+      if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${lineName(line)}.</b></span></p>`;
       // "The last C train leaves at 10:34 PM, in 25 min." / "The last downtown 3 train..."
       // The last train running late: keep counting down until it has left.
       const lateLast = g && g.phase === 'night' && g.svc === svc
@@ -1083,16 +1085,16 @@ function renderSubway() {
       if (g && ((g.phase === 'countdown' && g.svc === svc) || lateLast)) {
         const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
         const t = lateLast ?? liveLast(here, line, dir, null, minsToEpoch(g.after), nowS);
-        return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${esc(lineInfo(line).label)} train leaves at ${clockText(t)}, ${inText(t, nowS)}.</b> No ${way}${esc(lineInfo(line).label)} trains late nights.</span></p>`;
+        return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${lineName(line)} train leaves at ${clockText(t)}, ${inText(t, nowS)}.</b> No ${way}${lineName(line)} trains late nights.</span></p>`;
       }
       if (g && g.phase === 'countdown') return '';
       if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
       // The other lines at this station still running this way (C: A or E; 3: 1 or 2).
       const off = (l, d) => { const x = nightGapState(stn.id, l, d); return !!x && x.phase !== 'countdown'; };
-      const alts = stn.lines.filter((l) => l !== line && !off(l, dir)).map((l) => esc(lineInfo(l).label));
+      const alts = stn.lines.filter((l) => l !== line && !off(l, dir)).map((l) => lineName(l));
       const altText = alts.length ? `the ${alts.slice(0, -1).join(', ')}${alts.length > 1 ? ' or ' : ''}${alts[alts.length - 1]}` : '';
       const way = dir === 'N' ? 'uptown' : 'downtown';
-      const label = esc(lineInfo(line).label);
+      const label = lineName(line);
       // Short: "No C trains until 5:41 AM. Use the A or E." A line not running
       // either way gets no direction; when only one direction stops (the 3
       // ends at Penn), say which.
@@ -1106,7 +1108,7 @@ function renderSubway() {
       // Other lines still running express in this direction (the 3 uptown, late at night).
       const otherExpress = (line) => here.some((g) => g.route !== line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time >= nowS - 30));
       notes = switching.map(({ line, st }) => {
-        const label = esc(lineInfo(line).label);
+        const label = lineName(line);
         if (st.phase === 'started') {
           // (After midnight the last express can be yesterday's evening schedule.)
           const base = st.lastExpress >= 1440 && nyNow().mins < 720 ? -1440 : 0;
@@ -1535,7 +1537,7 @@ async function openChange(id, view = 1) {
   if (!model) return;
   changeOpen = { id, view };
   const { n, route, alt } = model;
-  const label = esc(lineInfo(route).label);
+  const label = lineName(route);
   $('chg-kind').textContent = friendlyType(n.type);
   const hasAlt = alt.text.length > 0;
   const canMapAlt = alt.transfers.length || alt.buses.length;
@@ -2299,7 +2301,7 @@ const isSwitchNotice = (n) => happeningNow(n) && /\b(running|runs|run|operating|
 const subwayExpressSwitch = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => isSwitchNotice(n) && (n.lines || []).includes(route) && dirMatch(n, dir));
 // (Only used when the line has no local row to carry the pill.)
 const switchNoteHtml = (route, dir) => (subwayExpressSwitch(route, dir).length
-  ? `<div class="none-row">${bulletHtml(route)}<span>Some ${esc(lineInfo(route).label)} trains are running express and skip local stops. Other options are in the service notices.</span></div>` : '');
+  ? `<div class="none-row">${bulletHtml(route)}<span>Some ${lineName(route)} trains are running express and skip local stops. Other options are in the service notices.</span></div>` : '');
 
 // The options sheet: other ways to where the delayed train goes.
 // Stations every train shares (Penn itself, the hubs on the way out): not a reason to switch.
@@ -2376,7 +2378,7 @@ function openNoticeOptions(id) {
   $('chg-h').innerHTML = `${lines.map((l) => bulletHtml(l, 'tiny')).join('')} from Penn`;
   $('chg-top').innerHTML = `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`;
   const dirs = ['N', 'S'].filter((d) => dirMatch(n, d));
-  $('chg-below').innerHTML = lines.flatMap((l) => dirs.map((d) => `<h3 class="cm-h">Instead of the ${dirs.length > 1 ? (d === 'N' ? 'uptown ' : 'downtown ') : ''}${esc(lineInfo(l).label)}</h3>${subwayOptionsHtml(l, d, PENN_SUBWAY[l], mode, true)}`)).join('');
+  $('chg-below').innerHTML = lines.flatMap((l) => dirs.map((d) => `<h3 class="cm-h">Instead of the ${dirs.length > 1 ? (d === 'N' ? 'uptown ' : 'downtown ') : ''}${lineName(l)}</h3>${subwayOptionsHtml(l, d, PENN_SUBWAY[l], mode, true)}`)).join('');
   openSheet();
 }
 function subwayOptionsHtml(route, dir, stnId, mode, bare) {
@@ -2391,7 +2393,7 @@ function subwayOptionsHtml(route, dir, stnId, mode, bare) {
     if (!shared || !t) continue;
     if (!best.has(g.route) || best.get(g.route).t.time > t.time) best.set(g.route, { route: g.route, shared, t, svc: g.svc });
   }
-  const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route, dir).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">Shares ${o.shared} stations with the ${esc(lineInfo(route).label)}</span></li>`).join('');
+  const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route, dir).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">Shares ${o.shared} stations with the ${lineName(route)}</span></li>`).join('');
   if (!items) return '<p class="cm-live">No other line from this station shares its stops.</p>';
   return `${bare ? '' : `<h3 class="cm-h">${mode === 'local' ? 'Other trains making local stops' : 'Other trains from this platform'}</h3>`}<ul class="cm-stns">${items}</ul>`;
 }

@@ -231,6 +231,9 @@ a.late-pill:hover, a.late-pill:focus-visible { background: #263259; color: #fff;
 .dir h3 { margin: 1rem 0 .3rem; font-size: .85rem; font-weight: 500; color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
 .sline { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .7rem; align-items: center; padding: .4rem 0; }
 .bullet { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff; background: #6b7a70; box-shadow: 0 0 0 1px rgba(242, 234, 216, .2); }
+.bullet.inl { display: inline-grid; width: 1.3em; height: 1.3em; font-size: .78em; vertical-align: -.22em; box-shadow: none; margin: 0 .05em; }
+.bullet.inl.wide { width: auto; padding: 0 .35em; }
+.none-row .bullet.inl { opacity: 1; }
 .bullet.small { width: 1.4rem; height: 1.4rem; font-size: .8rem; }
 .bullet.wide, .al-item .bullet.tiny.wide { width: auto; padding: 0 .35em; border-radius: 99px; } /* SIR */
 
