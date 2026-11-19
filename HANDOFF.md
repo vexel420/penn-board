@@ -550,3 +550,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   text before "What's happening?"): the MTA's text, affected stations to tap
   and zoom, Google/Apple Maps directions.
 - Preview mode: add #preview to the address to list the next week's planned LIRR and subway work that has a map, labelled 'Upcoming planned work' (relay /alerts/{feed}?ahead=168).
+- LIRR map: station cards and the tapped station's map label list the branches calling there as coloured chips (lirrBranchesAt; City Terminal Zone left out). Other LIRR branches are drawn in their own colours (thin, lighter).

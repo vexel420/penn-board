@@ -1468,6 +1468,10 @@ function lirrModel(n) {
 }
 
 const LLL = (id) => [lirrData.stops[id][1], lirrData.stops[id][2]];
+// The LIRR branches calling at a station, as small chips in their colours.
+// (City Terminal Zone is left out: it's the shared stretch Penn-Jamaica.)
+const lirrBranchesAt = (id) => Object.entries(lirrData.routes).filter(([r, x]) => r !== '12' && x.stops.includes(id)).map(([, x]) => x);
+const lirrChip = (x) => `<span class="lchip" style="background:${esc(x.color)};color:${esc(x.text)}">${esc(x.name.replace(/ Branch$| Service$/, ''))}</span>`;
 // A branch's track cut into station-to-station pieces; a piece between two
 // affected stations is part of the change (buses or no trains there).
 function lirrSegments(route, affected) {
@@ -1502,6 +1506,7 @@ async function openLirrChange(model, view) {
     const cards = [...affected].map((id, i) => {
       const d = directionsTo(LLL(id), lirrData.stops[id][0]);
       return `<li class="cm-stn"><button type="button" class="cm-zoom" data-zoom="l${i}"><b>${esc(lirrData.stops[id][0])}</b></button>
+        <span class="lchips">${lirrBranchesAt(id).map(lirrChip).join('')}</span>
         <span class="cm-dir">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></span></li>`;
     }).join('');
     $('chg-below').innerHTML = `<h3 class="cm-h">Stations affected · tap to zoom in</h3><ul class="cm-stns">${cards}</ul>
@@ -1532,10 +1537,11 @@ function drawLirrChange(map, model, view) {
   const { routes, affected, kind } = model;
   const casing = (pts, w) => L.polyline(pts, { color: '#fff', weight: w + 4, interactive: false }).addTo(map);
   const penn = lirrData.penn;
-  // The rest of the LIRR, thin and grey, so the way from Penn to the branch shows.
+  // The rest of the LIRR in each branch's own colour, thinner and lighter, so
+  // the way from Penn to the affected branch shows.
   for (const [r, paths] of Object.entries(lirrData.shapes)) {
     if (routes.includes(r)) continue;
-    for (const path of paths) L.polyline(path, { color: '#9a9a9a', weight: 2.5, opacity: 0.8, interactive: false }).addTo(map);
+    for (const path of paths) L.polyline(path, { color: lirrData.routes[r].color, weight: 3, opacity: 0.55, interactive: false }).addTo(map);
   }
   const all = [];
   for (const r of routes) {
@@ -1563,7 +1569,8 @@ function drawLirrChange(map, model, view) {
   const note = kind === 'skip' ? 'Skipped' : kind === 'bus' ? 'Buses' : 'No trains';
   for (const id of affected) labels.push({ at: LLL(id), must: view === 2 || affected.size <= 6, cls: 'off', html: `${esc(name(id))}<small style="color:#ffd9d3">${note}</small>`, w: textWidth(name(id)), h: 36 });
   const labelLayer = L.layerGroup().addTo(map), ring = L.layerGroup().addTo(map);
-  const sync = () => placeLabels(map, labelLayer, labels);
+  let selected = null; // a station tapped in the list gets a fuller label instead
+  const sync = () => placeLabels(map, labelLayer, labels.filter((x) => !selected || !L.latLng(x.at).equals(L.latLng(LLL(selected)))));
   const pts = view === 2 ? [...affected].map(LLL) : [...all, ...(lirrData.stops[penn] ? [LLL(penn)] : [])];
   const fit = L.latLngBounds(pts).pad(view === 2 ? 0.4 : 0.05);
   map.fitBounds(fit, { padding: [24, 24], maxZoom: 14 });
@@ -1576,6 +1583,9 @@ function drawLirrChange(map, model, view) {
     $('chg-below').querySelectorAll('[data-zoom]').forEach((x) => x.setAttribute('aria-pressed', x === b));
     ring.clearLayers();
     L.marker(LLL(id), { interactive: false, zIndexOffset: 2000, icon: L.divIcon({ className: '', iconSize: [0, 0], html: '<div class="cm-ring"></div>' }) }).addTo(ring);
+    // The station's name and the branches that call there, beside it.
+    L.marker(LLL(id), { interactive: false, zIndexOffset: 2100, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="cm-label lstation" style="transform:translate(-50%,24px)">${esc(lirrData.stops[id][0])}${affected.has(id) ? `<small style="color:#c0392b">${kind === 'skip' ? 'Skipped' : kind === 'bus' ? 'Buses replace trains' : 'No trains'}</small>` : ''}<span class="lchips">${lirrBranchesAt(id).map(lirrChip).join('')}</span></div>` }) }).addTo(ring);
+    selected = id; sync();
     map.flyTo(LLL(id), 14.5, { duration: 0.8 });
     $('chg-map').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };
