@@ -688,8 +688,6 @@ function lineSection(here, stnId, line, dir) {
   const any = gap && Object.values(gap)[0];
   return any ? any.svc : (['2', '3', 'A'].includes(line) ? 'express' : 'local');
 }
-// Notice text with line symbols as plain names ("[3]" -> "3"), for banners.
-const plainLines = (t) => esc(String(t).replace(/\[([A-Z0-9]{1,2})\]/g, '$1').replace(/\[[a-z ]+ icon\]/gi, '').replace(/ {2,}/g, ' ').trim());
 // null: no suspension to show here (the usual messages apply).
 function suspensionNote(stn, here, line, dir, svc, nowS) {
   const s = suspensionFor(stn.id, line, nowS);
@@ -706,12 +704,8 @@ function suspensionNote(stn, here, line, dir, svc, nowS) {
   if (!alts.length) alts = stn.lines.filter((l) => l !== line && here.some((x) => x.route === l && x.dir === dir));
   const altNames = alts.map((l) => esc(lineInfo(l).label));
   const use = altNames.length ? ` Use the ${altNames.slice(0, -1).join(', ')}${altNames.length > 1 ? ' or ' : ''}${altNames[altNames.length - 1]}.` : '';
-  const how = alts.length ? (desc.split(/(?<=\.)\s+/).find((x) => x.includes(`[${alts[0]}]`)) || '') : '';
-  // "Use the 2, which makes 3 stops between..." when the advisory starts with the line.
-  const lead = `[${alts[0]}] `;
-  const after = how && how.startsWith(lead) && altNames.length === 1
-    ? ` Use the ${altNames[0]}, which ${plainLines(how.slice(lead.length))}`
-    : `${use}${how ? ` ${plainLines(how)}` : ''}`;
+  // Just "Use the 2." (owner: the advisory's details stay in the notice).
+  const after = use;
   const until = `until ${clockText(s.end)}`;
   // The last train before it starts (a late one still counts).
   const last = here.filter((x) => x.route === line && x.dir === dir).flatMap((x) => x.trains)
