@@ -2275,12 +2275,34 @@ function njtLastHtml(r) {
   return `<div class="row-last">${ICON.moon}<span>${say}</span></div>`;
 }
 
+// A delay notice on a train: one short line ("⚠ Delays up to 45 min") that
+// opens to the notice's own words and other options. Opened ones stay open
+// across refreshes.
+const openRowAlerts = new Set();
+const normNotice = (t) => String(t).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function rowAlertSummary(ns) {
+  const all = ns.map((n) => n.text).join(' ');
+  const mins = [...all.matchAll(/(\d+)[- ]?(?:to[- ]\d+[- ]?)?min(?:ute)?s?\b/gi)].map((m) => +m[1]).filter((x) => x > 0 && x < 300);
+  const range = all.match(/(\d+)\s*(?:-|to)\s*(\d+)[- ]?min/i);
+  if (/cancel/i.test(all) && !/delay/i.test(all)) return 'Cancellations';
+  if (range) return `Delays of ${range[1]}–${range[2]} min`;
+  if (mins.length && /delay|late/i.test(all)) return `Delays up to ${Math.max(...mins)} min`;
+  return /delay|late/i.test(all) ? 'Delays' : 'Service alert';
+}
 function rowAlertHtml(r) {
   if (view !== 'departures' || r.tone === 'departed') return '';
-  const ns = rowNotices(r);
+  let ns = rowNotices(r);
+  // The same notice sent twice, short and long: keep the long one.
+  ns = ns.filter((n) => !ns.some((m) => m !== n && normNotice(m.text).length > normNotice(n.text).length && normNotice(m.text).startsWith(normNotice(n.text))));
   if (!ns.length) return '';
-  return `<div class="row-alert">${ns.map((n) => `<p>⚠ ${noticeText(n.text)}</p>`).join('')}<button type="button" class="al-map" data-options="${esc(r.id)}">Other options</button></div>`;
+  const key = `${r.id}|${ns.map((n) => n.id).join(',')}`;
+  return `<details class="row-alert" data-key="${esc(key)}"${openRowAlerts.has(key) ? ' open' : ''}><summary>⚠ ${esc(rowAlertSummary(ns))}${ns.length > 1 ? ` <span class="ra-n">${ns.length} notices</span>` : ''}</summary>${ns.map((n) => `<p>${noticeText(n.text)}</p>`).join('')}<button type="button" class="al-map" data-options="${esc(r.id)}">Other options</button></details>`;
 }
+document.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d.classList || !d.classList.contains('row-alert') || !d.dataset.key) return;
+  if (d.open) openRowAlerts.add(d.dataset.key); else openRowAlerts.delete(d.dataset.key);
+}, true);
 // Subway: delay notices on a line's rows.
 // (A notice that starts "Downtown" or "Uptown" applies to that direction only.)
 const subwayDelays = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => /delay/i.test(n.type) && isDelayNotice(n) && (n.lines || []).includes(route)
