@@ -594,3 +594,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   morning's when it's the same kind of day). Matched by train number, the row
   gets a banner: "Last Morristown Line train from Penn until 5:58 AM." /
   "Last NJ Transit train from Penn until 4:28 AM." (or "tonight" if unknown).
+- Late-night pill also on local A/2 trains (localNight): judged by the train's own Penn time, from when the first late-night local sets off (switches nightStart, e.g. 10:08 PM downtown A) until the first daytime express reaches Penn.
