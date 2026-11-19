@@ -1326,6 +1326,20 @@ function mtaTextHtml(t) {
   return html + (list ? '</ul>' : '');
 }
 
+// A line moved sideways by `px` screen pixels (left of its direction when
+// negative), at the map's current zoom: for lines drawn side by side.
+function offsetLine(map, pts, px) {
+  const z = map.getZoom();
+  const P = pts.map((p) => map.project(p, z));
+  const out = P.map((p, i) => {
+    const a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)];
+    let dx = b.x - a.x, dy = b.y - a.y; const len = Math.hypot(dx, dy) || 1;
+    dx /= len; dy /= len;
+    return map.unproject(L.point(p.x - dy * px, p.y + dx * px), z);
+  });
+  return out;
+}
+
 function drawChange(map, model, view) {
   const { route, closed, alt } = model;
   const info = lineInfo(route);
@@ -1366,18 +1380,31 @@ function drawChange(map, model, view) {
   // The line's temporary route over another line's tracks ("[C] runs via the
   // [F]"): drawn in its colour, with its badge beside each station it uses.
   const borrowed = new Set();
+  const sideBySide = L.layerGroup().addTo(map), pairs = [];
   for (const v of model.via || []) {
     const path = (subwayShapes[v.line] || []).find((p) => along(p, LL(v.from)).d < 0.002 && along(p, LL(v.to)).d < 0.002);
     if (!path) continue;
     const sa = along(path, LL(v.from)).s, sb = along(path, LL(v.to)).s;
     const pts = between(path, sa, sb, LL(v.from), LL(v.to));
-    casing(pts, 6); L.polyline(pts, { color: info.color, weight: 6, interactive: false }).addTo(map);
+    // Side by side: the rerouted line and the line whose tracks it uses, like
+    // two lines sharing a trunk on a subway map. Redrawn on zoom (offsets are
+    // in screen pixels).
+    pairs.push({ pts, a: info.color, b: lineInfo(v.line).color });
     for (const id of subwayData.routes[v.line].normal) {
       if (!subwayData.stops[id] || borrowed.has(id)) continue;
       const x = along(path, LL(id));
       if (x.d < 0.0015 && x.s >= Math.min(sa, sb) - 0.01 && x.s <= Math.max(sa, sb) + 0.01) borrowed.add(id);
     }
   }
+  const drawPairs = () => {
+    sideBySide.clearLayers();
+    for (const pr of pairs) {
+      L.polyline(pr.pts, { color: '#fff', weight: 15, interactive: false }).addTo(sideBySide);
+      L.polyline(offsetLine(map, pr.pts, -3.2), { color: pr.a, weight: 6, interactive: false }).addTo(sideBySide);
+      L.polyline(offsetLine(map, pr.pts, 3.2), { color: pr.b, weight: 6, interactive: false }).addTo(sideBySide);
+    }
+  };
+  if (pairs.length) { map.on('zoomend', drawPairs); map.whenReady(drawPairs); }
   // Badges show once zoomed in enough to tell stations apart; further out, one
   // tag on the temporary route says what it is.
   const viaBadges = L.layerGroup(), viaTag = L.layerGroup();
