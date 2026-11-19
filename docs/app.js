@@ -808,7 +808,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
     ? `<span class="dname changing b-wrap"><span class="out" aria-hidden="true">${before}</span><span class="in">${html}</span></span>`
     : `<span class="b-wrap">${html}</span>`;
   if (before && before.slice(0, 20) !== html.slice(0, 20)) slideStarted = performance.now();
-  const delayNote = subwayDelays(g.route).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
+  const delayNote = subwayDelays(g.route, dir).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
   return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>${delayNote}`;
 }
 $('subway').addEventListener('click', (e) => {
@@ -956,7 +956,7 @@ function renderSubway() {
       minsShown.set(rowKey, firstMin + rest);
       const rerouted = trains.find((x) => unusualStops(g.route, x).length);
       // A delay notice for this line: under the row, with other options.
-      const delayNote = subwayDelays(g.route).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
+      const delayNote = subwayDelays(g.route, dir).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
       if (!rerouted) {
         return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>${delayNote}`;
       }
@@ -1944,15 +1944,20 @@ const njtAltHtml = () => (njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transi
 const NJT_LINE_WORDS = [[/\bNEC\b|Northeast Corridor/i, /Northeast/i], [/North Jersey Coast|\bNJCL\b/i, /Jersey Coast/i], [/Morris (and|&) Essex|\bM&E\b/i, /Morristown|Gladstone/i],
   [/Montclair-Boonton|\bMOBO\b/i, /Montclair|Boonton/i], [/Raritan Valley/i, /Raritan/i], [/Main\/Bergen|Main Line|Bergen County/i, /Main|Bergen/i], [/Pascack/i, /Pascack/i], [/Gladstone/i, /Gladstone/i]];
 const DELAY_TYPES = /delay|cancel|suspend|single track/i;
+// Only notices about delays get "Other options". A train switched between
+// local and express (or rerouted) is itself another way to travel, even when
+// the MTA files it under "Delays", so those don't.
+const SERVICE_SWITCH = /\b(running|runs|run|operating|operates)\s+(express|local)\b|\bexpress (between|from|to|in)\b|\blocal (between|from|to|in)\b|\breroute|\bruns? via\b/i;
+const isDelayNotice = (n) => (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text);
 function rowNotices(r) {
   const all = (board && board.notices && board.notices.rail) || [];
   if (r.carrier === 'lirr' && lirrData) {
     const id = Object.keys(lirrData.routes).find((k) => lirrData.routes[k].name === r.line);
-    return id ? all.filter((n) => n.carrier === 'lirr' && DELAY_TYPES.test(n.type) && (n.lines || []).includes(id)) : [];
+    return id ? all.filter((n) => n.carrier === 'lirr' && isDelayNotice(n) && (n.lines || []).includes(id)) : [];
   }
   if (r.carrier === 'njt') {
     return all.filter((n) => {
-      if (n.carrier !== 'njt') return false;
+      if (n.carrier !== 'njt' || !isDelayNotice(n)) return false;
       const nums = [...String(n.text).matchAll(/#\s?(\d{3,5})/g)].map((m) => m[1]);
       if (nums.length) return nums.includes(String(r.train));
       return NJT_LINE_WORDS.some(([inText, inLine]) => inText.test(n.text) && inLine.test(r.line || ''));
@@ -1967,7 +1972,9 @@ function rowAlertHtml(r) {
   return `<div class="row-alert">${ns.map((n) => `<p>⚠ ${noticeText(n.text)}</p>`).join('')}<button type="button" class="al-map" data-options="${esc(r.id)}">Other options</button></div>`;
 }
 // Subway: delay notices on a line's rows.
-const subwayDelays = (route) => ((board && board.notices && board.notices.subway) || []).filter((n) => /delay/i.test(n.type) && (n.lines || []).includes(route));
+// (A notice that starts "Downtown" or "Uptown" applies to that direction only.)
+const subwayDelays = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => /delay/i.test(n.type) && isDelayNotice(n) && (n.lines || []).includes(route)
+  && !(dir && ((dir === 'N' && /^\W*(downtown|southbound|brooklyn-bound)/i.test(n.text)) || (dir === 'S' && /^\W*(uptown|northbound|bronx-bound)/i.test(n.text)))));
 
 // The options sheet: other ways to where the delayed train goes.
 // Stations every train shares (Penn itself, the hubs on the way out): not a reason to switch.
@@ -2024,7 +2031,7 @@ function openSubwayOptions(route, dir, stnId) {
   const nowS = Date.now() / 1000;
   $('chg-kind').textContent = 'Other options';
   $('chg-h').innerHTML = `${bulletHtml(route, 'tiny')} ${dir === 'N' ? 'uptown' : 'downtown'} from Penn`;
-  $('chg-top').innerHTML = subwayDelays(route).map((n) => `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`).join('');
+  $('chg-top').innerHTML = subwayDelays(route, dir).map((n) => `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`).join('');
   const mine = subwayData.routes[route].normalSet;
   const groups = board.subway.filter((g) => g.route !== route && g.dir === dir && g.trains[0] && g.trains[0].stops[0] === stnId);
   const best = new Map();
@@ -2034,7 +2041,7 @@ function openSubwayOptions(route, dir, stnId) {
     if (!shared || !t) continue;
     if (!best.has(g.route) || best.get(g.route).t.time > t.time) best.set(g.route, { route: g.route, shared, t, svc: g.svc });
   }
-  const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">Shares ${o.shared} stations with the ${esc(lineInfo(route).label)}</span></li>`).join('');
+  const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route, dir).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">Shares ${o.shared} stations with the ${esc(lineInfo(route).label)}</span></li>`).join('');
   $('chg-below').innerHTML = items ? `<h3 class="cm-h">Other trains from this platform</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other line from this station shares its stops.</p>';
   openSheet();
 }

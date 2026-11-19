@@ -579,3 +579,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   stations by timetable; NJT also links the PATH guides; subway lists other
   lines from the same platform sharing stations.
 - Trial (owner, Nov 19): subway 'Rows with more than one destination: Take turns | All destinations' switch under the subway panel (localStorage subwayStyle). Option B (optionBRow): every 8 s the row slides between all destinations ('Far Rockaway · Lefferts Blvd') and each destination's next 3 times, ordered by next train; holds on the times while a train is 'now'.
+- Other options only for delay notices (isDelayNotice): a notice saying trains run express/local or are rerouted (even typed 'Delays') gets none. Subway delay notices starting 'Downtown'/'Uptown' apply to that direction only.
