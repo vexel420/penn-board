@@ -432,6 +432,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   30 min past its time is dropped quietly (`LISTED_PAST_S`).
 - The greyed "usual" LIRR track is LIRR's own `sched_track` (scheduled track);
   the posted `track` replaces it.
+- Late nights a line not running either way (the C) says "No C trains until T. Use the A or E." with no direction.
 - C and downtown 3: in the hour before their last train, a banner counts down
   ("The last downtown 3 train leaves at 10:24 PM, in 14 min.").
 - PATH's late-night banner ends when the night's last via-Hoboken train has

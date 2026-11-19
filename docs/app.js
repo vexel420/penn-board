@@ -886,12 +886,13 @@ function renderSubway() {
       const altText = alts.length ? `the ${alts.slice(0, -1).join(', ')}${alts.length > 1 ? ' or ' : ''}${alts[alts.length - 1]}` : '';
       const way = dir === 'N' ? 'uptown' : 'downtown';
       const label = esc(lineInfo(line).label);
-      // Short: "No C trains until 5:41 AM. For downtown service, use the A or E."
-      // When only one direction stops (the 3 ends at Penn), say which.
+      // Short: "No C trains until 5:41 AM. Use the A or E." A line not running
+      // either way gets no direction; when only one direction stops (the 3
+      // ends at Penn), say which.
       const oneWay = !off(line, dir === 'N' ? 'S' : 'N');
       const say = oneWay
         ? `No ${label} trains ${way} until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`
-        : `No ${label} trains until ${fmtClock(g.until)}.${altText ? ` For ${way} service, use ${altText}.` : ''}`;
+        : `No ${label} trains until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`;
       return `<div class="none-row">${bulletHtml(line)}<span>${say}</span></div>`;
     }).join('');
     if (svc === 'express') {
