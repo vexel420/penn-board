@@ -705,16 +705,16 @@ function suspensionNote(stn, here, line, dir, svc, nowS) {
   let alts = [...new Set([...desc.matchAll(/\[([A-Z0-9]{1,2})\]/g)].map((m) => m[1]))].filter((l) => l !== line && stn.lines.includes(l));
   if (!alts.length) alts = stn.lines.filter((l) => l !== line && here.some((x) => x.route === l && x.dir === dir));
   const altNames = alts.map((l) => lineName(l));
-  const use = altNames.length ? ` Use the ${altNames.slice(0, -1).join(', ')}${altNames.length > 1 ? ' or ' : ''}${altNames[altNames.length - 1]}.` : '';
-  // Just "Use the 2." (owner: the advisory's details stay in the notice).
-  const after = use;
+  // "…until 5:00 AM, use the 2." (owner: one sentence; the advisory's
+  // details stay in the notice).
+  const use = altNames.length ? `, use the ${altNames.slice(0, -1).join(', ')}${altNames.length > 1 ? ' or ' : ''}${altNames[altNames.length - 1]}.` : '.';
   const until = `until ${clockText(s.end)}`;
   // The last train before it starts (a late one still counts).
   const last = here.filter((x) => x.route === line && x.dir === dir).flatMap((x) => x.trains)
     .map((t) => t.time).filter((t) => t >= nowS - 30 && t <= s.start + 10 * 60).sort((a, b) => b - a)[0];
-  if (last) return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${label} train leaves at ${clockText(last)}, ${inText(last, nowS)}.</b> Then no ${way}${label} trains ${until}.${after}</span></p>`;
-  if (nowS < s.start) return `<p class="svc-line night">${ICON.moon}<span><b>No ${way}${label} trains from ${clockText(s.start)} ${until}.</b>${after}</span></p>`;
-  return `<div class="none-row">${bulletHtml(line)}<span>No ${way}${label} trains ${until}.${after}</span></div>`;
+  if (last) return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${label} train leaves at ${clockText(last)}, ${inText(last, nowS)}.</b> Then no ${way}${label} trains ${until}${use}</span></p>`;
+  if (nowS < s.start) return `<p class="svc-line night">${ICON.moon}<span><b>No ${way}${label} trains from ${clockText(s.start)} ${until}</b>${use}</span></p>`;
+  return `<div class="none-row">${bulletHtml(line)}<span>No ${way}${label} trains ${until}${use}</span></div>`;
 }
 
 // Timetable minutes (after today's midnight, may pass 24:00) -> epoch seconds.
@@ -1095,13 +1095,13 @@ function renderSubway() {
       const altText = alts.length ? `the ${alts.slice(0, -1).join(', ')}${alts.length > 1 ? ' or ' : ''}${alts[alts.length - 1]}` : '';
       const way = dir === 'N' ? 'uptown' : 'downtown';
       const label = lineName(line);
-      // Short: "No C trains until 5:41 AM. Use the A or E." A line not running
+      // Short: "No C trains until 5:41 AM, use the A or E." A line not running
       // either way gets no direction; when only one direction stops (the 3
       // ends at Penn), say which.
       const oneWay = !bothWaysOff(stn.id, line);
       const say = oneWay
-        ? `No ${label} trains ${way} until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`
-        : `No ${label} trains until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`;
+        ? `No ${label} trains ${way} until ${fmtClock(g.until)}${altText ? `, use ${altText}` : ''}.`
+        : `No ${label} trains until ${fmtClock(g.until)}${altText ? `, use ${altText}` : ''}.`;
       return `<div class="none-row">${bulletHtml(line)}<span>${say}</span></div>`;
     }).join('');
     if (svc === 'express') {
