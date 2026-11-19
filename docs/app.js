@@ -1087,6 +1087,27 @@ function findStation(name, prefer = []) {
 // "42 St-Port Authority/Times Sq-42 St" names a station complex: one id per part.
 const findStations = (name, prefer) => [...new Set(String(name).split('/').map((p) => findStation(p, prefer)).filter(Boolean))];
 
+// Where a rerouted line runs instead, read from the notice: "[C] runs via the
+// [F] from Jay St-MetroTech to 34 St-Herald Sq and via the [D] to 59 St-
+// Columbus Circle." -> [{ line: 'F', from, to }, { line: 'D', from, to }]. Only
+// the first sentence of each kind is used (the other direction is the same
+// route in reverse).
+function readVia(desc, route) {
+  const sentence = String(desc || '').split('\n').find((x) => new RegExp(`\\[${route}\\][^.]*runs via the \\[`).test(x));
+  if (!sentence) return [];
+  const out = [];
+  let from = null;
+  for (const m of sentence.matchAll(/via the \[([A-Z0-9]{1,2})\](?: from (.+?))? to (.+?)(?= and via|\.|$)/g)) {
+    const line = m[1];
+    if (!subwayData.routes[line]) continue;
+    const a = m[2] ? findStation(m[2], [line]) : from;
+    const b = findStation(m[3], [line]);
+    if (a && b) out.push({ line, from: a, to: b });
+    from = b;
+  }
+  return out;
+}
+
 // The MTA's alternatives, read from the notice's text.
 function readAlternatives(desc, route) {
   const text = String(desc || '').split(/what'?s happening\?/i)[0].trim();
@@ -1141,7 +1162,7 @@ function changeModel(n) {
   const route = bulletsIn(n.text).find((r) => named.includes(r)) || named[0];
   const closed = new Set(n.affected[route].filter((id) => subwayData.stops[id]));
   if (!closed.size) return null;
-  return { n, route, closed, alt: readAlternatives(n.desc, route) };
+  return { n, route, closed, alt: readAlternatives(n.desc, route), via: readVia(n.desc, route) };
 }
 const changeModels = () => ((board && board.notices && board.notices.subway) || []).map(changeModel).filter(Boolean);
 
@@ -1246,6 +1267,7 @@ async function openChange(id, view = 1) {
         <li><span class="sw" style="border-color:${esc(lineInfo(route).color)}"></span>${label} trains running</li>
         <li><span class="sw off"></span>No ${label} trains</li>
         ${alt.buses.length ? '<li><span class="sw bus"></span>Free shuttle bus</li>' : ''}
+        ${model.via && model.via.length ? `<li>${bulletHtml(route, 'tiny')} on its temporary route, via the ${[...new Set(model.via.map((v) => v.line))].map((l) => bulletHtml(l, 'tiny')).join(' and ')}</li>` : ''}
       </ul>
       ${hasAlt ? '<button type="button" class="cm-go" data-view="2">How to get around this <span aria-hidden="true">→</span></button>' : liveDirectionsHtml()}`;
     $('chg-below').innerHTML = '';
@@ -1315,7 +1337,7 @@ function drawChange(map, model, view) {
   // Area for view 2: around the closed part, the transfer stations and buses.
   let area = null;
   if (view === 2) {
-    const pts = [...closed, ...alt.transfers.flatMap((t) => t.ids), ...alt.buses.flatMap((b) => b.ids)].map(LL);
+    const pts = [...closed, ...alt.transfers.flatMap((t) => t.ids), ...alt.buses.flatMap((b) => b.ids), ...(model.via || []).flatMap((v) => [v.from, v.to])].map(LL);
     area = L.latLngBounds(pts).pad(0.25);
     if (subwayData.routes[route].normal.some((id) => id === '128' || id === 'A28') && area.pad(0.4).contains(PENN_LL)) area.extend(PENN_LL);
     // The suggested lines, only within that area, thinner and lighter.
@@ -1341,6 +1363,36 @@ function drawChange(map, model, view) {
   for (const s of segs.filter((x) => x.closed)) L.polyline(s.pts, { color: '#8f8f8f', weight: 5, dashArray: '8 7', interactive: false }).addTo(map);
   for (const s of segs.filter((x) => !x.closed)) L.polyline(s.pts, { color: info.color, weight: 6, interactive: false }).addTo(map);
   for (const p of live.paths) L.polyline(p, { color: info.color, weight: 6, interactive: false }).addTo(map);
+  // The line's temporary route over another line's tracks ("[C] runs via the
+  // [F]"): drawn in its colour, with its badge beside each station it uses.
+  const borrowed = new Set();
+  for (const v of model.via || []) {
+    const path = (subwayShapes[v.line] || []).find((p) => along(p, LL(v.from)).d < 0.002 && along(p, LL(v.to)).d < 0.002);
+    if (!path) continue;
+    const sa = along(path, LL(v.from)).s, sb = along(path, LL(v.to)).s;
+    const pts = between(path, sa, sb, LL(v.from), LL(v.to));
+    casing(pts, 6); L.polyline(pts, { color: info.color, weight: 6, interactive: false }).addTo(map);
+    for (const id of subwayData.routes[v.line].normal) {
+      if (!subwayData.stops[id] || borrowed.has(id)) continue;
+      const x = along(path, LL(id));
+      if (x.d < 0.0015 && x.s >= Math.min(sa, sb) - 0.01 && x.s <= Math.max(sa, sb) + 0.01) borrowed.add(id);
+    }
+  }
+  // Badges show once zoomed in enough to tell stations apart; further out, one
+  // tag on the temporary route says what it is.
+  const viaBadges = L.layerGroup(), viaTag = L.layerGroup();
+  for (const id of borrowed) {
+    L.circleMarker(LL(id), { radius: 4, weight: 2, color: '#1b1b1b', fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(map);
+    L.marker(LL(id), { interactive: false, zIndexOffset: 800, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="via-badge">${bulletHtml(route, 'tiny')}</div>` }) }).addTo(viaBadges);
+  }
+  if (borrowed.size) {
+    const ids = [...borrowed], mid = ids[Math.floor(ids.length / 2)];
+    const lines = [...new Set((model.via || []).map((v) => v.line))];
+    L.marker(LL(mid), { interactive: false, zIndexOffset: 900, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="cm-label" style="transform:translate(14px,-50%);flex-direction:row;align-items:center;gap:3px">${bulletHtml(route, 'tiny')} via ${lines.map((l) => bulletHtml(l, 'tiny')).join('')}</div>` }) }).addTo(viaTag);
+    // Close in, station names list the line themselves, so the badges step aside.
+    const showVia = () => { const z = map.getZoom(); viaTag.remove(); viaBadges.remove(); if (z < 13) viaTag.addTo(map); else if (z < 14) viaBadges.addTo(map); };
+    map.on('zoomend', showVia); showVia();
+  }
   // Shuttle buses, stop to stop (the MTA doesn't give the streets they use).
   for (const b of alt.buses) {
     let ids = b.ids;
@@ -1366,7 +1418,7 @@ function drawChange(map, model, view) {
   const lineIds = subwayData.routes[route].normal.filter((id) => subwayData.stops[id]);
   for (const id of new Set([...lineIds, ...closed])) dot(id, closed.has(id));
   const names = L.layerGroup();
-  const shownIds = new Set([...lineIds, ...closed]);
+  const shownIds = new Set([...lineIds, ...closed, ...borrowed]);
   if (view === 2) {
     for (const l of alt.detours) for (const id of subwayData.routes[l].normal) {
       if (subwayData.stops[id] && !shownIds.has(id) && area.contains(LL(id))) { dot(id, false, true); shownIds.add(id); }
@@ -1374,7 +1426,12 @@ function drawChange(map, model, view) {
   }
   // Zoomed in, every station shows its name and lines.
   const named = [];
-  const linesAt = (id) => [...stationLines(id)].filter((l) => (view === 2 ? l === route || alt.detours.includes(l) : l === route) && !(l === route && closed.has(id)));
+  // (A station the line is borrowing lists the line too, with the line it belongs to.)
+  const linesAt = (id) => {
+    const ls = [...stationLines(id)].filter((l) => (view === 2 ? l === route || alt.detours.includes(l) : l === route) && !(l === route && closed.has(id)));
+    if (borrowed.has(id)) { for (const v of model.via || []) if (stationLines(id).has(v.line) && !ls.includes(v.line)) ls.push(v.line); if (!ls.includes(route)) ls.unshift(route); }
+    return ls;
+  };
   // One name per station complex (Jay St-MetroTech has two stations): the one with lines running.
   const order = [...shownIds].sort((a, b) => linesAt(b).length - linesAt(a).length);
   for (const id of order) {
