@@ -430,7 +430,7 @@ function rowHtml(r) {
   return `<li class="row ${r.tone}${left === 'gone' && !gone && !due ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
-    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${rowAlertHtml(r)}</div>
+    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${rowAlertHtml(r)}</div>
     <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${sched}</div>
     ${trackCell(r, r.tone === 'final' ? ' ring' : '')}
   </li>`;
@@ -1979,6 +1979,64 @@ function rowNotices(r) {
   }
   return [];
 }
+// ---------- NJ Transit's last trains before the overnight break ----------
+// From NJ Transit's whole-day schedule for Penn (relay /njt-day, refreshed
+// every 30 min): for each line, the last departure before a break of 2 hours
+// or more that runs past 3 AM, and the first train after it; the same for NJ
+// Transit as a whole. Matched to live rows by train number.
+let njtLast = new Map(); // train number -> { line: true?, all: true?, until }
+function njtTime2(s) { // "18-Nov-2026 10:05:00 PM"
+  const m = /^(\d+)-(\w+)-(\d+) (\d+):(\d+):\d+ (AM|PM)$/.exec(s || '');
+  if (!m) return 0;
+  const mon = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(m[2]) + 1;
+  return PennFeeds.nyToEpoch(+m[3], mon, +m[1], (+m[4] % 12) + (m[6] === 'PM' ? 12 : 0), +m[5], 0);
+}
+function lastBeforeBreak(list) { // [{t, id}] sorted -> [{id, until|null}]
+  const out = [];
+  for (let i = 0; i < list.length; i++) {
+    const a = list[i], b = list[i + 1];
+    // Covers 3 AM: from the train's time to the next (or the list's end, if none).
+    const end = b ? b.t : a.t + 6 * 3600;
+    if (end - a.t < 2 * 3600) continue;
+    // The next 3 AM after this train: is it inside the break?
+    const t3 = a.t + ((180 - nyDayAt(a.t).mins + 1440) % 1440) * 60;
+    if (t3 <= end) out.push({ id: a.id, t: a.t, until: b ? b.t : null });
+  }
+  // The schedule ends with tonight's last trains, so tomorrow's first isn't in
+  // it: use this morning's (same time a day later) when tomorrow is the same
+  // kind of day (weekday, Saturday, Sunday) as today.
+  const known = out.find((o) => o.until);
+  for (const o of out) {
+    if (o.until || !known) continue;
+    const guess = known.until + Math.round((o.t - known.t) / 86400) * 86400;
+    if (guess > o.t && nyDayAt(guess).day === nyDayAt(known.until).day) o.until = guess;
+  }
+  return out;
+}
+async function loadNjtLast() {
+  if (!window.PENN_RELAY) return;
+  try {
+    const d = await (await fetch(`${window.PENN_RELAY.replace(/\/$/, '')}/njt-day`)).json();
+    const deps = (d.ITEMS || []).filter((x) => x.dest && !/^new york/i.test(x.dest)).map((x) => ({ t: njtTime2(x.t), id: String(x.id), line: x.line })).filter((x) => x.t).sort((a, b) => a.t - b.t);
+    const map = new Map();
+    const byLine = new Map();
+    for (const x of deps) { if (!byLine.has(x.line)) byLine.set(x.line, []); byLine.get(x.line).push(x); }
+    for (const list of byLine.values()) for (const o of lastBeforeBreak(list)) map.set(o.id, { ...(map.get(o.id) || {}), line: true, until: o.until });
+    for (const o of lastBeforeBreak(deps)) map.set(o.id, { ...(map.get(o.id) || {}), all: true, allUntil: o.until });
+    njtLast = map;
+    renderRail();
+  } catch (e) { console.warn('NJ Transit day schedule:', e); }
+}
+loadNjtLast(); setInterval(loadNjtLast, 30 * 60 * 1000);
+function njtLastHtml(r) {
+  if (r.carrier !== 'njt' || view !== 'departures' || r.tone === 'departed' || r.tone === 'stop') return '';
+  const x = njtLast.get(String(r.train));
+  if (!x) return '';
+  const until = (t) => (t ? ` until ${clock(t).hm} ${clock(t).ap}` : ' tonight');
+  const say = x.all ? `Last NJ Transit train from Penn${until(x.allUntil)}.` : `Last ${esc(r.line)} train from Penn${until(x.until)}.`;
+  return `<div class="row-last">${ICON.moon}<span>${say}</span></div>`;
+}
+
 function rowAlertHtml(r) {
   if (view !== 'departures' || r.tone === 'departed') return '';
   const ns = rowNotices(r);

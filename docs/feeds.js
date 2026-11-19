@@ -495,11 +495,32 @@ function parseNjt(items) {
     };
   });
 }
+// NJ Transit's messages carry no start or end time, only words: "Saturday,
+// November 21", "Weekdays Beginning on Monday, November 23", "through Friday,
+// November 20". A message whose dates are all still to come isn't happening
+// now (it stays in the notices, but isn't put on today's trains).
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+function njtActiveNow(text) {
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/New_York' }).format(new Date()).split('-').map(Number);
+  const todayN = today[0] * 10000 + today[1] * 100 + today[2];
+  const re = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})(?:,?\s*(\d{4}))?/gi;
+  let any = false, active = false;
+  for (const m of String(text).matchAll(re)) {
+    any = true;
+    const month = MONTHS.indexOf(m[1].toLowerCase()) + 1;
+    let year = m[3] ? +m[3] : today[0];
+    if (!m[3] && month < today[1] - 6) year += 1;
+    const n = year * 10000 + month * 100 + +m[2];
+    const before = String(text).slice(Math.max(0, m.index - 30), m.index);
+    if (/\b(through|thru|until|ending)\b/i.test(before)) { if (todayN <= n) active = true; } else if (n <= todayN) active = true;
+  }
+  return !any || active;
+}
 function njtNotices(messages) {
   const seen = new Set();
   return (messages || []).filter((m) => m && m.MSG_TEXT).map((m) => ({
     id: `njt-${m.MSG_ID || m.MSG_TEXT.slice(0, 40)}`, carrier: 'njt', type: 'Service notice',
-    urgent: URGENT.test(m.MSG_TEXT) || /cancel/i.test(m.MSG_TEXT), lines: [], text: m.MSG_TEXT.trim(),
+    urgent: URGENT.test(m.MSG_TEXT) || /cancel/i.test(m.MSG_TEXT), lines: [], text: m.MSG_TEXT.trim(), activeNow: njtActiveNow(m.MSG_TEXT),
   })).filter((n) => !seen.has(n.text) && seen.add(n.text));
 }
 // In the browser: through the relay, which holds the owner's login.
@@ -621,5 +642,5 @@ async function upcomingNotices(feed) {
   return parseAlerts(raw, () => true).map((n) => ({ ...n, id: `preview-${n.id}`, carrier: feed === 'lirr' ? 'lirr' : 'subway', preview: true }));
 }
 
-return { board, upcomingNotices, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
+return { board, njtActiveNow, upcomingNotices, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
 });

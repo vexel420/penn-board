@@ -12,6 +12,7 @@
 //                       owner's NJ Transit RailData login, kept as the Worker
 //                       secrets NJT_USERNAME and NJT_PASSWORD (never sent to
 //                       the page). Cached 30 s.
+//   GET /njt-day        NJ Transit's whole-day schedule from Penn (cached 1 h)
 //
 // The MTA's subway notice file is about 1 MB; filtered here it is a few tens of KB, so
 // the board can refresh notices as often as trains. Every response is cached
@@ -171,6 +172,20 @@ export default {
         // Which NJ Transit server the relay is using (no data, no secrets).
         await getToken(env, false).catch(() => {});
         return json(JSON.stringify({ server: new URL(NJT_API).host }), 0);
+      }
+      if (pathname === '/njt-day') {
+        // The day's whole schedule from Penn (NJ Transit trains only), for
+        // the last trains before the overnight break. Cached 1 hour.
+        const cache = caches.default;
+        const key = new Request(request.url, { method: 'GET' });
+        const hit = await cache.match(key);
+        if (hit) return hit;
+        const r = await njtCall(env, 'getStationSchedule', { station: 'NY', NJTOnly: 'true' });
+        const items = (Array.isArray(r) ? r.flatMap((x) => x.ITEMS || []) : (r && r.ITEMS) || [])
+          .map((x) => ({ t: x.SCHED_DEP_DATE, id: x.TRAIN_ID, line: x.LINE, dest: x.DESTINATION }));
+        const res = json(JSON.stringify({ ITEMS: items }), 3600);
+        ctx.waitUntil(cache.put(key, res.clone()));
+        return res;
       }
       if (pathname === '/njt') {
         const cache = caches.default;

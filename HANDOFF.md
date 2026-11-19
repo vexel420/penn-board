@@ -583,3 +583,14 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Other options only for delay notices (isDelayNotice): a notice saying trains run express/local or are rerouted (even typed 'Delays') gets none. Subway delay notices starting 'Downtown'/'Uptown' apply to that direction only.
 - 'Some C trains running express' notices: no note on express trains; a note with Other options (local-stopping lines only) goes under that line's local service, or in its Local section if no local train is listed (switchNoteHtml). Direction from 'uptown'/'downtown' anywhere in the first sentence (dirMatch).
 - Notes on individual trains (delays, express changes, reroute rows' maps) only for notices in effect now (parseAlerts' activeNow; not shown-early notices, not #preview). LIRR row branch names map to MTA route ids via LIRR_ALIASES (Huntington = Port Jefferson Branch in the MTA's data).
+- NJ Transit notices: `njtActiveNow` reads the dates in the text ("Saturday,
+  November 21", "Beginning on Monday, November 23", "through Friday, November
+  20"); if every date is still to come the notice isn't put on trains (it stays
+  in the notices). Undated messages count as happening now.
+- Last NJ Transit trains of the night: relay `/njt-day` (getStationSchedule,
+  station NY, NJTOnly; cached 1 h) -> the page (`loadNjtLast`, every 30 min)
+  finds, per line and overall, the last departure before a 2 h+ break that
+  runs past 3 AM, and the first after it (tomorrow's estimated from this
+  morning's when it's the same kind of day). Matched by train number, the row
+  gets a banner: "Last Morristown Line train from Penn until 5:58 AM." /
+  "Last NJ Transit train from Penn until 4:28 AM." (or "tonight" if unknown).
