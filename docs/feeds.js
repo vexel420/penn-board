@@ -604,5 +604,20 @@ const relayPath = source('relay-path', 20, async () => {
   return parsePath(await (await get(`${base.replace(/\/$/, '')}/path`)).json());
 });
 
-return { board, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
+// Preview of upcoming planned work (the board's #preview mode): notices that
+// start within a week, so their maps can be checked before they're in effect.
+async function upcomingNotices(feed) {
+  if (!relayBase()) return [];
+  const raw = await (await get(`${relayBase()}/alerts/${feed}?ahead=168`)).json();
+  const t = now();
+  for (const e of raw.entity || []) {
+    const a = e.alert || {};
+    // Treat it as in effect so parseAlerts keeps it; mark it as a preview.
+    a.active_period = [{ start: t - 60 }];
+    (a['transit_realtime.mercury_alert'] = a['transit_realtime.mercury_alert'] || {}).display_before_active = 0;
+  }
+  return parseAlerts(raw, () => true).map((n) => ({ ...n, id: `preview-${n.id}`, carrier: feed === 'lirr' ? 'lirr' : 'subway', preview: true }));
+}
+
+return { board, upcomingNotices, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
 });

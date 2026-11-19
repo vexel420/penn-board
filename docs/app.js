@@ -1696,7 +1696,7 @@ function renderPathSchedule() {
 // panel. It starts collapsed; opening it is remembered for this visit until
 // the set of notices changes.
 const friendlyType = (t) => {
-  const x = t.replace(/^Planned - /, 'Planned work, ');
+  const x = t.replace(/^(Upcoming: )?Planned - /, (m, up) => (up ? 'Upcoming planned work, ' : 'Planned work, '));
   return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); // sentence case
 };
 function noticeWho(n) {
@@ -1734,8 +1734,23 @@ function noticeStrip(list, where) {
   const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}</p></div>`).join('');
   return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${opened ? ' open' : ''}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
 }
+// Add #preview to the address to see the next week's planned LIRR and subway
+// work as notices, with their maps (to check maps before work is in effect).
+const PREVIEW = /preview/i.test(location.hash);
+let previewNotices = [];
+if (PREVIEW) Promise.all([PennFeeds.upcomingNotices('lirr'), PennFeeds.upcomingNotices('subway')])
+  .then(([l, s]) => { previewNotices = [...l, ...s].filter((n) => /planned/i.test(n.type)); renderServiceNotices(); }).catch(() => {});
 function renderServiceNotices() {
   if (!board || !board.notices) return;
+  if (PREVIEW && previewNotices.length) {
+    const have = new Set([...board.notices.rail, ...board.notices.subway].map((n) => n.id));
+    for (const n of previewNotices) {
+      const p = { ...n, type: `Upcoming: ${n.type}` };
+      // Only those that open a map: the point of the preview.
+      if (have.has(n.id) || !(lirrModel(p) || changeModel(p))) continue;
+      (n.carrier === 'lirr' ? board.notices.rail : board.notices.subway).push(p);
+    }
+  }
   $('rail-notices').innerHTML = noticeStrip(board.notices.rail, 'rail');
   $('subway-notices').innerHTML = noticeStrip(board.notices.subway, 'subway');
   $('path-notices').innerHTML = noticeStrip(board.notices.path, 'path');

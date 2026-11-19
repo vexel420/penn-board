@@ -549,3 +549,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   between affected stations is dotted / dashed. View 2 (when the notice has
   text before "What's happening?"): the MTA's text, affected stations to tap
   and zoom, Google/Apple Maps directions.
+- Preview mode: add #preview to the address to list the next week's planned LIRR and subway work that has a map, labelled 'Upcoming planned work' (relay /alerts/{feed}?ahead=168).

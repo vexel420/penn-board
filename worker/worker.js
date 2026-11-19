@@ -46,9 +46,9 @@ async function upstream(url, seconds) {
 // Keep plain-English text only (drop the HTML copies) to shrink the response.
 const plain = (t) => (t && t.translation ? { translation: t.translation.filter((x) => x.language === 'en') } : t);
 
-async function alerts(feed) {
+async function alerts(feed, aheadHours = 1) {
   const data = await (await upstream(MTA_ALERTS[feed], 20)).json();
-  const soon = Date.now() / 1000 + 3600;
+  const soon = Date.now() / 1000 + aheadHours * 3600;
   const now = Date.now() / 1000;
   const entity = (data.entity || []).filter((e) => {
     const a = e.alert || {};
@@ -202,7 +202,9 @@ export default {
         const key = new Request(request.url, { method: 'GET' });
         const hit = await cache.match(key);
         if (hit) return hit;
-        const res = json(await alerts(m[1]), 20);
+        // ?ahead=168: notices starting within a week (the board's map preview).
+        const ahead = Math.min(168, Math.max(1, +new URL(request.url).searchParams.get('ahead') || 1));
+        const res = json(await alerts(m[1], ahead), 20);
         ctx.waitUntil(cache.put(key, res.clone()));
         return res;
       }
