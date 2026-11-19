@@ -40,12 +40,7 @@ NIGHT_GAP_MIN = 90  # a longer break than this in a line's trains is its night o
 # Extra last stops that share the line's main row (owner's choice, Nov 2026):
 # the weekday rush-hour A to Rockaway Park. (Euclid Av A trips stay separate.)
 SHARE_ROW = {('A', 'S'): ['H15']}
-NIGHT_HEADWAY = 15  # minutes: in the morning, trains closer than this end the night
-# The late-night pill (owner's rule, Nov 2026): once every express train has
-# finished serving the platform for the night, a line's trains are late-night
-# trains from the point where they stay more than NIGHT_GAP minutes apart.
-# (A line running express all night, the 3 uptown, doesn't hold the others back.)
-NIGHT_GAP = 12
+NIGHT_HEADWAY = 15  # minutes: trains this far apart (or more) are late-night service
 
 
 def minutes(hms):
@@ -138,19 +133,10 @@ def line_shapes(z, shape_line):
     return out
 
 
-def last_express(ts_at_platform):
-    """The last express train of the evening at one Penn platform (all lines),
-    in evening-continuous minutes; lines running express all night don't count."""
-    xs = [(t if t >= 12 * 60 else t + 1440, line, express) for t, line, express in ts_at_platform if t >= 12 * 60 or t < 6 * 60]
-    all_night = {line for x, line, e in xs if e and 25 * 60 + 30 <= x <= 28 * 60 + 30}
-    return max([x for x, line, e in xs if e and line not in all_night and x < 28 * 60] or [0])
-
-
-def night_window(trips_at_penn, last_e=0):
-    """When a line runs its late-night timetable from Penn: 'from', the first
-    evening train after the platform's last express (last_e) from which the
-    line's trains stay more than NIGHT_GAP minutes apart, and 'to', the first
-    morning train that comes within NIGHT_HEADWAY of the one before.
+def night_window(trips_at_penn):
+    """When a line runs its late-night timetable from Penn (trains NIGHT_HEADWAY
+    minutes or more apart): 'from', the first evening train of that pattern,
+    and 'to', the first morning train that comes sooner after the one before.
     Trains at or after 'from', or before 'to', are late-night trains. Each line
     has its own, so the pill drops off line by line as service ramps up."""
     times = sorted({t[0] for t in trips_at_penn})
@@ -168,11 +154,11 @@ def night_window(trips_at_penn, last_e=0):
     if not evening:
         return None
     night = evening + [t + 1440 for t in morning if evening[-1] < t + 1440 < to + 1440]
-    s = len(night)
-    while s - 1 >= 1 and night[s - 1] - night[s - 2] > NIGHT_GAP:
-        s -= 1
-    after = [x for x in night[s:] if x > last_e]
-    frm = (after[0] % 1440 if after[0] >= 1440 else after[0]) if after else None
+    frm = None
+    for i in range(len(night) - 1, 0, -1):
+        if night[i] - night[i - 1] < NIGHT_HEADWAY:
+            break
+        frm = night[i] % 1440 if night[i] >= 1440 else night[i]
     if frm is None or 6 * 60 < frm < 19 * 60 or not morning:
         return None
     # Every scheduled late-night trip, by its live-feed id (the PATH method:
@@ -186,22 +172,6 @@ def night_window(trips_at_penn, last_e=0):
         if night_train and t[3]:
             near.append(t[3])
     return {'from': frm, 'to': to, 'trips': sorted(set(near))}
-
-
-def cutback_window(trips_at_penn):
-    """A line cut back to start at Penn late at night (the 3 uptown: Penn to
-    Harlem only). Its late-night pattern begins with the first evening train
-    that starts at Penn and ends with the first morning train that comes
-    through from further down the line. None if the line isn't cut back."""
-    starts = [t for t in trips_at_penn if t[0] == t[1] and (t[0] >= 20 * 60 or t[0] < 9 * 60)]
-    if len(starts) < 5:
-        return None
-    ev = lambda t: t if t >= 12 * 60 else t + 1440   # evening-continuous minutes
-    frm_x = min(ev(t[0]) for t in starts)
-    last_start = max(ev(t[0]) for t in starts)
-    through = sorted(ev(t[0]) for t in trips_at_penn if t[0] != t[1] and ev(t[0]) > last_start)
-    to = (through[0] - 1440) if through and through[0] >= 1440 else 12 * 60
-    return {'from': frm_x % 1440, 'to': to, 'trips': sorted({t[3] for t in starts if t[3]}), 'cutback': True}
 
 
 def rows(z, name):
@@ -274,12 +244,8 @@ def main(zip_path):
                 ends[(trip_line[tid], c[2])][names[-1]] += 1
                 at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express, code.group(1) if code else ''))
     switches, gaps, nights = {}, {}, {}
-    platform = defaultdict(list)  # (station, dir, day) -> [(penn min, line, express?)]
     for (station, line, d, day), ts in at_penn.items():
-        platform[(station, d, day)] += [(t[0], line, t[2]) for t in ts]
-    last_e = {k: last_express(v) for k, v in platform.items()}
-    for (station, line, d, day), ts in at_penn.items():
-        w = cutback_window(ts) or night_window(ts, last_e[(station, d, day)]) if not (line in NIGHT_GAP_LINES and night_gap(ts)) else None
+        w = night_window(ts) if not (line in NIGHT_GAP_LINES and night_gap(ts)) else None
         if w:
             nights.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = w
         sw = switch_times(ts)
