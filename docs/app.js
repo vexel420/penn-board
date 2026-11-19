@@ -1230,6 +1230,8 @@ $('change').addEventListener('close', () => {
 });
 
 async function openChange(id, view = 1) {
+  const lm = lirrModels().find((m) => m.n.id === id);
+  if (lm) { changeOpen = { id, view }; return openLirrChange(lm, view); }
   const model = changeModels().find((m) => m.n.id === id);
   if (!model) return;
   changeOpen = { id, view };
@@ -1432,6 +1434,154 @@ function drawChange(map, model, view) {
 }
 const lineLabel = (info) => esc(info.label);
 
+// ---------- LIRR service-change map ----------
+// The same two views as the subway map, for LIRR notices that change where
+// trains go: stops skipped, buses replacing trains, suspensions. The MTA's
+// LIRR notices name the branch and the stations affected (ids match
+// docs/lirr-data.json, built by scripts/build-lirr-data.py):
+//   view 1: the branch from Penn, with the affected stations crossed out
+//           (skipped) or the stretch between them dashed (buses / no trains);
+//   view 2: the MTA's own text (how to get around it), with the affected
+//           stations listed (tap to zoom; directions in Google or Apple Maps).
+const LIRR_CHANGE = /suspend|substitute bus|stops skipped|reroute|single track|service change|no service/i;
+let lirrData = null, lirrDataLoading = null;
+function loadLirrData() {
+  if (lirrData) return Promise.resolve(lirrData);
+  if (!lirrDataLoading) {
+    const v = (document.querySelector('script[src^="app.js"]').src.split('v=')[1] || '');
+    lirrDataLoading = fetch(`lirr-data.json?v=${v}`).then((r) => { if (!r.ok) throw new Error('LIRR map data did not load'); return r.json(); })
+      .then((d) => (lirrData = d)).catch((e) => { lirrDataLoading = null; throw e; });
+  }
+  return lirrDataLoading;
+}
+loadLirrData().then(() => renderServiceNotices()).catch(() => {});
+
+function lirrModel(n) {
+  if (!n || n.carrier !== 'lirr' || !lirrData || !LIRR_CHANGE.test(n.type)) return null;
+  const routes = Object.keys(n.affected || {}).filter((r) => lirrData.routes[r] && (lirrData.shapes[r] || []).length);
+  if (!routes.length) return null;
+  const affected = new Set(routes.flatMap((r) => n.affected[r]).filter((id) => lirrData.stops[id]));
+  if (!affected.size) return null;
+  const kind = /bus/i.test(n.type) ? 'bus' : /skipped/i.test(n.type) ? 'skip' : 'off';
+  const text = String(n.desc || '').split(/what'?s happening\?/i)[0].trim();
+  return { n, lirr: true, routes, affected, kind, text };
+}
+
+const LLL = (id) => [lirrData.stops[id][1], lirrData.stops[id][2]];
+// A branch's track cut into station-to-station pieces; a piece between two
+// affected stations is part of the change (buses or no trains there).
+function lirrSegments(route, affected) {
+  const ids = [...new Set([...lirrData.routes[route].stops, ...affected])].filter((id) => lirrData.stops[id]);
+  const segs = [];
+  for (const path of lirrData.shapes[route] || []) {
+    const on = ids.map((id) => ({ id, ...along(path, LLL(id)) })).filter((x) => x.d < 0.003).sort((a, b) => a.s - b.s);
+    for (let i = 0; i < on.length - 1; i++) {
+      const a = on[i], b = on[i + 1];
+      segs.push({ pts: between(path, a.s, b.s, LLL(a.id), LLL(b.id)), hit: affected.has(a.id) && affected.has(b.id) });
+    }
+  }
+  return segs;
+}
+
+async function openLirrChange(model, view) {
+  const { n, routes, affected, kind, text } = model;
+  const r0 = lirrData.routes[routes[0]];
+  $('chg-kind').textContent = friendlyType(n.type);
+  const sw = kind === 'skip' ? '' : `<li><span class="sw ${kind === 'bus' ? 'bus' : 'off'}"></span>${kind === 'bus' ? 'Buses replace trains' : 'No trains'}</li>`;
+  if (view === 1) {
+    $('chg-h').innerHTML = `<span class="plate lirr">LIRR</span> ${esc(n.text)}`;
+    $('chg-top').innerHTML = `<ul class="cm-key">
+        <li><span class="sw" style="border-color:${esc(r0.color)}"></span>${esc(routes.map((r) => lirrData.routes[r].name).join(', '))}</li>
+        ${kind === 'skip' ? '<li><span class="sw off"></span>Station skipped</li>' : sw}
+      </ul>
+      ${text ? '<button type="button" class="cm-go" data-view="2">How to get around this <span aria-hidden="true">→</span></button>' : liveDirectionsHtml()}`;
+    $('chg-below').innerHTML = '';
+  } else {
+    $('chg-h').innerHTML = 'Getting around it';
+    $('chg-top').innerHTML = `<button type="button" class="cm-back" data-view="1">← Whole branch</button><p class="cm-sum">${esc(n.text)}</p>`;
+    const cards = [...affected].map((id, i) => {
+      const d = directionsTo(LLL(id), lirrData.stops[id][0]);
+      return `<li class="cm-stn"><button type="button" class="cm-zoom" data-zoom="l${i}"><b>${esc(lirrData.stops[id][0])}</b></button>
+        <span class="cm-dir">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></span></li>`;
+    }).join('');
+    $('chg-below').innerHTML = `<h3 class="cm-h">Stations affected · tap to zoom in</h3><ul class="cm-stns">${cards}</ul>
+      <h3 class="cm-h">From the MTA</h3><div class="cm-mta">${mtaTextHtml(text)}</div>${liveDirectionsHtml()}`;
+  }
+  const dialog = $('change');
+  if (!dialog.open) { dialog.showModal(); history.pushState({ changeMap: true }, ''); }
+  dialog.querySelector('.cm-body').scrollTop = 0;
+  const box = $('chg-map');
+  box.hidden = false;
+  try {
+    const Lf = await loadLeaflet();
+    if (!changeOpen || changeOpen.id !== n.id || changeOpen.view !== view) return;
+    if (changeMap) changeMap.remove();
+    changeMap = Lf.map(box, { zoomSnap: 0.25, scrollWheelZoom: false });
+    Lf.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 18, className: 'cm-tiles',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Lines: MTA',
+    }).addTo(changeMap);
+    drawLirrChange(changeMap, model, view);
+  } catch (e) {
+    console.warn('LIRR map:', e);
+    box.hidden = true;
+  }
+}
+
+function drawLirrChange(map, model, view) {
+  const { routes, affected, kind } = model;
+  const casing = (pts, w) => L.polyline(pts, { color: '#fff', weight: w + 4, interactive: false }).addTo(map);
+  const penn = lirrData.penn;
+  // The rest of the LIRR, thin and grey, so the way from Penn to the branch shows.
+  for (const [r, paths] of Object.entries(lirrData.shapes)) {
+    if (routes.includes(r)) continue;
+    for (const path of paths) L.polyline(path, { color: '#9a9a9a', weight: 2.5, opacity: 0.8, interactive: false }).addTo(map);
+  }
+  const all = [];
+  for (const r of routes) {
+    const color = lirrData.routes[r].color;
+    const segs = lirrSegments(r, affected);
+    for (const s of segs) casing(s.pts, 6);
+    for (const s of segs) {
+      all.push(...s.pts);
+      if (s.hit && kind !== 'skip') {
+        L.polyline(s.pts, kind === 'bus'
+          ? { color: '#222', weight: 4, dashArray: '2 7', lineCap: 'round', interactive: false }
+          : { color: '#8f8f8f', weight: 5, dashArray: '8 7', interactive: false }).addTo(map);
+      } else L.polyline(s.pts, { color, weight: 6, interactive: false }).addTo(map);
+    }
+    for (const id of lirrData.routes[r].stops) {
+      if (!lirrData.stops[id]) continue;
+      const hit = affected.has(id);
+      L.circleMarker(LLL(id), { radius: hit ? 5 : 3.5, weight: 2, color: hit ? '#c0392b' : '#1b1b1b', fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(map);
+    }
+  }
+  // Labels: Penn, each affected station, the branch's far ends.
+  const name = (id) => lirrData.stops[id][0];
+  const labels = [];
+  if (lirrData.stops[penn]) labels.push({ at: LLL(penn), must: true, cls: 'here', html: `★ ${esc(name(penn))}<small>You are here</small>`, w: textWidth(name(penn)) + 10, h: 36 });
+  const note = kind === 'skip' ? 'Skipped' : kind === 'bus' ? 'Buses' : 'No trains';
+  for (const id of affected) labels.push({ at: LLL(id), must: view === 2 || affected.size <= 6, cls: 'off', html: `${esc(name(id))}<small style="color:#ffd9d3">${note}</small>`, w: textWidth(name(id)), h: 36 });
+  const labelLayer = L.layerGroup().addTo(map), ring = L.layerGroup().addTo(map);
+  const sync = () => placeLabels(map, labelLayer, labels);
+  const pts = view === 2 ? [...affected].map(LLL) : [...all, ...(lirrData.stops[penn] ? [LLL(penn)] : [])];
+  const fit = L.latLngBounds(pts).pad(view === 2 ? 0.4 : 0.05);
+  map.fitBounds(fit, { padding: [24, 24], maxZoom: 14 });
+  map.on('zoomend moveend', sync); sync();
+  setTimeout(() => { map.invalidateSize(); map.fitBounds(fit, { padding: [24, 24], maxZoom: 14 }); sync(); }, 60);
+  $('chg-below').onclick = (e) => {
+    const b = e.target.closest('[data-zoom]');
+    if (!b) return;
+    const id = [...affected][+b.dataset.zoom.slice(1)];
+    $('chg-below').querySelectorAll('[data-zoom]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+    ring.clearLayers();
+    L.marker(LLL(id), { interactive: false, zIndexOffset: 2000, icon: L.divIcon({ className: '', iconSize: [0, 0], html: '<div class="cm-ring"></div>' }) }).addTo(ring);
+    map.flyTo(LLL(id), 14.5, { duration: 0.8 });
+    $('chg-map').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+}
+const lirrModels = () => ((board && board.notices && board.notices.rail) || []).map(lirrModel).filter(Boolean);
+
 $('change').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) return closeChange();
   const v = e.target.closest('[data-view]');
@@ -1439,6 +1589,10 @@ $('change').addEventListener('click', (e) => {
 });
 $('chg-close').addEventListener('click', closeChange);
 $('alerts').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-change]');
+  if (b) openChange(b.dataset.change);
+});
+$('rail-notices').addEventListener('click', (e) => {
   const b = e.target.closest('[data-change]');
   if (b) openChange(b.dataset.change);
 });
@@ -1576,7 +1730,7 @@ function noticeStrip(list, where) {
   const urgent = list.some((n) => n.urgent);
   const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : 'Service notices for trains at Penn';
   // Notices that close or reroute part of a line open a map.
-  const mapBtn = (n) => (typeof changeModel === 'function' && changeModel(n) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
+  const mapBtn = (n) => (typeof changeModel === 'function' && (changeModel(n) || lirrModel(n)) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
   const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}</p></div>`).join('');
   return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${opened ? ' open' : ''}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
 }
@@ -1592,7 +1746,7 @@ function renderServiceNotices() {
 function renderAlertsTab() {
   const rail = board.notices.rail || [], subway = board.notices.subway || [];
   const card = (n) => {
-    const map = typeof changeModel === 'function' && changeModel(n) ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
+    const map = typeof changeModel === 'function' && (changeModel(n) || lirrModel(n)) ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
     return `<div class="al-card${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${map ? `<br>${map}` : ''}</p></div>`;
   };
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;

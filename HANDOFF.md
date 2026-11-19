@@ -536,3 +536,16 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Subway: if any train in a line/direction/service is rerouted, that line's destinations stop turning and get separate still rows (so the rerouted one shows 'Rerouted, see map').
 - PATH alerts (Nov 18): relay /path-alerts (Port Authority's alerts?agency=PATH&hours=8, a list of messages per incident 'ebid' with state Open/Closed). The board shows each open incident's latest message (time stamp removed) in a 'PATH alerts' strip above PATH times and in the phone Alerts tab.
 - subway-data.json: if it fails to load it's retried every 20 s (was: never, leaving raw '[1]' text and grey 'S' badges). Notice text shows a line's name instead of '[1]' until line colours load.
+
+## LIRR service-change map (Nov 19, 2026)
+- docs/lirr-data.json (scripts/build-lirr-data.py, from the MTA's gtfslirr.zip):
+  branches (name, colour, stations), stations (ids = stop_id in LIRR notices),
+  simplified track paths; Penn = stop 237.
+- LIRR notices of type stops skipped / substitute buses / suspended / reroute /
+  single track / service change get "See map" (`lirrModel`, `openLirrChange`,
+  `drawLirrChange` in docs/app.js, same dialog as the subway map). View 1: the
+  branch in its colour, other LIRR lines thin grey, affected stations ringed
+  red ("Skipped" / "Buses" / "No trains"); for buses or suspensions the stretch
+  between affected stations is dotted / dashed. View 2 (when the notice has
+  text before "What's happening?"): the MTA's text, affected stations to tap
+  and zoom, Google/Apple Maps directions.
