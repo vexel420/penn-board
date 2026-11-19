@@ -1944,15 +1944,22 @@ const njtAltHtml = () => (njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transi
 const NJT_LINE_WORDS = [[/\bNEC\b|Northeast Corridor/i, /Northeast/i], [/North Jersey Coast|\bNJCL\b/i, /Jersey Coast/i], [/Morris (and|&) Essex|\bM&E\b/i, /Morristown|Gladstone/i],
   [/Montclair-Boonton|\bMOBO\b/i, /Montclair|Boonton/i], [/Raritan Valley/i, /Raritan/i], [/Main\/Bergen|Main Line|Bergen County/i, /Main|Bergen/i], [/Pascack/i, /Pascack/i], [/Gladstone/i, /Gladstone/i]];
 const DELAY_TYPES = /delay|cancel|suspend|single track/i;
+// A live LIRR train's branch name -> the MTA's LIRR route id (notices use
+// these). Huntington trains are the Port Jefferson Branch in the MTA's data.
+const LIRR_ALIASES = { 'Huntington Branch': 'Port Jefferson Branch', 'Greenport Branch': 'Greenport Service', 'Belmont Park Branch': 'Belmont Park', 'City Terminal Branch': 'City Terminal Zone' };
+const lirrRouteFor = (line) => lirrData && Object.keys(lirrData.routes).find((k) => lirrData.routes[k].name === (LIRR_ALIASES[line] || line));
 // Only notices about delays get "Other options". A train switched between
 // local and express (or rerouted) is itself another way to travel, even when
 // the MTA files it under "Delays", so those don't.
 const SERVICE_SWITCH = /\b(running|runs|run|operating|operates)\s+(express|local)\b|\bexpress (between|from|to|in)\b|\blocal (between|from|to|in)\b|\breroute|\bruns? via\b/i;
-const isDelayNotice = (n) => (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text);
+// Notes on individual trains only for events happening now: not notices the
+// MTA shows ahead of their start, nor #preview's upcoming work.
+const happeningNow = (n) => n.activeNow !== false && !n.preview;
+const isDelayNotice = (n) => happeningNow(n) && (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text);
 function rowNotices(r) {
   const all = (board && board.notices && board.notices.rail) || [];
   if (r.carrier === 'lirr' && lirrData) {
-    const id = Object.keys(lirrData.routes).find((k) => lirrData.routes[k].name === r.line);
+    const id = lirrRouteFor(r.line);
     return id ? all.filter((n) => n.carrier === 'lirr' && isDelayNotice(n) && (n.lines || []).includes(id)) : [];
   }
   if (r.carrier === 'njt') {
@@ -1987,7 +1994,7 @@ const dirMatch = (n, dir) => {
   if (!dir || down === up) return true;
   return dir === 'S' ? down : up;
 };
-const subwayExpressSwitch = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => (n.lines || []).includes(route)
+const subwayExpressSwitch = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => happeningNow(n) && (n.lines || []).includes(route)
   && /\b(running|runs|run|operating|operates)\s+express\b|\bexpress (between|from|to|in)\b|local to express/i.test(`${n.type} ${n.text}`) && dirMatch(n, dir));
 const switchNoteHtml = (route, dir, stnId) => (subwayExpressSwitch(route, dir).length
   ? `<div class="row-alert sub"><span>⚠ Some ${esc(lineInfo(route).label)} trains are running express and skip local stops</span><button type="button" class="al-map" data-sopt="${esc(route)}|${dir}|${stnId}|local">Other options</button></div>` : '');
@@ -2094,7 +2101,7 @@ $('subway-notices').addEventListener('click', (e) => {
   if (b) openChange(b.dataset.change);
 });
 // A "Rerouted, see map" row opens the notice behind it when there is one.
-const changeFor = (route) => changeModels().find((m) => m.route === route);
+const changeFor = (route) => changeModels().find((m) => m.route === route && happeningNow(m.n));
 
 function renderPath() {
   if (!board) return;

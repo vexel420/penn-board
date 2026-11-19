@@ -374,7 +374,9 @@ function parseAlerts(feed, keep) {
     }
     const tr = (a.description_text && a.description_text.translation) || [];
     const desc = ((tr.find((x) => x.language === 'en') || {}).text || '').trim();
-    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc, where });
+    // In effect right now (not just shown early, ahead of its start).
+    const activeNow = !periods.length || periods.some((p) => (+p.start || 0) <= t && t <= (+p.end || Infinity));
+    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc, where, activeNow });
   }
   out.sort((x, y) => y.urgent - x.urgent);
   const byText = new Map();
