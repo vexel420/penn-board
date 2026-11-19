@@ -601,3 +601,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   "Late-night service has started" banner now counts down too. Two or more
   night banners in one section merge into one box (`mergeNightBanners`), one
   line each. Option B rows give each destination its own late-night pill.
+- Last-train banners use live times: subway liveLast takes the latest live train from 10 min before to 60 min after the timetable time (liveLastOnly keeps the countdown up while a late last train hasn't left); PATH countdown uses livePathLast/livePathFirstVia and stays up while a late last direct JSQ train is still to come.

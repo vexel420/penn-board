@@ -656,13 +656,20 @@ const minsToEpoch = (mins) => { const n = nyNow(); return Math.floor(Date.now() 
 // direction (express or local, if given) closest to the scheduled time within
 // 15 min, so the banner shows the same time and minutes as the row below it.
 // Without a match, the timetable's time.
+// The last train is the latest one: a train running late (up to an hour) or
+// a little early still counts, and nothing scheduled after it can be listed.
 function liveLast(groups, line, dir, svc, sched, nowS) {
   let best = null;
   for (const g of groups) {
     if (g.route !== line || g.dir !== dir || (svc && g.svc !== svc)) continue;
-    for (const t of g.trains) if (t.time >= nowS - 30 && Math.abs(t.time - sched) <= 15 * 60 && (!best || Math.abs(t.time - sched) < Math.abs(best - sched))) best = t.time;
+    for (const t of g.trains) if (t.time >= nowS - 30 && t.time >= sched - 10 * 60 && t.time <= sched + 60 * 60 && (!best || t.time > best)) best = t.time;
   }
   return best ?? sched;
+}
+// The same, but null when no live train matches.
+function liveLastOnly(groups, line, dir, svc, sched, nowS) {
+  const t = liveLast(groups, line, dir, svc, sched, nowS);
+  return t === sched && !groups.some((g) => g.route === line && g.dir === dir && g.trains.some((x) => x.time === sched)) ? null : t;
 }
 const clockText = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
 const inText = (t, nowS) => { const m = Math.max(0, Math.round((t - nowS) / 60)); return m < 1 ? 'now' : `in ${m} min`; };
@@ -719,6 +726,8 @@ function pathState() {
     if (!viaLeft || (T.lastNight != null && m > T.lastNight)) return { phase: 'day' };
     return { phase: 'night', until: T.firstDirect };
   }
+  // Still counting down while the last direct train, running late, hasn't left.
+  if (m > T.lastDirect && livePathLast(T.lastDirect)) return { phase: 'countdown', lastDirect: T.lastDirect, nightStart: T.nightStart, left: 0 };
   if (m > T.lastDirect) {
     const N = pathDay(nyNow(1).day);
     return { phase: 'night', until: N ? N.firstDirect : T.firstDirect };
@@ -771,6 +780,28 @@ function pathLateNight(dest, epoch) {
   }
   return W.from != null && W.from >= 720 && m >= W.from;
 }
+// The live PATH train that is the timetable's last direct Journal Square one
+// (the latest direct JSQ train from 10 min before to an hour after its time),
+// and the first via-Hoboken train of the night; null if not in PATH's data.
+function livePathLast(schedMins) {
+  const nowS = Date.now() / 1000, sched = minsToEpoch(schedMins);
+  let best = null;
+  for (const x of (board && board.path) || []) {
+    if (!/journal/i.test(x.dest || '') || /via/i.test(x.dest || '')) continue;
+    if (x.time >= nowS - 30 && x.time >= sched - 600 && x.time <= sched + 3600 && (!best || x.time > best)) best = x.time;
+  }
+  return best;
+}
+function livePathFirstVia(schedMins) {
+  const nowS = Date.now() / 1000, sched = minsToEpoch(schedMins);
+  let best = null;
+  for (const x of (board && board.path) || []) {
+    if (!/via/i.test(x.dest || '')) continue;
+    if (x.time >= nowS - 30 && x.time >= sched - 600 && x.time <= sched + 3600 && (!best || x.time < best)) best = x.time;
+  }
+  return best;
+}
+
 // Tags beside the PATH heading, and what goes above the train rows.
 function renderPathPattern() {
   const st = pathState();
@@ -781,8 +812,13 @@ function renderPathPattern() {
   $('path-h').innerHTML = `PATH${tags.join('')}<span>33 St station, Sixth Av at 32 St</span>`;
   if (!st) return '';
   if (st.phase === 'countdown') {
-    const starts = st.nightStart != null ? `Late-night service starts at ${fmtClock(st.nightStart)}. ` : '';
-    return `<p class="svc-line night">${ICON.moon}<span>${starts}<b>The last direct Journal Square train leaves in ${st.left} min</b>, at ${fmtClock(st.lastDirect)}.</span></p>`;
+    // Live times where PATH has them, so the banner agrees with the rows below.
+    const nowS = Date.now() / 1000;
+    const last = livePathLast(st.lastDirect) ?? minsToEpoch(st.lastDirect);
+    const via = st.nightStart != null ? (livePathFirstVia(st.nightStart) ?? minsToEpoch(st.nightStart)) : null;
+    const starts = via != null ? `Late-night service starts at ${clockText(via)}. ` : '';
+    const left = Math.max(0, Math.round((last - nowS) / 60));
+    return `<p class="svc-line night">${ICON.moon}<span>${starts}<b>The last direct Journal Square train leaves ${left < 1 ? 'now' : `in ${left} min`}</b>, at ${clockText(last)}.</span></p>`;
   }
   if (st.phase === 'night') {
     const dots = '<span class="pdots" aria-hidden="true" style="opacity:.35"><i style="background:#ff9900"></i></span>';
@@ -924,9 +960,12 @@ function renderSubway() {
       }
       if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${esc(lineInfo(line).label)}.</b></span></p>`;
       // "The last C train leaves at 10:34 PM, in 25 min." / "The last downtown 3 train..."
-      if (g && g.phase === 'countdown' && g.svc === svc) {
+      // The last train running late: keep counting down until it has left.
+      const lateLast = g && g.phase === 'night' && g.svc === svc
+        ? liveLastOnly(here, line, dir, null, minsToEpoch(g.after - (nyNow().mins < 720 ? 1440 : 0)), nowS) : null;
+      if (g && ((g.phase === 'countdown' && g.svc === svc) || lateLast)) {
         const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
-        const t = liveLast(here, line, dir, null, minsToEpoch(g.after), nowS);
+        const t = lateLast ?? liveLast(here, line, dir, null, minsToEpoch(g.after), nowS);
         return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${esc(lineInfo(line).label)} train leaves at ${clockText(t)}, ${inText(t, nowS)}.</b> No ${way}${esc(lineInfo(line).label)} trains late nights.</span></p>`;
       }
       if (g && g.phase === 'countdown') return '';
@@ -959,6 +998,12 @@ function renderSubway() {
         }
         if (st.phase === 'morning') return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${label}.</b></span></p>`;
         const expressDue = here.some((g) => g.route === line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time >= nowS - 30));
+        // The last express running late: still counting down.
+        if (st.phase === 'night' && expressDue) {
+          const base = nyNow().mins < 720 ? -1440 : 0;
+          const t = liveLastOnly(here, line, dir, 'express', minsToEpoch((st.lastExpress ?? 0) + base), nowS);
+          if (t) return `<p class="svc-line night">${ICON.moon}<span><b>The last ${label} express train leaves at ${clockText(t)}, ${inText(t, nowS)}.</b></span></p>`;
+        }
         if (st.phase === 'night' && !expressDue) {
           const say = otherExpress(line) ? `${label} trains run local late nights, until ${fmtClock(st.until)}.` : `No express trains late nights. ${label} trains run local until ${fmtClock(st.until)}.`;
           return `<div class="none-row">${bulletHtml(line)}<span>${say}</span></div>`;
