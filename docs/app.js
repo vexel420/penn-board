@@ -1323,7 +1323,13 @@ function drawChange(map, model, view) {
       for (const path of subwayShapes[l] || []) {
         let cur = [];
         const flush = () => { if (cur.length > 1) { casing(cur, 3); L.polyline(cur, { color: lineInfo(l).color, weight: 4, opacity: 0.8, interactive: false }).addTo(map); } cur = []; };
-        for (const p of path) { if (area.contains(p)) cur.push(p); else flush(); }
+        // Keep every stretch that touches the area, ends included: track data
+        // can have long straight stretches with no points inside it (the 1
+        // under Broadway, 157 St to Dyckman St).
+        for (let i = 0; i < path.length - 1; i++) {
+          const a = path[i], b = path[i + 1];
+          if (area.intersects(L.latLngBounds([a, b]))) { if (!cur.length) cur.push(a); cur.push(b); } else flush();
+        }
         flush();
       }
     }
