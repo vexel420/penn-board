@@ -376,7 +376,9 @@ function parseAlerts(feed, keep) {
     const desc = ((tr.find((x) => x.language === 'en') || {}).text || '').trim();
     // In effect right now (not just shown early, ahead of its start).
     const activeNow = !periods.length || periods.some((p) => (+p.start || 0) <= t && t <= (+p.end || Infinity));
-    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc, where, activeNow });
+    // Its periods in effect (epoch seconds), so the board can count down to one.
+    const spans = periods.map((p) => [+p.start || 0, +p.end || Infinity]);
+    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc, where, activeNow, periods: spans });
   }
   out.sort((x, y) => y.urgent - x.urgent);
   const byText = new Map();

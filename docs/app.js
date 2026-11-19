@@ -667,6 +667,60 @@ const cutbackNight = (stationId, route, dir, epoch) => {
   return !!g && mins < g.until && (g.after >= 12 * 60 || mins > g.after);
 };
 
+// ---------- a line suspended by a notice (planned overnight work) ----------
+// The notice's next period (in effect now, or starting within 4 hours) that
+// suspends this line at this Penn station.
+function suspensionFor(stnId, line, nowS) {
+  let best = null;
+  for (const n of (board && board.notices && board.notices.subway) || []) {
+    if (n.preview || !/suspend/i.test(n.type) || !(n.lines || []).includes(line) || !((n.affected || {})[line] || []).includes(stnId)) continue;
+    for (const [start, end] of n.periods || []) {
+      if (end > nowS && start - nowS < 4 * 3600 && (!best || start < best.start)) best = { n, start, end };
+    }
+  }
+  return best;
+}
+// Which section (express or local) a line's trains are listed in this way.
+function lineSection(here, stnId, line, dir) {
+  const g = here.find((x) => x.route === line && x.dir === dir);
+  if (g) return g.svc || 'local';
+  const gap = subwayData && subwayData.nightGaps && ((subwayData.nightGaps[stnId] || {})[line] || {})[dir];
+  const any = gap && Object.values(gap)[0];
+  return any ? any.svc : (['2', '3', 'A'].includes(line) ? 'express' : 'local');
+}
+// Notice text with line symbols as plain names ("[3]" -> "3"), for banners.
+const plainLines = (t) => esc(String(t).replace(/\[([A-Z0-9]{1,2})\]/g, '$1').replace(/\[[a-z ]+ icon\]/gi, '').replace(/ {2,}/g, ' ').trim());
+// null: no suspension to show here (the usual messages apply).
+function suspensionNote(stn, here, line, dir, svc, nowS) {
+  const s = suspensionFor(stn.id, line, nowS);
+  if (!s) return null;
+  // A direction already off for the night by the timetable keeps its message.
+  const g = nightGapState(stn.id, line, dir);
+  if (g && g.phase === 'night') return null;
+  if (lineSection(here, stn.id, line, dir) !== svc) return '';
+  const label = esc(lineInfo(line).label);
+  const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
+  // The lines the advisory sends people to ("[2] makes [3] stops..."), at this station.
+  const desc = String(s.n.desc || '');
+  let alts = [...new Set([...desc.matchAll(/\[([A-Z0-9]{1,2})\]/g)].map((m) => m[1]))].filter((l) => l !== line && stn.lines.includes(l));
+  if (!alts.length) alts = stn.lines.filter((l) => l !== line && here.some((x) => x.route === l && x.dir === dir));
+  const altNames = alts.map((l) => esc(lineInfo(l).label));
+  const use = altNames.length ? ` Use the ${altNames.slice(0, -1).join(', ')}${altNames.length > 1 ? ' or ' : ''}${altNames[altNames.length - 1]}.` : '';
+  const how = alts.length ? (desc.split(/(?<=\.)\s+/).find((x) => x.includes(`[${alts[0]}]`)) || '') : '';
+  // "Use the 2, which makes 3 stops between..." when the advisory starts with the line.
+  const lead = `[${alts[0]}] `;
+  const after = how && how.startsWith(lead) && altNames.length === 1
+    ? ` Use the ${altNames[0]}, which ${plainLines(how.slice(lead.length))}`
+    : `${use}${how ? ` ${plainLines(how)}` : ''}`;
+  const until = `until ${clockText(s.end)}`;
+  // The last train before it starts (a late one still counts).
+  const last = here.filter((x) => x.route === line && x.dir === dir).flatMap((x) => x.trains)
+    .map((t) => t.time).filter((t) => t >= nowS - 30 && t <= s.start + 10 * 60).sort((a, b) => b - a)[0];
+  if (last) return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${label} train leaves at ${clockText(last)}, ${inText(last, nowS)}.</b> Then no ${way}${label} trains ${until}.${after}</span></p>`;
+  if (nowS < s.start) return `<p class="svc-line night">${ICON.moon}<span><b>No ${way}${label} trains from ${clockText(s.start)} ${until}.</b>${after}</span></p>`;
+  return `<div class="none-row">${bulletHtml(line)}<span>No ${way}${label} trains ${until}.${after}</span></div>`;
+}
+
 // Timetable minutes (after today's midnight, may pass 24:00) -> epoch seconds.
 const minsToEpoch = (mins) => { const n = nyNow(); return Math.floor(Date.now() / 60000) * 60 - n.mins * 60 + mins * 60; };
 // The live train that is the timetable's last one: the line's train in this
@@ -1017,6 +1071,10 @@ function renderSubway() {
     let notes = '';
     // A line that isn't running late at night says which train to take.
     const gaps = stn.lines.map((line) => {
+      // A notice suspending the line here (the overnight 3): count down to its
+      // last train, then point to the line the advisory names.
+      const sus = suspensionNote(stn, here, line, dir, svc, nowS);
+      if (sus !== null) return sus;
       let g = nightGapState(stn.id, line, dir);
       // The first morning train showing "now" at Penn ends "Daytime service has started".
       if (g && g.phase === 'morning' && here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time - nowS < 30))) {
