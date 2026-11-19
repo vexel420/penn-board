@@ -188,6 +188,22 @@ def night_window(trips_at_penn, last_e=0):
     return {'from': frm, 'to': to, 'trips': sorted(set(near))}
 
 
+def cutback_window(trips_at_penn):
+    """A line cut back to start at Penn late at night (the 3 uptown: Penn to
+    Harlem only). Its late-night pattern begins with the first evening train
+    that starts at Penn and ends with the first morning train that comes
+    through from further down the line. None if the line isn't cut back."""
+    starts = [t for t in trips_at_penn if t[0] == t[1] and (t[0] >= 20 * 60 or t[0] < 9 * 60)]
+    if len(starts) < 5:
+        return None
+    ev = lambda t: t if t >= 12 * 60 else t + 1440   # evening-continuous minutes
+    frm_x = min(ev(t[0]) for t in starts)
+    last_start = max(ev(t[0]) for t in starts)
+    through = sorted(ev(t[0]) for t in trips_at_penn if t[0] != t[1] and ev(t[0]) > last_start)
+    to = (through[0] - 1440) if through and through[0] >= 1440 else 12 * 60
+    return {'from': frm_x % 1440, 'to': to, 'trips': sorted({t[3] for t in starts if t[3]}), 'cutback': True}
+
+
 def rows(z, name):
     with z.open(name) as f:
         yield from csv.DictReader(io.TextIOWrapper(f, encoding='utf-8-sig'))
@@ -263,7 +279,7 @@ def main(zip_path):
         platform[(station, d, day)] += [(t[0], line, t[2]) for t in ts]
     last_e = {k: last_express(v) for k, v in platform.items()}
     for (station, line, d, day), ts in at_penn.items():
-        w = night_window(ts, last_e[(station, d, day)]) if not (line in NIGHT_GAP_LINES and night_gap(ts)) else None
+        w = cutback_window(ts) or night_window(ts, last_e[(station, d, day)]) if not (line in NIGHT_GAP_LINES and night_gap(ts)) else None
         if w:
             nights.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = w
         sw = switch_times(ts)
