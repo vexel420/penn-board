@@ -578,6 +578,6 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   same stations, grouped by line; LIRR also lists branches serving those
   stations by timetable; NJT also links the PATH guides; subway lists other
   lines from the same platform sharing stations.
-- Trial (owner, Nov 19): subway 'Rows with more than one destination: Take turns | All destinations' switch under the subway panel (localStorage subwayStyle). Option B (optionBRow): every 8 s the row slides between all destinations ('Far Rockaway · Lefferts Blvd') and each destination's next 3 times, ordered by next train; holds on the times while a train is 'now'.
+- Trial (owner, Nov 19): subway 'Rows with more than one destination: Take turns | All destinations' switch under the subway panel (localStorage subwayStyle). Option B (optionBRow): a still list, one line per destination with its next 3 times, ordered by next train (owner removed the switching and animation).
 - Other options only for delay notices (isDelayNotice): a notice saying trains run express/local or are rerouted (even typed 'Delays') gets none. Subway delay notices starting 'Downtown'/'Uptown' apply to that direction only.
 - 'Some C trains running express' notices: no note on express trains; a note with Other options (local-stopping lines only) goes under that line's local service, or in its Local section if no local train is listed (switchNoteHtml). Direction from 'uptown'/'downtown' anywhere in the first sentence (dirMatch).

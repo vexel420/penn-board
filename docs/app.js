@@ -777,10 +777,8 @@ function destName(key, name) {
 }
 
 // ---------- subway rows, option B (trial) ----------
-// A row with trains to more than one place shows, in turn, every place they
-// go ("Far Rockaway · Lefferts Blvd"), then each place's next times in order
-// of the next train (up to 3 per place), sliding between the two. While a
-// train is "now", it stays on the times.
+// A row with trains to more than one place lists each place with its next
+// times (up to 3), in order of the next train. It stays still: no switching.
 let subwayStyle = 'turns';
 try { subwayStyle = localStorage.getItem('subwayStyle') === 'b' ? 'b' : 'turns'; } catch {}
 const bShown = new Map(); // row -> what it showed last, to slide from
@@ -788,7 +786,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const key = `${stn.id}|${g.route}|${dir}|${g.svc}|B`;
   const c = turnCycles.get(key), order = ends.join(','), turnNow = Math.floor(Date.now() / ROTATE_MS);
   if (!c || c.order !== order) turnCycles.set(key, { order, from: turnNow });
-  const phase = arriving ? 2 : ((turnNow - turnCycles.get(key).from) % 2) + 1;
+  const phase = 2; // (owner, Nov 19: just the list, no switching or animation)
   const name = (id) => stationName(id) || id;
   const lastOf = (x) => x.stops[x.stops.length - 1];
   const pill = lateNightTrain(stn.id, g.route, dir, upcoming[0].time, upcoming[0].code) ? LATE_PILL : '';
@@ -804,10 +802,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   }
   const before = bShown.get(key);
   bShown.set(key, html);
-  const body = before && before !== html && before.slice(0, 20) !== html.slice(0, 20)
-    ? `<span class="dname changing b-wrap"><span class="out" aria-hidden="true">${before}</span><span class="in">${html}</span></span>`
-    : `<span class="b-wrap">${html}</span>`;
-  if (before && before.slice(0, 20) !== html.slice(0, 20)) slideStarted = performance.now();
+  const body = `<span class="b-wrap">${html}</span>`;
   const delayNote = subwayDelays(g.route, dir).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
   return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>${delayNote}${g.svc === 'local' ? switchNoteHtml(g.route, dir, stn.id) : ''}`;
 }
