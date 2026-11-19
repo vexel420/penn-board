@@ -1161,8 +1161,14 @@ function changeModel(n) {
   if (!named.length) return null;
   const route = bulletsIn(n.text).find((r) => named.includes(r)) || named[0];
   const closed = new Set(n.affected[route].filter((id) => subwayData.stops[id]));
+  // "Suspended" (not "Part Suspended"): no trains on the line at all while it
+  // applies. The notice may list only the stations the line serves then (the
+  // overnight 3: 34 St to 148 St), but the rest of the line isn't running
+  // either, so the whole line is drawn as closed.
+  const whole = /suspended/i.test(n.type) && !/part/i.test(n.type);
+  if (whole) for (const id of subwayData.routes[route].normal) if (subwayData.stops[id]) closed.add(id);
   if (!closed.size) return null;
-  return { n, route, closed, alt: readAlternatives(n.desc, route), via: readVia(n.desc, route) };
+  return { n, route, closed, whole, alt: readAlternatives(n.desc, route), via: readVia(n.desc, route) };
 }
 const changeModels = () => ((board && board.notices && board.notices.subway) || []).map(changeModel).filter(Boolean);
 
@@ -1264,7 +1270,7 @@ async function openChange(id, view = 1) {
   if (view === 1) {
     $('chg-h').innerHTML = noticeText(n.text);
     $('chg-top').innerHTML = `<ul class="cm-key">
-        <li><span class="sw" style="border-color:${esc(lineInfo(route).color)}"></span>${label} trains running</li>
+        ${model.whole ? '' : `<li><span class="sw" style="border-color:${esc(lineInfo(route).color)}"></span>${label} trains running</li>`}
         <li><span class="sw off"></span>No ${label} trains</li>
         ${alt.buses.length ? '<li><span class="sw bus"></span>Free shuttle bus</li>' : ''}
         ${model.via && model.via.length ? `<li>${bulletHtml(route, 'tiny')} on its temporary route, via the ${[...new Set(model.via.map((v) => v.line))].map((l) => bulletHtml(l, 'tiny')).join(' and ')}</li>` : ''}
