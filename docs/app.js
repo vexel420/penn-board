@@ -684,6 +684,13 @@ function mergeNightBanners(html) {
 }
 
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
+// Trouble on a line (delays, skipped stops, reroutes): a pill on its rows.
+// The notice itself, its map and other options are in the service notices.
+const WARN_IC = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 1.5 21h21zM11 9h2v6h-2zm0 8h2v2h-2z" fill="currentColor" fill-rule="evenodd"/></svg>';
+const warnPill = (txt) => `<span class="late-pill warn-pill">${WARN_IC}${txt}</span>`;
+const pills = (...ps) => { const h = ps.filter(Boolean).join(''); return h ? `<span class="pills">${h}</span>` : ''; };
+const subwayPills = (route, dir, svc) => (subwayDelays(route, dir).length ? warnPill('Delays') : '')
+  + (svc === 'local' && subwayExpressSwitch(route, dir).length ? warnPill('Some trains skip stops') : '');
 
 // PATH's late-night service: the hours when weekday trains from 33 St run to
 // Journal Square via Hoboken (about 11 PM to 6 AM). PATH trains leaving in
@@ -872,27 +879,27 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const c = turnCycles.get(key), order = ends.join(','), turnNow = Math.floor(Date.now() / ROTATE_MS);
   if (!c || c.order !== order) turnCycles.set(key, { order, from: turnNow });
   const phase = 2; // (owner, Nov 19: just the list, no switching or animation)
+  const linePills = subwayPills(g.route, dir, g.svc);
   const name = (id) => stationName(id) || id;
   const lastOf = (x) => x.stops[x.stops.length - 1];
   const pill = lateNightTrain(stn.id, g.route, dir, upcoming[0].time, upcoming[0].code) || localNight(stn.id, g, dir, upcoming[0].time) ? LATE_PILL : '';
   let html;
   if (phase === 1) {
-    html = `<span class="b-dests">${ends.map((e) => esc(name(e))).join('<span class="sep"> · </span>')}${pill}</span>`;
+    html = `<span class="b-dests">${ends.map((e) => esc(name(e))).join('<span class="sep"> · </span>')}${pills(pill, linePills)}</span>`;
   } else {
-    html = `<span class="b-times">${ends.map((e) => {
+    html = `<span class="b-times">${ends.map((e, k) => {
       const mine = upcoming.filter((x) => lastOf(x) === e);
       const ts = mine.slice(0, 3).map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`;
       // Late-night pill by this destination's next train.
       const p = lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) || localNight(stn.id, g, dir, mine[0].time) ? LATE_PILL : '';
-      return `<span class="b-row"><span>${esc(name(e))}${p}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
+      return `<span class="b-row"><span>${esc(name(e))}${pills(p, k === 0 ? linePills : '')}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
     }).join('')}</span>`;
   }
   const before = bShown.get(key);
   bShown.set(key, html);
   const body = `<span class="b-wrap">${html}</span>`;
-  const delayNote = subwayDelays(g.route, dir).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
-  return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>${delayNote}${g.svc === 'local' ? switchNoteHtml(g.route, dir, stn.id) : ''}`;
+  return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>`;
 }
 $('subway').addEventListener('click', (e) => {
   const b = e.target.closest('[data-sstyle]');
@@ -1015,7 +1022,7 @@ function renderSubway() {
     notes = mergeNightBanners(notes);
     // Express trains skipping local stops, with no local trains of that line listed.
     if (svc === 'local') for (const line of stn.lines) {
-      if (!here.some((g) => g.route === line && g.dir === dir && g.svc === 'local')) notes += switchNoteHtml(line, dir, stn.id);
+      if (!here.some((g) => g.route === line && g.dir === dir && g.svc === 'local')) notes += switchNoteHtml(line, dir);
     }
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
       let upcoming = g.trains.filter((x) => x.time >= nowS - 30);
@@ -1057,14 +1064,15 @@ function renderSubway() {
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
       minsShown.set(rowKey, firstMin + rest);
       const rerouted = trains.find((x) => unusualStops(g.route, x).length);
-      // A delay notice for this line: under the row, with other options.
-      const delayNote = (subwayDelays(g.route, dir).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '')
-        + (svc === 'local' ? switchNoteHtml(g.route, dir, stn.id) : '');
-      if (!rerouted) {
-        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>${delayNote}`;
+      // Delays and skipped stops: pills on the row (the notice, its map and
+      // other options are in the service notices).
+      const linePills = subwayPills(g.route, dir, svc);
+      if (!rerouted || changeFor(g.route)) {
+        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pills(pill, linePills, rerouted ? warnPill('Rerouted') : '')}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
       }
+      // Rerouted with no notice behind it: the row itself opens the map.
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pill}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>${delayNote}`;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pills(pill, linePills)}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
@@ -1950,6 +1958,17 @@ function pathModel(n) {
   if (!Object.keys(state).length && !flagged.length) return null;
   return { n, state, flagged, issue };
 }
+// A pill for PATH trains from 33 St on a line an open PATH alert says is
+// delayed or suspended (Journal Square via Hoboken uses both 33 St lines).
+function pathTrouble(dest) {
+  const ids = /via/i.test(dest) ? ['JSQ-33', 'HOB-33'] : /journal/i.test(dest) ? ['JSQ-33'] : /hoboken/i.test(dest) ? ['HOB-33'] : [];
+  let worst = '';
+  for (const m of pathModels()) for (const id of ids) {
+    if (m.state[id] === 'off') worst = 'off';
+    else if (m.state[id] === 'delay' && !worst) worst = 'delay';
+  }
+  return worst === 'off' ? warnPill('Suspended') : worst === 'delay' ? warnPill('Delays') : '';
+}
 const pathModels = () => ((board && board.notices && board.notices.path) || []).map(pathModel).filter(Boolean);
 
 async function openPathIssue(m) {
@@ -2155,10 +2174,11 @@ const dirMatch = (n, dir) => {
   if (!dir || down === up) return true;
   return dir === 'S' ? down : up;
 };
-const subwayExpressSwitch = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => happeningNow(n) && (n.lines || []).includes(route)
-  && /\b(running|runs|run|operating|operates)\s+express\b|\bexpress (between|from|to|in)\b|local to express/i.test(`${n.type} ${n.text}`) && dirMatch(n, dir));
-const switchNoteHtml = (route, dir, stnId) => (subwayExpressSwitch(route, dir).length
-  ? `<div class="row-alert sub"><span>⚠ Some ${esc(lineInfo(route).label)} trains are running express and skip local stops</span><button type="button" class="al-map" data-sopt="${esc(route)}|${dir}|${stnId}|local">Other options</button></div>` : '');
+const isSwitchNotice = (n) => happeningNow(n) && /\b(running|runs|run|operating|operates)\s+express\b|\bexpress (between|from|to|in)\b|local to express/i.test(`${n.type} ${n.text}`);
+const subwayExpressSwitch = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => isSwitchNotice(n) && (n.lines || []).includes(route) && dirMatch(n, dir));
+// (Only used when the line has no local row to carry the pill.)
+const switchNoteHtml = (route, dir) => (subwayExpressSwitch(route, dir).length
+  ? `<div class="none-row">${bulletHtml(route)}<span>Some ${esc(lineInfo(route).label)} trains are running express and skip local stops. Other options are in the service notices.</span></div>` : '');
 
 // The options sheet: other ways to where the delayed train goes.
 // Stations every train shares (Penn itself, the hubs on the way out): not a reason to switch.
@@ -2212,10 +2232,34 @@ function openOptions(r) {
 function openSubwayOptions(route, dir, stnId, mode) {
   changeOpen = { id: 'options', view: 1 };
   $('chg-map').hidden = true;
-  const nowS = Date.now() / 1000;
   $('chg-kind').textContent = 'Other options';
   $('chg-h').innerHTML = `${bulletHtml(route, 'tiny')} ${dir === 'N' ? 'uptown' : 'downtown'} from Penn`;
   $('chg-top').innerHTML = (mode === 'local' ? subwayExpressSwitch(route, dir) : subwayDelays(route, dir)).map((n) => `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`).join('');
+  $('chg-below').innerHTML = subwayOptionsHtml(route, dir, stnId, mode);
+  openSheet();
+}
+// The Penn station each subway line stops at.
+const PENN_SUBWAY = { 1: '128', 2: '128', 3: '128', A: 'A28', C: 'A28', E: 'A28' };
+// "Other options" on a subway notice (delays, or local stops skipped).
+const noticeHasOptions = (n) => n.carrier === 'subway' && (n.lines || []).some((l) => PENN_SUBWAY[l])
+  && ((/delay/i.test(n.type) && isDelayNotice(n)) || isSwitchNotice(n));
+const optionsBtn = (n) => (noticeHasOptions(n) ? ` <button type="button" class="al-map" data-nopt="${esc(n.id)}">Other options</button>` : '');
+function openNoticeOptions(id) {
+  const n = ((board && board.notices && board.notices.subway) || []).find((x) => x.id === id);
+  if (!n || !subwayData) return;
+  const mode = isSwitchNotice(n) && !(/delay/i.test(n.type) && isDelayNotice(n)) ? 'local' : '';
+  changeOpen = { id: 'options', view: 1 };
+  $('chg-map').hidden = true;
+  $('chg-kind').textContent = 'Other options';
+  const lines = n.lines.filter((l) => PENN_SUBWAY[l] && subwayData.routes[l]);
+  $('chg-h').innerHTML = `${lines.map((l) => bulletHtml(l, 'tiny')).join('')} from Penn`;
+  $('chg-top').innerHTML = `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`;
+  const dirs = ['N', 'S'].filter((d) => dirMatch(n, d));
+  $('chg-below').innerHTML = lines.flatMap((l) => dirs.map((d) => `<h3 class="cm-h">Instead of the ${dirs.length > 1 ? (d === 'N' ? 'uptown ' : 'downtown ') : ''}${esc(lineInfo(l).label)}</h3>${subwayOptionsHtml(l, d, PENN_SUBWAY[l], mode, true)}`)).join('');
+  openSheet();
+}
+function subwayOptionsHtml(route, dir, stnId, mode, bare) {
+  const nowS = Date.now() / 1000;
   const mine = subwayData.routes[route].normalSet;
   // For local stops being skipped, only trains that make local stops help.
   const groups = board.subway.filter((g) => g.route !== route && g.dir === dir && g.trains[0] && g.trains[0].stops[0] === stnId && (mode !== 'local' || g.svc === 'local'));
@@ -2227,8 +2271,8 @@ function openSubwayOptions(route, dir, stnId, mode) {
     if (!best.has(g.route) || best.get(g.route).t.time > t.time) best.set(g.route, { route: g.route, shared, t, svc: g.svc });
   }
   const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route, dir).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">Shares ${o.shared} stations with the ${esc(lineInfo(route).label)}</span></li>`).join('');
-  $('chg-below').innerHTML = items ? `<h3 class="cm-h">${mode === 'local' ? 'Other trains making local stops' : 'Other trains from this platform'}</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other line from this station shares its stops.</p>';
-  openSheet();
+  if (!items) return '<p class="cm-live">No other line from this station shares its stops.</p>';
+  return `${bare ? '' : `<h3 class="cm-h">${mode === 'local' ? 'Other trains making local stops' : 'Other trains from this platform'}</h3>`}<ul class="cm-stns">${items}</ul>`;
 }
 document.addEventListener('click', (e) => {
   const g = e.target.closest('[data-guide]');
@@ -2236,7 +2280,9 @@ document.addEventListener('click', (e) => {
   const o = e.target.closest('[data-options]');
   if (o) { e.preventDefault(); e.stopPropagation(); const r = board.departures.find((x) => x.id === o.dataset.options); if (r) openOptions(r); return; }
   const s = e.target.closest('[data-sopt]');
-  if (s) { e.preventDefault(); e.stopPropagation(); const [route, dir, stn, mode] = s.dataset.sopt.split('|'); openSubwayOptions(route, dir, stn, mode); }
+  if (s) { e.preventDefault(); e.stopPropagation(); const [route, dir, stn, mode] = s.dataset.sopt.split('|'); openSubwayOptions(route, dir, stn, mode); return; }
+  const no = e.target.closest('[data-nopt]');
+  if (no) { e.preventDefault(); e.stopPropagation(); openNoticeOptions(no.dataset.nopt); }
 }, true);
 $('path-notices').addEventListener('click', (e) => {
   const b = e.target.closest('[data-change]');
@@ -2282,7 +2328,7 @@ function renderPath() {
     const rest = mins.length > 1 ? `, ${mins.slice(1).join(', ')}` : '';
     const dots = (g.colors.length ? g.colors : ['']).map((c) => `<i${c ? ` style="background:#${c}"` : ''}></i>`).join('');
     const pill = pathLateNight(dest, nowS + (mins[0] || 0) * 60) ? LATE_PILL : '';
-    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}</span><span class="smins">${firstMin}${rest}</span></div>`;
+    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pills(pill, pathTrouble(dest))}</span><span class="smins">${firstMin}${rest}</span></div>`;
   }).join('') + '<p class="sched-note live-note">Live times from PATH.</p>';
 }
 
@@ -2347,7 +2393,7 @@ function renderPathSchedule() {
     const ts = [...g.times, ...g.later].slice(0, 5);
     const gaps = ts.slice(1).map((t, i) => t - ts[i]).sort((a, b) => a - b);
     const every = gaps.length ? `<span class="every-sub">About every ${gaps[Math.floor(gaps.length / 2)]} min</span>` : '';
-    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pill}${every}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
+    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pills(pill, pathTrouble(dest))}${every}</span><span class="smins"><b>${first}</b>${rest.length ? ', ' + rest.join(', ') : ''}</span></div>`;
   }).join('');
   $('path').innerHTML = renderPathPattern() + (lines || '<p class="empty">No PATH trains are scheduled from 33 St in the next hour.</p>') + note;
 }
@@ -2392,7 +2438,7 @@ function noticeStrip(list, where) {
   const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : 'Service notices for trains at Penn';
   // Notices that close or reroute part of a line open a map.
   const mapBtn = (n) => (typeof changeModel === 'function' && (changeModel(n) || lirrModel(n) || pathModel(n)) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
-  const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}</p></div>`).join('');
+  const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}${optionsBtn(n)}</p></div>`).join('');
   return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${opened ? ' open' : ''}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
 }
 // Add #preview to the address to see the next week's planned LIRR and subway
@@ -2424,7 +2470,8 @@ function renderAlertsTab() {
   const rail = board.notices.rail || [], subway = board.notices.subway || [];
   const card = (n) => {
     const map = typeof changeModel === 'function' && (changeModel(n) || lirrModel(n) || pathModel(n)) ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
-    return `<div class="al-card${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${map ? `<br>${map}` : ''}</p></div>`;
+    const opts = optionsBtn(n);
+    return `<div class="al-card${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${map || opts ? `<br>${map}${opts}` : ''}</p></div>`;
   };
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
   $('alerts').innerHTML = njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')

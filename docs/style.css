@@ -217,6 +217,9 @@ details.via .checking { display: block; color: var(--dim); font-size: .8rem; }
 .none-row .bullet { opacity: .35; }
 .late-pill { display: flex; align-items: center; gap: .25rem; width: max-content; margin-top: .15rem; padding: .05rem .45rem; border-radius: 99px; background: #1b2440; color: #c9d3ff; font-size: .72rem; font-weight: 700; }
 .late-pill .ic { width: .95em; height: .95em; }
+.pills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .15rem; }
+.pills .late-pill { margin-top: 0; }
+.warn-pill { background: #4a2a0e; color: #ffc983; }
 .stn { margin-top: .9rem; padding: .7rem .8rem .5rem; border: 1px solid var(--line); border-radius: 8px; }
 .stn-lines { display: flex; gap: .3rem; }
 .stn .dir:first-of-type h3 { margin-top: .6rem; }
