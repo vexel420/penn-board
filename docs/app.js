@@ -776,6 +776,51 @@ function destName(key, name) {
   return `<span class="dname changing"><span class="out" aria-hidden="true">${esc(before)}</span><span class="in">${esc(name)}</span></span>`;
 }
 
+// ---------- subway rows, option B (trial) ----------
+// A row with trains to more than one place shows, in turn, every place they
+// go ("Far Rockaway · Lefferts Blvd"), then each place's next times in order
+// of the next train (up to 3 per place), sliding between the two. While a
+// train is "now", it stays on the times.
+let subwayStyle = 'turns';
+try { subwayStyle = localStorage.getItem('subwayStyle') === 'b' ? 'b' : 'turns'; } catch {}
+const bShown = new Map(); // row -> what it showed last, to slide from
+function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
+  const key = `${stn.id}|${g.route}|${dir}|${g.svc}|B`;
+  const c = turnCycles.get(key), order = ends.join(','), turnNow = Math.floor(Date.now() / ROTATE_MS);
+  if (!c || c.order !== order) turnCycles.set(key, { order, from: turnNow });
+  const phase = arriving ? 2 : ((turnNow - turnCycles.get(key).from) % 2) + 1;
+  const name = (id) => stationName(id) || id;
+  const lastOf = (x) => x.stops[x.stops.length - 1];
+  const pill = lateNightTrain(stn.id, g.route, dir, upcoming[0].time, upcoming[0].code) ? LATE_PILL : '';
+  let html;
+  if (phase === 1) {
+    html = `<span class="b-dests">${ends.map((e) => esc(name(e))).join('<span class="sep"> · </span>')}${pill}</span>`;
+  } else {
+    html = `<span class="b-times">${ends.map((e) => {
+      const ts = upcoming.filter((x) => lastOf(x) === e).slice(0, 3).map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
+      const first = ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`;
+      return `<span class="b-row"><span>${esc(name(e))}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
+    }).join('')}</span>`;
+  }
+  const before = bShown.get(key);
+  bShown.set(key, html);
+  const body = before && before !== html && before.slice(0, 20) !== html.slice(0, 20)
+    ? `<span class="dname changing b-wrap"><span class="out" aria-hidden="true">${before}</span><span class="in">${html}</span></span>`
+    : `<span class="b-wrap">${html}</span>`;
+  if (before && before.slice(0, 20) !== html.slice(0, 20)) slideStarted = performance.now();
+  const delayNote = subwayDelays(g.route).length ? `<div class="row-alert sub"><span>⚠ Delays on the ${esc(lineInfo(g.route).label)}</span><button type="button" class="al-map" data-sopt="${esc(g.route)}|${dir}|${stn.id}">Other options</button></div>` : '';
+  return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>${delayNote}`;
+}
+$('subway').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-sstyle]');
+  if (!b) return;
+  subwayStyle = b.dataset.sstyle;
+  try { localStorage.setItem('subwayStyle', subwayStyle); } catch {}
+  bShown.clear(); slideStarted = -Infinity; renderSubway();
+});
+const subwayStyleHtml = () => `<div class="sub-style"><span>Rows with more than one destination</span><div class="style-seg">
+  <button type="button" data-sstyle="turns" aria-pressed="${subwayStyle === 'turns'}">Take turns</button><button type="button" data-sstyle="b" aria-pressed="${subwayStyle === 'b'}">All destinations</button></div></div>`;
+
 let subwayShown = [];      // the groups drawn, so a tap can find its train
 const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
 // The panel is redrawn often (new data, the 10 s tick, each turn). Redrawing
@@ -881,6 +926,8 @@ function renderSubway() {
       // every A train's time, whatever its end.
       const arriving = upcoming.length && Math.round((upcoming[0].time - nowS) / 60) <= 0;
       if (ends.length > 1) subwayTurning = true;
+      // Trial (owner, Nov 19): option B, set with the switch under the panel.
+      if (ends.length > 1 && subwayStyle === 'b') return optionBRow(g, stn, dir, upcoming, ends, arriving, nowS);
       // The turns always start with the end whose train comes first, and start
       // over from it whenever that order changes (a train leaves, or a "now").
       if (ends.length > 1) {
@@ -922,7 +969,7 @@ function renderSubway() {
   }).join('');
   const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('');
   return `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
-  }).join('');
+  }).join('') + subwayStyleHtml();
   renderSubwayTags(states);
 }
 
