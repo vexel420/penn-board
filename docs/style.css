@@ -473,3 +473,5 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 /* NJ Transit's last trains before the overnight break */
 .row-last { display: flex; align-items: center; gap: .45rem; margin-top: .35rem; padding: .35rem .55rem; border-radius: 4px; background: #262b4a; color: #e6e8ff; font-size: .85rem; font-weight: 600; }
 .row-last .ic { width: 1em; height: 1em; flex: none; }
+.svc-line.merged > span { display: grid; gap: .35rem; }
+.svc-line.merged .nl { display: block; }

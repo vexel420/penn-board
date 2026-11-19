@@ -595,3 +595,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   gets a banner: "Last Morristown Line train from Penn until 5:58 AM." /
   "Last NJ Transit train from Penn until 4:28 AM." (or "tonight" if unknown).
 - Late-night pill also on local A/2 trains (localNight): judged by the train's own Penn time, from when the first late-night local sets off (switches nightStart, e.g. 10:08 PM downtown A) until the first daytime express reaches Penn.
+- Late-night banners use the live train that matches the timetable's last train
+  (`liveLast`: same line/direction[/service], within 15 min of the scheduled
+  time) for "leaves at h:mm, in N min", so they agree with the rows; the 2/A
+  "Late-night service has started" banner now counts down too. Two or more
+  night banners in one section merge into one box (`mergeNightBanners`), one
+  line each. Option B rows give each destination its own late-night pill.

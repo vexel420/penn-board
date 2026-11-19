@@ -650,6 +650,32 @@ const localNight = (stationId, g, dir, epoch) => {
   return mins >= 12 * 60 ? mins >= T.nightStart : mins < T.firstExpressPenn;
 };
 
+// Timetable minutes (after today's midnight, may pass 24:00) -> epoch seconds.
+const minsToEpoch = (mins) => { const n = nyNow(); return Math.floor(Date.now() / 60000) * 60 - n.mins * 60 + mins * 60; };
+// The live train that is the timetable's last one: the line's train in this
+// direction (express or local, if given) closest to the scheduled time within
+// 15 min, so the banner shows the same time and minutes as the row below it.
+// Without a match, the timetable's time.
+function liveLast(groups, line, dir, svc, sched, nowS) {
+  let best = null;
+  for (const g of groups) {
+    if (g.route !== line || g.dir !== dir || (svc && g.svc !== svc)) continue;
+    for (const t of g.trains) if (t.time >= nowS - 30 && Math.abs(t.time - sched) <= 15 * 60 && (!best || Math.abs(t.time - sched) < Math.abs(best - sched))) best = t.time;
+  }
+  return best ?? sched;
+}
+const clockText = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
+const inText = (t, nowS) => { const m = Math.max(0, Math.round((t - nowS) / 60)); return m < 1 ? 'now' : `in ${m} min`; };
+// Two or more late-night banners in one section become one box, each still
+// counting down on its own line.
+function mergeNightBanners(html) {
+  const re = new RegExp(`<p class="svc-line night">${ICON.moon.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<span>(.*?)</span></p>`, 'g');
+  const items = [...html.matchAll(re)].map((m) => m[1]);
+  if (items.length < 2) return html;
+  const rest = html.replace(re, '');
+  return `<p class="svc-line night merged">${ICON.moon}<span>${items.map((x) => `<span class="nl">${x}</span>`).join('')}</span></p>${rest}`;
+}
+
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 
 // PATH's late-night service: the hours when weekday trains from 33 St run to
@@ -818,9 +844,12 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
     html = `<span class="b-dests">${ends.map((e) => esc(name(e))).join('<span class="sep"> · </span>')}${pill}</span>`;
   } else {
     html = `<span class="b-times">${ends.map((e) => {
-      const ts = upcoming.filter((x) => lastOf(x) === e).slice(0, 3).map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
+      const mine = upcoming.filter((x) => lastOf(x) === e);
+      const ts = mine.slice(0, 3).map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`;
-      return `<span class="b-row"><span>${esc(name(e))}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
+      // Late-night pill by this destination's next train.
+      const p = lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) || localNight(stn.id, g, dir, mine[0].time) ? LATE_PILL : '';
+      return `<span class="b-row"><span>${esc(name(e))}${p}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
     }).join('')}</span>`;
   }
   const before = bShown.get(key);
@@ -897,8 +926,8 @@ function renderSubway() {
       // "The last C train leaves at 10:34 PM, in 25 min." / "The last downtown 3 train..."
       if (g && g.phase === 'countdown' && g.svc === svc) {
         const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
-        const left = g.left < 1 ? 'now' : `in ${g.left} min`;
-        return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${esc(lineInfo(line).label)} train leaves at ${fmtClock(g.after)}, ${left}.</b> No ${way}${esc(lineInfo(line).label)} trains late nights.</span></p>`;
+        const t = liveLast(here, line, dir, null, minsToEpoch(g.after), nowS);
+        return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${esc(lineInfo(line).label)} train leaves at ${clockText(t)}, ${inText(t, nowS)}.</b> No ${way}${esc(lineInfo(line).label)} trains late nights.</span></p>`;
       }
       if (g && g.phase === 'countdown') return '';
       if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
@@ -922,7 +951,12 @@ function renderSubway() {
       const otherExpress = (line) => here.some((g) => g.route !== line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time >= nowS - 30));
       notes = switching.map(({ line, st }) => {
         const label = esc(lineInfo(line).label);
-        if (st.phase === 'started') return `<p class="svc-line night">${ICON.moon}<span><b>Late-night service has started on the ${label}.</b> The last express train leaves at ${fmtClock(st.lastExpress)}.</span></p>`;
+        if (st.phase === 'started') {
+          // (After midnight the last express can be yesterday's evening schedule.)
+          const base = st.lastExpress >= 1440 && nyNow().mins < 720 ? -1440 : 0;
+          const t = liveLast(here, line, dir, 'express', minsToEpoch(st.lastExpress + base), nowS);
+          return `<p class="svc-line night">${ICON.moon}<span><b>Late-night service has started on the ${label}.</b> The last express train leaves at ${clockText(t)}, ${inText(t, nowS)}.</span></p>`;
+        }
         if (st.phase === 'morning') return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${label}.</b></span></p>`;
         const expressDue = here.some((g) => g.route === line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time >= nowS - 30));
         if (st.phase === 'night' && !expressDue) {
@@ -933,6 +967,7 @@ function renderSubway() {
       }).join('');
     }
     notes += gaps;
+    notes = mergeNightBanners(notes);
     // Express trains skipping local stops, with no local trains of that line listed.
     if (svc === 'local') for (const line of stn.lines) {
       if (!here.some((g) => g.route === line && g.dir === dir && g.svc === 'local')) notes += switchNoteHtml(line, dir, stn.id);
