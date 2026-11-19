@@ -627,6 +627,13 @@ function lateNightTrain(stationId, route, dir, epoch, code) {
   return !Y || Y.from >= 12 * 60 || m >= Y.from;
 }
 
+// A line with no late-night trains in either direction (the C), by the
+// timetable: its messages name no direction. (The 3 stops only downtown.)
+const bothWaysOff = (stationId, line) => {
+  const g = subwayData && subwayData.nightGaps && (subwayData.nightGaps[stationId] || {})[line];
+  return !!(g && g.N && g.S);
+};
+
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 
 // PATH's late-night service: the hours when weekday trains from 33 St run to
@@ -873,8 +880,7 @@ function renderSubway() {
       if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${esc(lineInfo(line).label)}.</b></span></p>`;
       // "The last C train leaves at 10:34 PM, in 25 min." / "The last downtown 3 train..."
       if (g && g.phase === 'countdown' && g.svc === svc) {
-        const other = nightGapState(stn.id, line, dir === 'N' ? 'S' : 'N');
-        const way = other ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
+        const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
         const left = g.left < 1 ? 'now' : `in ${g.left} min`;
         return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${esc(lineInfo(line).label)} train leaves at ${fmtClock(g.after)}, ${left}.</b> No ${way}${esc(lineInfo(line).label)} trains late nights.</span></p>`;
       }
@@ -889,7 +895,7 @@ function renderSubway() {
       // Short: "No C trains until 5:41 AM. Use the A or E." A line not running
       // either way gets no direction; when only one direction stops (the 3
       // ends at Penn), say which.
-      const oneWay = !off(line, dir === 'N' ? 'S' : 'N');
+      const oneWay = !bothWaysOff(stn.id, line);
       const say = oneWay
         ? `No ${label} trains ${way} until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`
         : `No ${label} trains until ${fmtClock(g.until)}.${altText ? ` Use ${altText}.` : ''}`;
