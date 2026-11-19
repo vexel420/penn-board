@@ -789,7 +789,7 @@ function mergeNightBanners(html) {
 
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 // Subway: the pill opens the MTA's late-night subway map in a new tab.
-const MTA_NIGHT_MAP = 'https://www.mta.info/node/5336';
+const MTA_NIGHT_MAP = 'https://www.mta.info/map/5336';
 const SUB_LATE_PILL = `<a class="late-pill" href="${MTA_NIGHT_MAP}" target="_blank" rel="noopener" title="MTA late-night subway map (opens in a new tab)">${ICON.moon}Late night<span class="ext" aria-hidden="true">↗</span><span class="sr">, MTA late-night map, opens in a new tab</span></a>`;
 // Trouble on a line (delays, skipped stops, reroutes): a pill on its rows.
 // The notice itself, its map and other options are in the service notices.
