@@ -13,7 +13,8 @@ one that turns up at Penn because of a service change:
     going downtown, which ends at Penn), the hours with no trains (the page
     suggests the station's other lines running that way).
 
-It also builds docs/subway-shapes.json: the path of every line's tracks
+It also builds docs/subway-times.json (each trip's scheduled time at Penn,
+to tell on-time trains from late ones) and docs/subway-shapes.json: the path of every line's tracks
 (simplified to about 100 KB), which the service-change map draws.
 
 Rebuild it when the MTA publishes a new timetable (a few times a year):
@@ -277,6 +278,17 @@ def main(zip_path):
         total = sum(counts.values())
         main = {k for k, n in counts.items() if n >= 0.1 * total} | set(SHARE_ROW.get((line, d), []))
         terminals.setdefault(line, {})[d] = sorted(main & set(counts))
+    # Each scheduled trip's time at Penn, by its live-feed id, so the board
+    # can tell a train running on time from a late one (a delay pill comes
+    # off an on-time train). "code:minutes" pairs, minutes after the service
+    # day's midnight (past 1440 after midnight).
+    times = {}
+    for (station, line, d, day), ts in at_penn.items():
+        pairs = sorted({(t[3], t[0]) for t in ts if t[3]})
+        times.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = ','.join(f'{c}:{m}' for c, m in pairs)
+    TIMES_OUT = OUT.with_name('subway-times.json')
+    TIMES_OUT.write_text(json.dumps({'version': info.get('feed_version', ''), 'penn': times}, separators=(',', ':')))
+    print(f'Wrote {TIMES_OUT}: {TIMES_OUT.stat().st_size // 1024} KB')
     doc = {'version': info.get('feed_version', ''), 'routes': routes, 'stops': stops, 'switches': switches, 'nightGaps': gaps, 'night': nights, 'terminals': terminals}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT}: {len(routes)} lines, {len(stops)} stations, {OUT.stat().st_size // 1024} KB')

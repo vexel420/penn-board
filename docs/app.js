@@ -671,6 +671,39 @@ function liveLastOnly(groups, line, dir, svc, sched, nowS) {
   const t = liveLast(groups, line, dir, svc, sched, nowS);
   return t === sched && !groups.some((g) => g.route === line && g.dir === dir && g.trains.some((x) => x.time === sched)) ? null : t;
 }
+// Each scheduled trip's time at Penn, by its live-feed id (subway-times.json,
+// built by scripts/build-subway-data.py): to tell on-time trains from late ones.
+let subwayTimes, subwayTimesLoading = null;
+function loadSubwayTimes() {
+  if (subwayTimes !== undefined || subwayTimesLoading) return;
+  subwayTimesLoading = fetch('subway-times.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+    subwayTimes = null;
+    if (d && d.penn) {
+      subwayTimes = new Map();
+      for (const [stn, ls] of Object.entries(d.penn)) for (const [line, ds] of Object.entries(ls)) for (const [dir, days] of Object.entries(ds)) for (const [day, list] of Object.entries(days)) {
+        subwayTimes.set(`${stn}|${line}|${dir}|${day}`, new Map(list.split(',').map((x) => { const [c, m] = x.split(':'); return [c, +m]; })));
+      }
+    }
+    subwayTimesLoading = null;
+    if (board) renderSubway();
+  });
+}
+// Seconds a train is behind its scheduled time at Penn (negative: early);
+// null when it can't be matched to a scheduled trip.
+function subwayLateBy(stnId, route, dir, x) {
+  if (!subwayTimes || !x || !x.code) return null;
+  let best = null;
+  // Its service day: today's, yesterday's (trains after midnight) or tomorrow's.
+  for (const off of [-1, 0, 1]) {
+    const day = off === 0 ? scheduleToday(nyNow().day) : nyNow(off).day;
+    const m = (subwayTimes.get(`${stnId}|${route}|${dir}|${day}`) || new Map()).get(x.code);
+    if (m == null) continue;
+    const diff = x.time - minsToEpoch(off * 1440 + m);
+    if (Math.abs(diff) < 3 * 3600 && (best == null || Math.abs(diff) < Math.abs(best))) best = diff;
+  }
+  return best;
+}
+const subwayOnTime = (stnId, route, dir, x) => { const d = subwayLateBy(stnId, route, dir, x); return d != null && d <= ON_TIME_S; };
 const clockText = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
 const inText = (t, nowS) => { const m = Math.max(0, Math.round((t - nowS) / 60)); return m < 1 ? 'now' : `in ${m} min`; };
 // Two or more late-night banners in one section become one box, each still
@@ -689,7 +722,11 @@ const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 const WARN_IC = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 1.5 21h21zM11 9h2v6h-2zm0 8h2v2h-2z" fill="currentColor" fill-rule="evenodd"/></svg>';
 const warnPill = (txt) => `<span class="late-pill warn-pill">${WARN_IC}${txt}</span>`;
 const pills = (...ps) => { const h = ps.filter(Boolean).join(''); return h ? `<span class="pills">${h}</span>` : ''; };
-const subwayPills = (route, dir, svc) => (subwayDelays(route, dir).length ? warnPill('Delays') : '')
+// The "Delays" pill comes off a train that is running on time (within
+// ON_TIME_S of its scheduled time at Penn); a train we can't match to the
+// timetable keeps it.
+const ON_TIME_S = 180;
+const subwayPills = (route, dir, svc, stnId, train) => (subwayDelays(route, dir).length && !subwayOnTime(stnId, route, dir, train) ? warnPill('Delays') : '')
   + (svc === 'local' && subwayExpressSwitch(route, dir).length ? warnPill('Some trains skip stops') : '');
 
 // PATH's late-night service: the hours when weekday trains from 33 St run to
@@ -879,7 +916,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const c = turnCycles.get(key), order = ends.join(','), turnNow = Math.floor(Date.now() / ROTATE_MS);
   if (!c || c.order !== order) turnCycles.set(key, { order, from: turnNow });
   const phase = 2; // (owner, Nov 19: just the list, no switching or animation)
-  const linePills = subwayPills(g.route, dir, g.svc);
+  const linePills = subwayPills(g.route, dir, g.svc, stn.id, upcoming[0]);
   const name = (id) => stationName(id) || id;
   const lastOf = (x) => x.stops[x.stops.length - 1];
   const pill = lateNightTrain(stn.id, g.route, dir, upcoming[0].time, upcoming[0].code) || localNight(stn.id, g, dir, upcoming[0].time) ? LATE_PILL : '';
@@ -893,7 +930,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
       const first = ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`;
       // Late-night pill by this destination's next train.
       const p = lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) || localNight(stn.id, g, dir, mine[0].time) ? LATE_PILL : '';
-      return `<span class="b-row"><span>${esc(name(e))}${pills(p, k === 0 ? linePills : '')}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
+      return `<span class="b-row"><span>${esc(name(e))}${pills(p, subwayPills(g.route, dir, g.svc, stn.id, mine[0]))}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
     }).join('')}</span>`;
   }
   const before = bShown.get(key);
@@ -926,6 +963,7 @@ function renderSubway() {
     return;
   }
   loadSubwayData();
+  loadSubwayTimes();
   if (!board.subway.length) {
     $('subway').innerHTML = `<p class="empty">${board.sources.subway.error ? 'Subway times didn’t load. Trying again shortly.' : 'No subway trains reported right now.'}</p>`;
     return;
@@ -1066,7 +1104,7 @@ function renderSubway() {
       const rerouted = trains.find((x) => unusualStops(g.route, x).length);
       // Delays and skipped stops: pills on the row (the notice, its map and
       // other options are in the service notices).
-      const linePills = subwayPills(g.route, dir, svc);
+      const linePills = subwayPills(g.route, dir, svc, stn.id, trains[0]);
       if (!rerouted || changeFor(g.route)) {
         return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pills(pill, linePills, rerouted ? warnPill('Rerouted') : '')}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
       }
@@ -1960,14 +1998,25 @@ function pathModel(n) {
 }
 // A pill for PATH trains from 33 St on a line an open PATH alert says is
 // delayed or suspended (Journal Square via Hoboken uses both 33 St lines).
-function pathTrouble(dest) {
+// A train leaving within 2 min of a scheduled departure to the same place
+// is running on time.
+function pathOnTime(dest, epoch) {
+  if (!pathSchedule || !epoch) return false;
+  for (const off of [-1, 0, 1]) {
+    const day = off === 0 ? scheduleToday(nyNow().day) : nyNow(off).day;
+    for (const d of pathSchedule.days[day] || []) if (d.to === dest && Math.abs(minsToEpoch(off * 1440 + d.t) - epoch) <= 120) return true;
+  }
+  return false;
+}
+function pathTrouble(dest, epoch) {
   const ids = /via/i.test(dest) ? ['JSQ-33', 'HOB-33'] : /journal/i.test(dest) ? ['JSQ-33'] : /hoboken/i.test(dest) ? ['HOB-33'] : [];
   let worst = '';
   for (const m of pathModels()) for (const id of ids) {
     if (m.state[id] === 'off') worst = 'off';
     else if (m.state[id] === 'delay' && !worst) worst = 'delay';
   }
-  return worst === 'off' ? warnPill('Suspended') : worst === 'delay' ? warnPill('Delays') : '';
+  // (Live times only: an on-time train loses its "Delays" pill.)
+  return worst === 'off' ? warnPill('Suspended') : worst === 'delay' && !pathOnTime(dest, epoch) ? warnPill('Delays') : '';
 }
 const pathModels = () => ((board && board.notices && board.notices.path) || []).map(pathModel).filter(Boolean);
 
@@ -2317,7 +2366,7 @@ function renderPath() {
   for (const x of board.path || []) {
     const m = Math.round((x.time - nowS) / 60);
     if (m < 0) continue;
-    if (!byDest.has(x.dest)) byDest.set(x.dest, { colors: x.colors, mins: [] });
+    if (!byDest.has(x.dest)) byDest.set(x.dest, { colors: x.colors, mins: [], first: x.time });
     byDest.get(x.dest).mins.push(m);
   }
   if (!byDest.size) { renderPathSchedule(); return; }
@@ -2328,7 +2377,7 @@ function renderPath() {
     const rest = mins.length > 1 ? `, ${mins.slice(1).join(', ')}` : '';
     const dots = (g.colors.length ? g.colors : ['']).map((c) => `<i${c ? ` style="background:#${c}"` : ''}></i>`).join('');
     const pill = pathLateNight(dest, nowS + (mins[0] || 0) * 60) ? LATE_PILL : '';
-    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pills(pill, pathTrouble(dest))}</span><span class="smins">${firstMin}${rest}</span></div>`;
+    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pills(pill, pathTrouble(dest, g.first))}</span><span class="smins">${firstMin}${rest}</span></div>`;
   }).join('') + '<p class="sched-note live-note">Live times from PATH.</p>';
 }
 
