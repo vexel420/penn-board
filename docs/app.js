@@ -634,22 +634,6 @@ const bothWaysOff = (stationId, line) => {
   return !!(g && g.N && g.S);
 };
 
-// The A and the 2 run local late at night: once that switch has begun (and
-// until the first daytime express reaches Penn), their local trains are
-// late-night trains, even before trains get 15+ minutes apart.
-// Judged by the train's own time at Penn: after the first late-night train
-// sets off (evening), or before the first daytime express reaches Penn.
-const localNight = (stationId, g, dir, epoch) => {
-  if (g.svc !== 'local') return false;
-  const sw = subwayData && subwayData.switches && ((subwayData.switches[stationId] || {})[g.route] || {})[dir];
-  if (!sw) return false;
-  const t = epoch ?? (g.trains && g.trains[0] && g.trains[0].time) ?? Date.now() / 1000;
-  const { day, mins } = nyDayAt(t);
-  const T = sw[day === nyNow().day ? scheduleToday(day) : day];
-  if (!T) return false;
-  return mins >= 12 * 60 ? mins >= T.nightStart : mins < T.firstExpressPenn;
-};
-
 // Timetable minutes (after today's midnight, may pass 24:00) -> epoch seconds.
 const minsToEpoch = (mins) => { const n = nyNow(); return Math.floor(Date.now() / 60000) * 60 - n.mins * 60 + mins * 60; };
 // The live train that is the timetable's last one: the line's train in this
@@ -922,7 +906,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const linePills = subwayPills(g.route, dir, g.svc, stn.id, upcoming[0]);
   const name = (id) => stationName(id) || id;
   const lastOf = (x) => x.stops[x.stops.length - 1];
-  const pill = lateNightTrain(stn.id, g.route, dir, upcoming[0].time, upcoming[0].code) || localNight(stn.id, g, dir, upcoming[0].time) ? SUB_LATE_PILL : '';
+  const pill = lateNightTrain(stn.id, g.route, dir, upcoming[0].time, upcoming[0].code) ? SUB_LATE_PILL : '';
   let html;
   if (phase === 1) {
     html = `<span class="b-dests">${ends.map((e) => esc(name(e))).join('<span class="sep"> · </span>')}${pills(pill, linePills)}</span>`;
@@ -932,7 +916,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
       const ts = mine.slice(0, 3).map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`;
       // Late-night pill by this destination's next train.
-      const p = lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) || localNight(stn.id, g, dir, mine[0].time) ? SUB_LATE_PILL : '';
+      const p = lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) ? SUB_LATE_PILL : '';
       return `<span class="b-row"><span>${esc(name(e))}${pills(p, subwayPills(g.route, dir, g.svc, stn.id, mine[0]))}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
     }).join('')}</span>`;
   }
@@ -1091,7 +1075,7 @@ function renderSubway() {
       const trains = upcoming.slice(0, 3);
       if (!trains.length) return '';
       // Late-night pill by the next train's own time and line (stays until it leaves).
-      const pill = lateNightTrain(stn.id, g.route, dir, trains[0].time, trains[0].code) || localNight(stn.id, g, dir, trains[0].time) ? SUB_LATE_PILL : '';
+      const pill = lateNightTrain(stn.id, g.route, dir, trains[0].time, trains[0].code) ? SUB_LATE_PILL : '';
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = trains[0];
       const last = first.stops && first.stops[first.stops.length - 1];
