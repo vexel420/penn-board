@@ -188,7 +188,31 @@ async function njt(env) {
   try { const h = await caches.default.match(seenKey); if (h) seen = await h.json(); } catch {}
   const nyAt = (it) => { const x = (it.STOPS || []).find((y) => /new york penn/i.test(y.STATIONNAME || '')); return x ? Date.parse(String(x.TIME_UTC_FORMAT || '').replace(/^(\d+)-(\w+)-(\d+) /, '$2 $1 $3 ') + ' UTC') : NaN; };
   const ids = new Set(toNy.map((it) => it.TRAIN_ID));
-  const kept = seen.filter((it) => !ids.has(it.TRAIN_ID) && nyAt(it) > Date.now() - 10 * 60000).map((it) => ({ ...it, PAST_SECAUCUS: true }));
+  // Past Secaucus and Newark, a train is followed on its own (NJ Transit's
+  // live stop list for that train, read at most every 45 s), so a train held
+  // on the way in keeps updating and stays listed until NJ Transit marks it
+  // at New York; then for 10 more minutes. (Given up 3 hours past its time.)
+  const nyStop = (it) => (it.STOPS || []).find((y) => /new york penn/i.test(y.STATIONNAME || ''));
+  const arrivedAt = (it) => { const x = nyStop(it); return x && /^yes$/i.test(String(x.DEPARTED || '')) ? nyAt(it) : 0; };
+  const kept = [];
+  for (const old of seen) {
+    if (ids.has(old.TRAIN_ID)) continue;
+    let it = old;
+    const done = arrivedAt(it);
+    if (done ? done < Date.now() - 10 * 60000 : nyAt(it) < Date.now() - 3 * 3600000) continue;
+    if (!done) {
+      const k = new Request(`https://penn-board-relay.internal/njt-stops/${encodeURIComponent(old.TRAIN_ID)}`);
+      let fresh = null;
+      try { const h = await caches.default.match(k); if (h) fresh = await h.json(); } catch {}
+      if (!fresh) {
+        fresh = await njtCall(env, 'getTrainStopList', { train: old.TRAIN_ID }).catch(() => null);
+        if (fresh) await caches.default.put(k, new Response(JSON.stringify(fresh), { headers: { 'cache-control': 'max-age=45' } }));
+      }
+      const stops = fresh && (fresh.STOPS || (Array.isArray(fresh) && fresh[0] && fresh[0].STOPS));
+      if (Array.isArray(stops) && stops.some((y) => /new york penn/i.test(y.STATIONNAME || ''))) it = { ...old, STOPS: stops };
+    }
+    kept.push({ ...it, PAST_SECAUCUS: true });
+  }
   const arrivals = [...toNy, ...kept];
   if (sec && sec.ITEMS) await caches.default.put(seenKey, new Response(JSON.stringify(arrivals.map(({ PAST_SECAUCUS, ...it }) => it)), { headers: { 'cache-control': 'max-age=3600' } }));
   return JSON.stringify({ ITEMS: sched.ITEMS, MESSAGES: Array.isArray(msgs) ? msgs : [], ARRIVALS: arrivals });

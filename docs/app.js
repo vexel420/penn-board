@@ -290,7 +290,7 @@ function visibleRows(rows, kind) {
   // until it has left Penn (its feed row disappears then).
   if (kind === 'arrivals') {
     return [...rows, ...cancelledGone.arrivals.values()].sort((a, b) => a.time - b.time)
-      .filter((r) => (r.continuesTo ? r.departsAt > nowS - 30 * 60 : r.time > nowS - 5 * 60));
+      .filter((r) => (r.continuesTo ? r.departsAt > nowS - 30 * 60 : r.time > nowS - 5 * 60 || r.awaiting));
   }
   // Ordered by real departure: when a train left, or when it's now expected
   // to leave (delay included), so a delayed train moves down the board.
@@ -339,6 +339,8 @@ function pennSuspension(carrier) {
 const ownStatus = (r) => !fromNjt(r) || /^(on time|\d+ min late)$/i.test(String(r.status || '').trim());
 function shownStatus(r, kind) {
   if (kind === 'departures' && departedAt(r) !== null) return { status: 'Departed', tone: 'departed' };
+  // An NJ Transit train past its expected time that hasn't reached New York.
+  if (kind === 'arrivals' && r.awaiting && r.tone !== 'stop' && r.time < Date.now() / 1000 - 120) return { status: 'Delayed', tone: 'late', waiting: true };
   if (r.tone !== 'stop' && (ownStatus(r) || r.tone !== 'go') && pennSuspension(r.carrier) && !(kind === 'arrivals' && r.time <= Date.now() / 1000 && !r.continuesTo)) {
     return { status: fromNjt(r) && !ownStatus(r) ? r.status : 'Held', tone: 'held', held: true };
   }

@@ -524,6 +524,7 @@ function parseNjtArrivals(items) {
       track: '', trackLikely: '',
       status: arrived ? 'Arrived' : lateMin >= 2 ? `${lateMin} min late` : 'On time',
       tone: arrived ? 'go' : lateMin >= 2 ? 'late' : 'ok',
+      awaiting: !arrived, // listed until NJ Transit marks it at New York (the relay decides)
       via: stops.slice(1, i).map((x) => x.STATIONNAME).filter(Boolean),
     };
   }).filter(Boolean);
