@@ -826,7 +826,18 @@ const pills = (...ps) => { const h = ps.filter(Boolean).join(''); return h ? `<s
 // ON_TIME_S of its scheduled time at Penn); a train we can't match to the
 // timetable keeps it.
 const ON_TIME_S = 180;
-const subwayPills = (route, dir, svc, stnId, train) => (subwayDelays(route, dir).length && !subwayOnTime(stnId, route, dir, train) ? warnPill('Delays') : '')
+// Trial toggle (owner, Nov 20): "All late trains" also gives a pill to a
+// train running LATE_PILL_MIN or more behind its timetable with no advisory.
+const LATE_PILL_MIN = 5;
+let allLatePills = false;
+try { allLatePills = localStorage.getItem('subwayLatePills') === 'all'; } catch {}
+function subwayDelayPill(route, dir, stnId, train) {
+  if (subwayDelays(route, dir).length) return subwayOnTime(stnId, route, dir, train) ? '' : warnPill('Delays');
+  if (!allLatePills) return '';
+  const late = subwayLateBy(stnId, route, dir, train);
+  return late != null && late >= LATE_PILL_MIN * 60 ? warnPill(`${Math.round(late / 60)} min late`) : '';
+}
+const subwayPills = (route, dir, svc, stnId, train) => subwayDelayPill(route, dir, stnId, train)
   + (svc === 'local' && subwayExpressSwitch(route, dir).length ? warnPill('Some trains skip stops') : '');
 
 // PATH's late-night service: the hours when weekday trains from 33 St run to
@@ -1039,6 +1050,13 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>`;
 }
 $('subway').addEventListener('click', (e) => {
+  const lp = e.target.closest('[data-latepills]');
+  if (lp) {
+    allLatePills = lp.dataset.latepills === 'all';
+    try { localStorage.setItem('subwayLatePills', allLatePills ? 'all' : 'advisory'); } catch {}
+    slideStarted = -Infinity; renderSubway();
+    return;
+  }
   const b = e.target.closest('[data-sstyle]');
   if (!b) return;
   subwayStyle = b.dataset.sstyle;
@@ -1046,7 +1064,9 @@ $('subway').addEventListener('click', (e) => {
   bShown.clear(); slideStarted = -Infinity; renderSubway();
 });
 const subwayStyleHtml = () => `<div class="sub-style"><span>Rows with more than one destination</span><div class="style-seg">
-  <button type="button" data-sstyle="turns" aria-pressed="${subwayStyle === 'turns'}">Take turns</button><button type="button" data-sstyle="b" aria-pressed="${subwayStyle === 'b'}">All destinations</button></div></div>`;
+  <button type="button" data-sstyle="turns" aria-pressed="${subwayStyle === 'turns'}">Take turns</button><button type="button" data-sstyle="b" aria-pressed="${subwayStyle === 'b'}">All destinations</button></div></div>
+  <div class="sub-style"><span>Delay pills</span><div class="style-seg">
+  <button type="button" data-latepills="advisory" aria-pressed="${!allLatePills}">With advisories</button><button type="button" data-latepills="all" aria-pressed="${allLatePills}">All late trains</button></div></div>`;
 
 let subwayShown = [];      // the groups drawn, so a tap can find its train
 const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
