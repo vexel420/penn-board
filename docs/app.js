@@ -2227,10 +2227,11 @@ function lirrAdvice(n) {
   }
   return out;
 }
-// The MTA's map of travel alternatives when Penn is suspended (linked from
-// its notice text, which only says "click here"; not copied here).
+// The MTA's standing map of ways to Long Island when LIRR service at Penn
+// is suspended (owner, Nov 2026: a dedicated map, not tonight's only). Shown
+// with every LIRR disruption banner and guide; linked, not copied here.
 const MTA_LIRR_ALT_MAP = 'https://www.mta.info/image/186211';
-const altMapLink = (n) => (n && /map of travel alternatives/i.test(n.desc || '') ? `<a class="alt-map" href="${MTA_LIRR_ALT_MAP}" target="_blank" rel="noopener">MTA map of travel alternatives ↗</a>` : '');
+const altMapLink = () => `<a class="alt-map" href="${MTA_LIRR_ALT_MAP}" target="_blank" rel="noopener">MTA map of travel alternatives ↗</a>`;
 function openLirrGuide(key) {
   const g = LIRR_GUIDES[key];
   changeOpen = { id: `lguide-${key}`, view: 1 };
@@ -2243,7 +2244,7 @@ function openLirrGuide(key) {
     .map((t) => { const m = Math.max(0, Math.round((t.time - nowS) / 60)); return m ? `${m} min` : 'now'; }) : [];
   const n = lirrPennNotice(), advice = lirrAdvice(n);
   const others = Object.keys(LIRR_GUIDES).filter((k) => k !== key);
-  $('chg-top').innerHTML = `${advice.length ? `<div class="cm-mta"><b>From the MTA:</b>${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}${altMapLink(n)}</div>` : ''}
+  $('chg-top').innerHTML = `<div class="cm-mta">${advice.length ? `<b>From the MTA:</b>${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}` : ''}${altMapLink()}</div>
     <ol class="cm-steps">${g.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
     ${next.length ? `<p class="cm-sum"><b>Queens-bound ${lineName('E')} trains from Penn:</b> ${next.join(', ')}</p>` : ''}
     <p class="lchips">${others.map((k) => `<button type="button" class="cm-back" data-lguide="${k}">${esc(LIRR_GUIDES[k].title)} →</button>`).join(' ')}</p>`;
@@ -2272,7 +2273,7 @@ const lirrAltHtml = () => {
   if (!d) return '';
   const n = lirrPennNotice(), advice = lirrAdvice(n);
   return `<div class="njt-alt lirr-alt"><p><b>${d === 'suspended' ? 'LIRR service into and out of Penn is suspended.' : 'LIRR trains from Penn are badly delayed.'}</b></p>
-  ${advice.length ? `<div class="lirr-advice">${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}${altMapLink(n)}</div>` : ''}
+  <div class="lirr-advice">${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}${altMapLink()}</div>
   <p>Other ways to Long Island:</p>
   <div><button type="button" data-lguide="gcm">LIRR from Grand Central Madison</button><button type="button" data-lguide="woodside">By the 7 to Woodside</button><button type="button" data-lguide="jamaica">By the E to Forest Hills, Kew Gardens or Jamaica</button></div></div>`;
 };
