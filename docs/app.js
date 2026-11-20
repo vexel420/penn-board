@@ -264,6 +264,10 @@ function noteVanished(prev, next) {
   for (const id of still) vanished.delete(id);
   for (const r of prev ? prev.departures : []) {
     if (still.has(r.id) || vanished.has(r.id) || r.tone === 'stop') continue;
+    // Dropped because it now starts somewhere else (or is cancelled), per
+    // the railroad's notice: crossed off, never "Departed".
+    const change = tripChangeFor(r, 'departures', next);
+    if (change) { cancelledGone.departures.set(r.id, { ...r, tone: 'stop', status: change.status, changeNote: change.text }); continue; }
     if ((r.leaves ?? r.time) > nowS + 180) continue; // far from due: a feed glitch, not a departure
     if (r.departsByFeed) {
       // Amtrak drops a train that starts at Penn from its data while it's
@@ -441,6 +445,7 @@ function rowHtml(r) {
   // scheduled time, so a delayed train that is boarding still reads as delayed.
   const notes = [];
   if (heldBy) notes.push('service suspended at Penn');
+  if (r.changeStatus && r.changeStatus !== r.status) notes.push(esc(r.changeStatus));
   if (isDelayed(r) && !/late/i.test(r.status) && !gone && !heldBy) notes.push(`${r.lateMin} min late`);
   if (r.sched && Math.abs(r.sched - r.time) >= 120) notes.push(`scheduled ${clock(r.sched).hm}`);
   if (view === 'arrivals' && r.continuesTo) notes.push(`continues to ${esc(r.continuesTo)}, leaves ${clock(r.departsAt).hm}`);
@@ -2789,12 +2794,110 @@ async function loadBoard(force) {
   return PennFeeds.board({ force, path: path || undefined, pathAlerts: pa && pa.data ? pa.data : [] });
 }
 
+// ---------- trains that won't run to or from Penn, from the railroads' own notices ----------
+// LIRR: "The 10:20pm train from Penn Station to Huntington will originate at
+// Jamaica at 10:42pm." / "The 9:16pm train from Huntington to Penn Station is
+// canceled at Jamaica." / "... will be diverted to Grand Central."
+// NJ Transit: "train #3880 ... is canceled" / "will originate at Newark".
+// Such a train is crossed off at Penn, saying where it starts or ends instead.
+const placeShort = (x) => String(x || '').replace(/\s+(station|terminal)$/i, '').trim();
+function lirrTripChanges(b) {
+  const out = [];
+  for (const n of (b.notices && b.notices.rail) || []) {
+    if (n.carrier !== 'lirr' || n.activeNow === false || n.preview) continue;
+    for (const t of n.trips || []) {
+      const m = /^The (\d{1,2}):(\d{2})\s*([ap])m train from (.+?) to (.+?) (is|will) (.*)$/i.exec(t);
+      if (!m) continue;
+      const [, h, mi, ap, from, to, , rest] = m;
+      const mins = (+h % 12 + (ap.toLowerCase() === 'p' ? 12 : 0)) * 60 + +mi;
+      const at = (re) => { const x = re.exec(rest); return x ? placeShort(x[1]) : ''; };
+      let change = null;
+      if (/originate/i.test(rest)) { const when = /at (\d{1,2}:\d{2})\s*[ap]m\.?$/i.exec(rest); change = { status: `Starts at ${at(/originate (?:at|from|in) (.+?)(?: at \d|\.|$)/i)}${when ? ` ${when[1]}` : ''}` }; }
+      else if (/divert/i.test(rest)) change = { status: `To ${at(/diverted to (.+?)(?:\.|$)/i) || 'another station'}` };
+      else if (/terminate/i.test(rest)) change = { status: `Ends at ${at(/terminate (?:at|in) (.+?)(?:\.|$)/i)}` };
+      else if (/cancel/i.test(rest)) { const where = at(/cancel(?:l)?ed (?:at|in) (.+?)(?:\.|$)/i); change = { status: where ? `Ends at ${where}` : 'Cancelled', whole: !where }; }
+      if (!change) continue;
+      out.push({ ...change, mins, from: placeShort(from), to: placeShort(to), text: t });
+    }
+  }
+  return out;
+}
+const sameName = (a, b) => { const x = normName2(a).split(' ')[0], y = normName2(b).split(' ')[0]; return !!x && x === y; };
+// The notice line that changes this train, if any (b: the board whose notices to read).
+function tripChangeFor(r, kind, b, lirr = lirrTripChanges(b)) {
+  const njtMsgs = ((b.notices && b.notices.rail) || []).filter((n) => n.carrier === 'njt' && n.activeNow !== false).map((n) => n.text);
+  {
+    {
+      let hit = null;
+      if (r.carrier === 'lirr') {
+        const { mins } = nyDayAt(r.sched || r.time);
+        hit = lirr.find((c) => c.mins === mins && (kind === 'departures' ? /penn/i.test(c.from) && sameName(c.to, r.place) : /penn/i.test(c.to) && sameName(c.from, r.place)));
+        // A Penn departure that starts elsewhere: not cancelled outright.
+      } else if (r.carrier === 'njt' && r.train) {
+        const msg = njtMsgs.find((t) => new RegExp(`#\\s*${r.train}\\b`).test(t));
+        if (msg) {
+          const after = msg.slice(msg.search(new RegExp(`#\\s*${r.train}\\b`)));
+          const sentence = after.split(/\.\s/)[0];
+          const o = /originat\w* (?:at|in|from) ([A-Z][\w .'-]+?)(?:[,.]|\s+(?:at|due|and)\b|$)/.exec(sentence);
+          const e = /terminat\w* (?:at|in) ([A-Z][\w .'-]+?)(?:[,.]|\s+(?:at|due|and)\b|$)/.exec(sentence);
+          if (kind === 'departures' && o && !/^(new york|penn station|psny|ny penn)/i.test(o[1])) hit = { status: `Starts at ${placeShort(o[1])}`, text: sentence };
+          else if (kind === 'arrivals' && e && !/^(new york|penn station|psny|ny penn)/i.test(e[1])) hit = { status: `Ends at ${placeShort(e[1])}`, text: sentence };
+          else if (/\bcancel+ed\b/i.test(sentence) && /psny|new york|penn/i.test(sentence)) hit = { status: 'Cancelled', text: sentence };
+        }
+      }
+      return hit;
+    }
+  }
+}
+function applyTripChanges(b) {
+  if (!b || !b.departures) return;
+  const lirr = lirrTripChanges(b);
+  for (const kind of ['departures', 'arrivals']) {
+    for (const r of b[kind] || []) {
+      if (r.tone === 'stop' || r.departed) continue;
+      const hit = tripChangeFor(r, kind, b, lirr);
+      if (!hit) continue;
+      // NJ Transit's own status text, when it has one, stays.
+      const own = r.carrier === 'njt' && !/^(on time|\d+ min late)$/i.test(String(r.status || '').trim()) ? r.status : '';
+      Object.assign(r, { tone: 'stop', status: own || hit.status, changeStatus: hit.status, changeNote: hit.text });
+    }
+  }
+}
+
+// LIRR inbound changes name the train by its start time at the far end
+// ("the 9:16pm from Huntington"), which the Penn feed doesn't carry. Look
+// up only the arrivals from that station (once each) and match the time.
+const lirrStarts = new Map(); // train id -> its scheduled start (epoch), or 0 if unknown
+async function matchLirrArrivals(b) {
+  const changes = lirrTripChanges(b).filter((c) => /penn/i.test(c.to));
+  if (!changes.length) return;
+  const rows = (b.arrivals || []).filter((r) => r.carrier === 'lirr' && r.tone !== 'stop' && changes.some((c) => sameName(c.from, r.place)));
+  let changed = false;
+  await Promise.all(rows.map(async (r) => {
+    if (!lirrStarts.has(r.id)) {
+      lirrStarts.set(r.id, 0);
+      try {
+        const d = await (await fetch(`https://backend-unified.mylirr.org/locations/${encodeURIComponent(r.id)}`, { headers: { 'accept-version': '3.0' }, cache: 'no-store' })).json();
+        const first = ((d.details && d.details.stops) || [])[0];
+        lirrStarts.set(r.id, (first && first.sched_time) || 0);
+      } catch {}
+    }
+    const start = lirrStarts.get(r.id);
+    if (!start) return;
+    const c = changes.find((x) => x.mins === nyDayAt(start).mins && sameName(x.from, r.place));
+    if (c) { Object.assign(r, { tone: 'stop', status: c.status, changeNote: c.text }); changed = true; }
+  }));
+  if (changed && b === board) renderRail();
+}
+
 let loading = null;
 async function refresh(force = false) {
   if (loading && !force) return loading;
   const run = (async () => {
     try {
       const next = await loadBoard(force);
+      applyTripChanges(next);
+      matchLirrArrivals(next);
       noteVanished(board, next);
       board = next;
       lastGood = Date.now();

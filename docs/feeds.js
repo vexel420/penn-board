@@ -378,14 +378,17 @@ function parseAlerts(feed, keep) {
     const activeNow = !periods.length || periods.some((p) => (+p.start || 0) <= t && t <= (+p.end || Infinity));
     // Its periods in effect (epoch seconds), so the board can count down to one.
     const spans = periods.map((p) => [+p.start || 0, +p.end || Infinity]);
-    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc, where, activeNow, periods: spans });
+    // LIRR names trains it changes: "The 10:20pm train from Penn Station to
+    // Huntington will originate at Jamaica at 10:42pm." Kept, one per line.
+    const trips = (more.match(/The \d{1,2}:\d{2}\s*[ap]m train from [^.]+? to [^.]+?\.(?=\s|$)/gi) || []).map((x) => x.trim());
+    out.push({ id: e.id, type, urgent: URGENT.test(type), lines, text, more, affected, desc, where, activeNow, periods: spans, trips });
   }
   out.sort((x, y) => y.urgent - x.urgent);
   const byText = new Map();
   for (const n of out) {
     const key = n.text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
     const seen = byText.get(key);
-    if (seen) seen.lines = [...new Set([...seen.lines, ...n.lines])];
+    if (seen) { seen.lines = [...new Set([...seen.lines, ...n.lines])]; seen.trips = [...new Set([...(seen.trips || []), ...(n.trips || [])])]; }
     else byText.set(key, n);
   }
   return [...byText.values()];
