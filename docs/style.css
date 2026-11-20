@@ -170,6 +170,7 @@ details.via .checking { display: block; color: var(--dim); font-size: .8rem; }
 .status.ok { color: var(--ivory); font-weight: 450; }
 .status.go { color: var(--go); }
 .status.late { color: var(--late); }
+.status.held { color: var(--stop); font-weight: 700; }
 .status.stop { color: var(--stop); }
 .status.quiet { color: var(--dim); }
 

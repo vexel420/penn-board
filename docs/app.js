@@ -323,13 +323,30 @@ function finalCall(r, kind) {
   return (r.departsByFeed ? left > 0 : true) && left <= (isDelayed(r) ? 120 : 60);
 }
 
+// A notice in effect now saying a railroad's service into and out of Penn
+// is suspended (signal trouble, an incident): its trains are held, whatever
+// the feed's own "on time" says.
+const PENN_SUSPENDED = /(?:(?:into|in) and out of|to and from|at|from|into|to)\s+(?:new york\s+)?penn(?:sylvania)?\b/i;
+function pennSuspension(carrier) {
+  return ((board && board.notices && board.notices.rail) || []).find((n) => n.carrier === carrier && happeningNow(n)
+    && /suspend|no (?:train )?service/i.test(`${n.type} ${n.text}`) && /suspend|no (?:train )?service/i.test(n.text) && PENN_SUSPENDED.test(n.text));
+}
+// The board's own words ("On time", "5 min late"), not a railroad's status text.
+const ownStatus = (r) => !fromNjt(r) || /^(on time|\d+ min late)$/i.test(String(r.status || '').trim());
 function shownStatus(r, kind) {
   if (kind === 'departures' && departedAt(r) !== null) return { status: 'Departed', tone: 'departed' };
+  if (r.tone !== 'stop' && (ownStatus(r) || r.tone !== 'go') && pennSuspension(r.carrier) && !(kind === 'arrivals' && r.time <= Date.now() / 1000 && !r.continuesTo)) {
+    return { status: fromNjt(r) && !ownStatus(r) ? r.status : 'Held', tone: 'held', held: true };
+  }
   // A delayed train whose track is posted is boarding (NJ Transit's own text stays).
   if (kind === 'departures' && r.tone === 'late' && r.track && !fromNjt(r)) r = { ...r, status: 'Boarding', tone: 'go' };
   if (finalCall(r, kind)) return { status: fromNjt(r) ? r.status : 'All aboard', tone: 'final' };
   // An Amtrak train past its time that Amtrak hasn't reported boarding or gone.
   if (kind === 'departures' && r.departsByFeed && r.tone !== 'go' && r.tone !== 'stop' && (r.leaves ?? r.time) <= Date.now() / 1000) return { status: 'No update from Amtrak', tone: 'late' };
+  // Past its time (by more than 2 min) and still listed, with no word from
+  // its feed: it hasn't left, so it isn't "on time". (A boarding train keeps
+  // "All aboard"; a railroad's own status text is left alone.)
+  if (kind === 'departures' && ownStatus(r) && (r.tone === 'ok' || r.tone === 'late') && (r.leaves ?? r.time) < Date.now() / 1000 - 120) return { status: 'Delayed', tone: 'late' };
   if (r.tone !== 'go') return { status: r.status, tone: r.tone };
   if (kind === 'arrivals' && r.time <= Date.now() / 1000 && !r.continuesTo) return { status: r.status, tone: 'quiet' };
   if (isStale()) return { status: r.status, tone: 'quiet' };
@@ -414,6 +431,7 @@ function viaHtml(r) {
 function rowHtml(r) {
   const shown = shownStatus(r, view);
   r = { ...r, status: shown.status, tone: shown.tone };
+  const heldBy = shown.held ? pennSuspension(r.carrier) : null;
   const t = clock(r.time);
   const gone = r.tone === 'departed';
   // A late train counts down to when it is now expected to leave.
@@ -422,12 +440,13 @@ function rowHtml(r) {
   // Under the status: how late (when the status itself doesn't say) and the
   // scheduled time, so a delayed train that is boarding still reads as delayed.
   const notes = [];
-  if (isDelayed(r) && !/late/i.test(r.status) && !gone) notes.push(`${r.lateMin} min late`);
+  if (heldBy) notes.push('service suspended at Penn');
+  if (isDelayed(r) && !/late/i.test(r.status) && !gone && !heldBy) notes.push(`${r.lateMin} min late`);
   if (r.sched && Math.abs(r.sched - r.time) >= 120) notes.push(`scheduled ${clock(r.sched).hm}`);
   if (view === 'arrivals' && r.continuesTo) notes.push(`continues to ${esc(r.continuesTo)}, leaves ${clock(r.departsAt).hm}`);
   const sched = notes.length ? `<small>${notes.join(', ')}</small>` : '';
   const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
-  return `<li class="row ${r.tone}${left === 'gone' && !gone && !due ? ' gone' : ''}">
+  return `<li class="row ${r.tone}${left === 'gone' && !gone && !due && !heldBy ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
     <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${rowAlertHtml(r)}</div>
@@ -2284,6 +2303,7 @@ function rowAlertSummary(ns) {
   const all = ns.map((n) => n.text).join(' ');
   const mins = [...all.matchAll(/(\d+)[- ]?(?:to[- ]\d+[- ]?)?min(?:ute)?s?\b/gi)].map((m) => +m[1]).filter((x) => x > 0 && x < 300);
   const range = all.match(/(\d+)\s*(?:-|to)\s*(\d+)[- ]?min/i);
+  if (/suspend/i.test(all)) return 'Service suspended';
   if (/cancel/i.test(all) && !/delay/i.test(all)) return 'Cancellations';
   if (range) return `Delays of ${range[1]}–${range[2]} min`;
   if (mins.length && /delay|late/i.test(all)) return `Delays up to ${Math.max(...mins)} min`;
