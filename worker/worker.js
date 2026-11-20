@@ -150,17 +150,36 @@ async function njtCall(env, endpoint, fields) {
   if (env.NJT_KV) await env.NJT_KV.delete(`${KV_TOKEN}-${env.NJT_PROD_USERNAME ? 'prod' : 'test'}`);
   return njtPost(endpoint, { token: await getToken(env, true), ...fields });
 }
+async function newarkBoards(env) {
+  const key = new Request('https://penn-board-relay.internal/njt-newark-boards');
+  try { const h = await caches.default.match(key); if (h) return await h.json(); } catch {}
+  const boards = await Promise.all(['NP', 'ND'].map((station) => njtCall(env, 'getTrainSchedule', { station }).catch(() => null)));
+  const items = boards.flatMap((b) => (b && b.ITEMS) || []);
+  await caches.default.put(key, new Response(JSON.stringify(items), { headers: { 'cache-control': 'max-age=120' } }));
+  return items;
+}
 async function njt(env) {
   if (!env.NJT_USERNAME || !env.NJT_PASSWORD) throw new Error('NJ Transit login not set');
-  // Arrivals: every NJ Transit train to New York stops at Secaucus, and its
-  // board there lists each train's stops with the New York Penn time.
-  const [sched, msgs, sec] = await Promise.all([
+  // Arrivals: trains to New York, from the boards of the stations they pass
+  // on the way: Secaucus (most), and for those that skip it, Newark Penn
+  // (Northeast Corridor, Coast Line, Raritan Valley) and Newark Broad St
+  // (Morris & Essex, Montclair-Boonton). Each lists the train's stops with
+  // its New York Penn time. The Newark boards are read every 2 minutes.
+  const [sched, msgs, sec, nwk] = await Promise.all([
     njtCall(env, 'getTrainSchedule', { station: 'NY' }),
     njtCall(env, 'getStationMSG', { station: 'NY', line: '' }).catch(() => []),
     njtCall(env, 'getTrainSchedule', { station: 'SE' }).catch(() => null),
+    newarkBoards(env),
   ]);
   if (!sched || !sched.ITEMS) throw new Error((sched && sched.errorMessage) || 'NJ Transit sent no departures');
-  const toNy = ((sec && sec.ITEMS) || []).filter((it) => /new york/i.test(it.DESTINATION || '') && (it.STOPS || []).some((x) => /new york penn/i.test(x.STATIONNAME || '')));
+  const goesToNy = (it) => /new york/i.test(it.DESTINATION || '') && (it.STOPS || []).some((x) => /new york penn/i.test(x.STATIONNAME || ''));
+  const toNy = [];
+  const have = new Set();
+  // Secaucus first (closest to New York, so the freshest times), then Newark.
+  for (const it of [...((sec && sec.ITEMS) || []), ...nwk]) {
+    if (!goesToNy(it) || have.has(it.TRAIN_ID)) continue;
+    have.add(it.TRAIN_ID); toNy.push(it);
+  }
   // A train leaves Secaucus's list once it departs there, about 12 minutes
   // before New York: remember the ones seen (in this location's cache) until
   // 10 minutes after their New York time.
