@@ -350,7 +350,7 @@ function shownStatus(r, kind) {
   // Past its time (by more than 2 min) and still listed, with no word from
   // its feed: it hasn't left, so it isn't "on time". (A boarding train keeps
   // "All aboard"; a railroad's own status text is left alone.)
-  if (kind === 'departures' && ownStatus(r) && (r.tone === 'ok' || r.tone === 'late') && (r.leaves ?? r.time) < Date.now() / 1000 - 120) return { status: 'Delayed', tone: 'late' };
+  if (kind === 'departures' && ownStatus(r) && (r.tone === 'ok' || r.tone === 'late') && (r.leaves ?? r.time) < Date.now() / 1000 - 120) return { status: 'Delayed', tone: 'late', waiting: true };
   if (r.tone !== 'go') return { status: r.status, tone: r.tone };
   if (kind === 'arrivals' && r.time <= Date.now() / 1000 && !r.continuesTo) return { status: r.status, tone: 'quiet' };
   if (isStale()) return { status: r.status, tone: 'quiet' };
@@ -440,7 +440,9 @@ function rowHtml(r) {
   const gone = r.tone === 'departed';
   // A late train counts down to when it is now expected to leave.
   const left = gone ? agoText(departedAt(r) ?? r.time) : countdown(r.tone === 'stop' ? r.time : (r.leaves ?? r.time));
-  const due = !gone && left === 'gone' && r.departsByFeed; // late Amtrak, still expected
+  // Past its time but not reported gone (late Amtrak, a delayed or held
+  // train): still expected, so not dimmed, and the time says "due".
+  const due = !gone && left === 'gone' && (r.departsByFeed || shown.waiting || shown.held);
   // Under the status: how late (when the status itself doesn't say) and the
   // scheduled time, so a delayed train that is boarding still reads as delayed.
   const notes = [];
