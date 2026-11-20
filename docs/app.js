@@ -2188,6 +2188,59 @@ async function openGuide(key) {
   openSheet();
   try { drawPathMap(await freshMap(), { state: g.state, marks: g.marks, fit: ['33S', g.dest, 'JSQ'] }); } catch (e) { console.warn('guide map:', e); $('chg-map').hidden = true; }
 }
+// ---------- LIRR: other ways to Long Island when Penn is suspended or badly delayed ----------
+const LIRR_GUIDES = {
+  gcm: {
+    title: 'LIRR from Grand Central Madison', at: [40.7527, -73.9772], name: 'Grand Central Madison',
+    steps: [
+      'LIRR trains also leave from Grand Central Madison, under Grand Central Terminal (Madison Av at 44 St). Most branches run from there; check that its trains are running before you go.',
+      'From Penn: take an uptown 1, 2 or 3 one stop to Times Sq–42 St, then the S shuttle to Grand Central. About 15 minutes.',
+      'Or walk, about 25 minutes: east on 34 St, then north on Madison Av.',
+    ],
+  },
+  jamaica: {
+    title: 'To Jamaica by subway', at: [40.7003, -73.808], name: 'Jamaica Station', live: 'E',
+    steps: [
+      'Take a Queens-bound E from 34 St–Penn Station (the 8 Av side, under Penn) to Sutphin Blvd–Archer Av–JFK Airport. About 35 minutes.',
+      'LIRR’s Jamaica station is right above it. Every branch except Port Washington stops at Jamaica.',
+    ],
+  },
+};
+function openLirrGuide(key) {
+  const g = LIRR_GUIDES[key];
+  changeOpen = { id: `lguide-${key}`, view: 1 };
+  $('chg-map').hidden = true;
+  $('chg-kind').textContent = 'Other ways to Long Island';
+  $('chg-h').innerHTML = esc(g.title);
+  const nowS = Date.now() / 1000;
+  const next = g.live ? ((board && board.subway) || []).filter((x) => x.route === g.live && x.dir === 'N' && x.trains[0] && x.trains[0].stops[0] === 'A28')
+    .flatMap((x) => x.trains).filter((t) => t.time >= nowS - 30).sort((a, b) => a.time - b.time).slice(0, 3)
+    .map((t) => { const m = Math.max(0, Math.round((t.time - nowS) / 60)); return m ? `${m} min` : 'now'; }) : [];
+  const other = key === 'gcm' ? 'jamaica' : 'gcm';
+  $('chg-top').innerHTML = `<ol class="cm-steps">${g.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+    ${next.length ? `<p class="cm-sum"><b>Queens-bound ${lineName('E')} trains from Penn:</b> ${next.join(', ')}</p>` : ''}
+    <button type="button" class="cm-back" data-lguide="${other}">${other === 'gcm' ? 'LIRR from Grand Central Madison instead' : 'To Jamaica by subway instead'} →</button>`;
+  const d = directionsTo(g.at, g.name);
+  const notes = ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'lirr' && happeningNow(n));
+  $('chg-below').innerHTML = `<p class="cm-live">The subway charges its own fare unless the MTA says LIRR tickets are accepted (cross-honoring); check the LIRR notices.</p>
+    <p class="cm-live">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></p>
+    ${notes.length ? `<h3 class="cm-h">From the LIRR</h3><div class="cm-mta">${notes.map((n) => `<p>${noticeText(n.text)}</p>`).join('')}</div>` : ''}`;
+  openSheet();
+}
+// LIRR service into and out of Penn suspended, or most of the next hour's
+// LIRR trains badly late.
+function lirrDisrupted() {
+  if (!board) return '';
+  if (pennSuspension('lirr')) return 'suspended';
+  const nowS = Date.now() / 1000;
+  const rows = board.departures.filter((r) => r.carrier === 'lirr' && (r.leaves ?? r.time) > nowS - 300 && r.time < nowS + 75 * 60);
+  const late = rows.filter((r) => (r.lateMin || 0) >= 15 || (r.leaves ?? r.time) < nowS - 600).length;
+  return rows.length >= 4 && late >= 3 && late / rows.length >= 0.4 ? 'delayed' : '';
+}
+const lirrAltHtml = () => { const d = lirrDisrupted(); return d ? `<div class="njt-alt lirr-alt"><p><b>${d === 'suspended' ? 'LIRR service into and out of Penn is suspended.' : 'LIRR trains from Penn are badly delayed.'}</b> Other ways to Long Island:</p>
+  <div><button type="button" data-lguide="gcm">LIRR from Grand Central Madison</button><button type="button" data-lguide="jamaica">To Jamaica by subway</button></div></div>` : ''; };
+// Railroad banners for the chosen railroad (all: LIRR first).
+const railAltHtml = () => `${carrier === 'all' || carrier === 'lirr' ? lirrAltHtml() : ''}${carrier === 'all' || carrier === 'njt' ? njtAltHtml() : ''}`;
 // When to offer the guides: several NJ Transit trains from Penn cancelled, or
 // most of the next hour's badly late, or an NJ Transit notice about a
 // suspension or major delays at Penn. Always in #preview mode.
@@ -2201,7 +2254,14 @@ function njtDisrupted() {
   const notice = (board.notices.rail || []).some((n) => n.carrier === 'njt' && /suspend|no service|major delay|severe delay|significant delay|cross[- ]?honor/i.test(n.text) && /new york|penn station|psny|\bnec\b|northeast corridor|all lines/i.test(n.text));
   return cancelled >= 3 || (rows.length >= 4 && late >= 3 && late / rows.length >= 0.4) || notice;
 }
-const njtAltHtml = () => (njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transit trains from Penn are delayed or cancelled.</b> Other ways to New Jersey:</p>
+// Says "delayed", "cancelled" or both, by what the next hour's trains show.
+function njtTrouble() {
+  const nowS = Date.now() / 1000;
+  const rows = ((board && board.departures) || []).filter((r) => r.carrier === 'njt' && (r.leaves ?? r.time) > nowS - 300 && r.time < nowS + 75 * 60);
+  const c = rows.some((r) => r.tone === 'stop'), d = rows.some((r) => (r.lateMin || 0) >= 15);
+  return c && d ? 'delayed or cancelled' : c ? 'cancelled' : 'delayed';
+}
+const njtAltHtml = () => (njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transit trains from Penn are ${njtTrouble()}.</b> Other ways to New Jersey:</p>
   <div><button type="button" data-guide="newark">To Newark Penn by PATH</button><button type="button" data-guide="hoboken">To Hoboken by PATH</button></div></div>` : '');
 
 // ---------- delays on the trains they affect, with other options ----------
@@ -2440,6 +2500,8 @@ function subwayOptionsHtml(route, dir, stnId, mode, bare) {
   return `${bare ? '' : `<h3 class="cm-h">${mode === 'local' ? 'Other trains making local stops' : 'Other trains from this platform'}</h3>`}<ul class="cm-stns">${items}</ul>`;
 }
 document.addEventListener('click', (e) => {
+  const lg = e.target.closest('[data-lguide]');
+  if (lg) { e.preventDefault(); openLirrGuide(lg.dataset.lguide); return; }
   const g = e.target.closest('[data-guide]');
   if (g) { e.preventDefault(); openGuide(g.dataset.guide); return; }
   const o = e.target.closest('[data-options]');
@@ -2626,7 +2688,7 @@ function renderServiceNotices() {
   $('rail-notices').innerHTML = noticeStrip(board.notices.rail, 'rail');
   $('subway-notices').innerHTML = noticeStrip(board.notices.subway, 'subway');
   $('path-notices').innerHTML = noticeStrip(board.notices.path, 'path');
-  $('njt-alt').innerHTML = njtAltHtml();
+  $('njt-alt').innerHTML = railAltHtml();
   renderAlertsTab();
 }
 // Phones: every notice on its own tab, by where it applies, with a count on
@@ -2639,7 +2701,7 @@ function renderAlertsTab() {
     return `<div class="al-card${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${map || opts ? `<br>${map}${opts}` : ''}</p></div>`;
   };
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
-  $('alerts').innerHTML = njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
+  $('alerts').innerHTML = lirrAltHtml() + njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
     + group('Subway', subway, 'No subway notices for the lines at Penn right now.')
     + group('PATH', board.notices.path || [], 'No PATH alerts right now.');
   const n = rail.length + subway.length + (board.notices.path || []).length;
@@ -2735,7 +2797,7 @@ document.querySelector('.chips').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   carrier = b.dataset.carrier;
   try { localStorage.setItem('carrier', carrier); } catch {}
-  setPressed('.chips', 'carrier', carrier); renderRail();
+  setPressed('.chips', 'carrier', carrier); renderRail(); $('njt-alt').innerHTML = railAltHtml();
 });
 $('rows').addEventListener('toggle', (e) => {
   const id = e.target.dataset && e.target.dataset.id; if (!id) return;

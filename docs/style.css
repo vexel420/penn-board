@@ -492,3 +492,6 @@ details.row-alert .al-map { margin: .1rem 0 .25rem; }
 .row-last .ic { width: 1em; height: 1em; flex: none; }
 .svc-line.merged > span { display: grid; gap: .35rem; }
 .svc-line.merged .nl { display: block; }
+
+/* LIRR's banner: the LIRR blue instead of NJ Transit purple */
+.njt-alt.lirr-alt { border-color: #1f56c8; background: #14203a; }
