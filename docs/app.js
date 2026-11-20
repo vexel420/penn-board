@@ -361,7 +361,7 @@ function shownStatus(r, kind) {
 
 function finalLeft(r) {
   const s = (r.leaves ?? r.time) - Date.now() / 1000;
-  return s > 60 ? 'in 2 min' : 'under 1 min';
+  return s > 60 ? 'in 2 min' : s > 0 ? 'under 1 min' : 'due';
 }
 
 function agoText(epoch) {
@@ -455,7 +455,9 @@ function rowHtml(r) {
   if (view === 'arrivals' && r.continuesTo) notes.push(`continues to ${esc(r.continuesTo)}, leaves ${clock(r.departsAt).hm}`);
   const sched = notes.length ? `<small>${notes.join(', ')}</small>` : '';
   const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
-  return `<li class="row ${r.tone}${left === 'gone' && !gone && !due && !heldBy ? ' gone' : ''}">
+  // Departures never fade by the clock: only a train its railroad reports
+  // gone ("Departed") is dimmed. (Arrivals past their time still fade.)
+  return `<li class="row ${r.tone}${view === 'arrivals' && left === 'gone' && !gone && !due && !heldBy ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
     <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${rowAlertHtml(r)}</div>
