@@ -152,12 +152,27 @@ async function njtCall(env, endpoint, fields) {
 }
 async function njt(env) {
   if (!env.NJT_USERNAME || !env.NJT_PASSWORD) throw new Error('NJ Transit login not set');
-  const [sched, msgs] = await Promise.all([
+  // Arrivals: every NJ Transit train to New York stops at Secaucus, and its
+  // board there lists each train's stops with the New York Penn time.
+  const [sched, msgs, sec] = await Promise.all([
     njtCall(env, 'getTrainSchedule', { station: 'NY' }),
     njtCall(env, 'getStationMSG', { station: 'NY', line: '' }).catch(() => []),
+    njtCall(env, 'getTrainSchedule', { station: 'SE' }).catch(() => null),
   ]);
   if (!sched || !sched.ITEMS) throw new Error((sched && sched.errorMessage) || 'NJ Transit sent no departures');
-  return JSON.stringify({ ITEMS: sched.ITEMS, MESSAGES: Array.isArray(msgs) ? msgs : [] });
+  const toNy = ((sec && sec.ITEMS) || []).filter((it) => /new york/i.test(it.DESTINATION || '') && (it.STOPS || []).some((x) => /new york penn/i.test(x.STATIONNAME || '')));
+  // A train leaves Secaucus's list once it departs there, about 12 minutes
+  // before New York: remember the ones seen (in this location's cache) until
+  // 10 minutes after their New York time.
+  const seenKey = new Request('https://penn-board-relay.internal/njt-arrivals-seen');
+  let seen = [];
+  try { const h = await caches.default.match(seenKey); if (h) seen = await h.json(); } catch {}
+  const nyAt = (it) => { const x = (it.STOPS || []).find((y) => /new york penn/i.test(y.STATIONNAME || '')); return x ? Date.parse(String(x.TIME_UTC_FORMAT || '').replace(/^(\d+)-(\w+)-(\d+) /, '$2 $1 $3 ') + ' UTC') : NaN; };
+  const ids = new Set(toNy.map((it) => it.TRAIN_ID));
+  const kept = seen.filter((it) => !ids.has(it.TRAIN_ID) && nyAt(it) > Date.now() - 10 * 60000).map((it) => ({ ...it, PAST_SECAUCUS: true }));
+  const arrivals = [...toNy, ...kept];
+  if (sec && sec.ITEMS) await caches.default.put(seenKey, new Response(JSON.stringify(arrivals.map(({ PAST_SECAUCUS, ...it }) => it)), { headers: { 'cache-control': 'max-age=3600' } }));
+  return JSON.stringify({ ITEMS: sched.ITEMS, MESSAGES: Array.isArray(msgs) ? msgs : [], ARRIVALS: arrivals });
 }
 
 export default {

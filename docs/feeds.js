@@ -500,6 +500,34 @@ function parseNjt(items) {
     };
   });
 }
+// NJ Transit trains arriving at New York, from Secaucus's board (every train
+// to New York stops there; the relay remembers those past Secaucus). The New
+// York stop has the scheduled time (DEP_TIME) and the expected one (TIME).
+function parseNjtArrivals(items) {
+  return (items || []).map((it) => {
+    const stops = it.STOPS || [];
+    const i = stops.findIndex((x) => /new york penn/i.test(x.STATIONNAME || ''));
+    if (i < 0) return null;
+    const ny = stops[i];
+    const sched = njtTime(ny.DEP_TIME) || njtTime(ny.TIME), time = njtTime(ny.TIME) || sched;
+    if (!time) return null;
+    const lateMin = Math.max(0, Math.round((time - sched) / 60));
+    const arrived = /^yes$/i.test(String(ny.DEPARTED || ''));
+    const isAmtrak = /AMTRAK/i.test(it.LINE || '') || it.LINECODE === 'AM' || /^A\d/.test(it.TRAIN_ID || '');
+    return {
+      id: `njt-${it.TRAIN_ID}-arr`,
+      carrier: isAmtrak ? 'amtrak' : 'njt',
+      time, sched, lateMin,
+      place: njtPlace((stops[0] && stops[0].STATIONNAME) || ''),
+      line: String(it.LINE || ''),
+      train: String(it.TRAIN_ID || '').replace(/^A(?=\d)/, ''),
+      track: '', trackLikely: '',
+      status: arrived ? 'Arrived' : lateMin >= 2 ? `${lateMin} min late` : 'On time',
+      tone: arrived ? 'go' : lateMin >= 2 ? 'late' : 'ok',
+      via: stops.slice(1, i).map((x) => x.STATIONNAME).filter(Boolean),
+    };
+  }).filter(Boolean);
+}
 // NJ Transit's messages carry no start or end time, only words: "Saturday,
 // November 21", "Weekdays Beginning on Monday, November 23", "through Friday,
 // November 20". A message whose dates are all still to come isn't happening
@@ -532,7 +560,7 @@ function njtNotices(messages) {
 const relayNjt = source('relay-njt', 20, async () => {
   const d = await (await get(`${relayBase()}/njt`)).json();
   // STALE: NJ Transit couldn't be reached, so the relay sent its last good copy.
-  return { rows: parseNjt(d.ITEMS), notices: njtNotices(d.MESSAGES), staleSince: d.STALE ? d.STALE.since : 0 };
+  return { rows: parseNjt(d.ITEMS), arrivals: parseNjtArrivals(d.ARRIVALS), notices: njtNotices(d.MESSAGES), staleSince: d.STALE ? d.STALE.since : 0 };
 });
 
 // Combine the sources into the document the page renders. `njt` and `path`
@@ -545,7 +573,7 @@ async function board(extra = {}) {
   let njtNoticeList = extra.njtNotices || [];
   if (!extra.njt && relayBase()) {
     const r = await relayNjt(force);
-    n = { data: r.data ? r.data.rows : null, error: r.error, staleSince: r.data ? r.data.staleSince : 0 };
+    n = { data: r.data ? r.data.rows : null, arrivals: r.data ? r.data.arrivals || [] : [], error: r.error, staleSince: r.data ? r.data.staleSince : 0 };
     njtNoticeList = r.data ? r.data.notices : [];
   }
   const p = extra.path || { data: null, error: null };
@@ -567,6 +595,8 @@ async function board(extra = {}) {
   }
   departures.push(...amtrakDeps);
   if (a.data) arrivals.push(...a.data.arrivals);
+  // NJ Transit's own trains only (Amtrak's come from Amtrak).
+  arrivals.push(...(n.arrivals || []).filter((r) => r.carrier === 'njt'));
 
   // The page decides what to show as trains leave (docs/app.js, visibleRows);
   // this only drops rows long past.
