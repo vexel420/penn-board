@@ -2199,13 +2199,38 @@ const LIRR_GUIDES = {
     ],
   },
   jamaica: {
-    title: 'To Jamaica by subway', at: [40.7003, -73.808], name: 'Jamaica Station', live: 'E',
+    title: 'By the E to Forest Hills, Kew Gardens or Jamaica', at: [40.7003, -73.808], name: 'Jamaica Station', live: 'E',
     steps: [
-      'Take a Queens-bound E from 34 St–Penn Station (the 8 Av side, under Penn) to Sutphin Blvd–Archer Av–JFK Airport. About 35 minutes.',
-      'LIRR’s Jamaica station is right above it. Every branch except Port Washington stops at Jamaica.',
+      'Take a Queens-bound E from 34 St–Penn Station (the 8 Av side, under Penn).',
+      'For the LIRR at Forest Hills, get off at Forest Hills–71 Av (about 25 minutes); at Kew Gardens, Kew Gardens–Union Tpke; at Jamaica, Sutphin Blvd–Archer Av–JFK Airport (about 35 minutes), right under LIRR’s Jamaica station.',
+      'Every branch except Port Washington stops at Jamaica.',
+    ],
+  },
+  woodside: {
+    title: 'By the 7 to Woodside', at: [40.7459, -73.9029], name: 'Woodside Station',
+    steps: [
+      'Take the 7 to 61 St–Woodside: from 34 St–Hudson Yards (a 10-minute walk west, at 11 Av), or take an uptown 1, 2 or 3 one stop to Times Sq–42 St and change to the 7. From Grand Central, the 7 is in the same station.',
+      'LIRR’s Woodside station is right under the 7 there. Port Washington trains and most Main Line trains stop at Woodside.',
     ],
   },
 };
+// The LIRR's notice about Penn, cut to its advice for everyone (no
+// branch-by-branch train lists, no "click here").
+const lirrPennNotice = () => pennSuspension('lirr') || ((board && board.notices && board.notices.rail) || []).find((n) => n.carrier === 'lirr' && happeningNow(n) && /penn/i.test(n.text) && /delay|suspend/i.test(`${n.type} ${n.text}`));
+function lirrAdvice(n) {
+  const parts = String((n && n.desc) || '').split(/\n+/).map((x) => x.trim()).filter(Boolean);
+  const out = [];
+  for (const x of parts) {
+    if (/service alerts$|^(east|west)bound|^the \d/i.test(x)) break;
+    if (/click here/i.test(x)) continue;
+    out.push(x);
+  }
+  return out;
+}
+// The MTA's map of travel alternatives when Penn is suspended (linked from
+// its notice text, which only says "click here"; not copied here).
+const MTA_LIRR_ALT_MAP = 'https://www.mta.info/image/186211';
+const altMapLink = (n) => (n && /map of travel alternatives/i.test(n.desc || '') ? `<a class="alt-map" href="${MTA_LIRR_ALT_MAP}" target="_blank" rel="noopener">MTA map of travel alternatives ↗</a>` : '');
 function openLirrGuide(key) {
   const g = LIRR_GUIDES[key];
   changeOpen = { id: `lguide-${key}`, view: 1 };
@@ -2216,13 +2241,16 @@ function openLirrGuide(key) {
   const next = g.live ? ((board && board.subway) || []).filter((x) => x.route === g.live && x.dir === 'N' && x.trains[0] && x.trains[0].stops[0] === 'A28')
     .flatMap((x) => x.trains).filter((t) => t.time >= nowS - 30).sort((a, b) => a.time - b.time).slice(0, 3)
     .map((t) => { const m = Math.max(0, Math.round((t.time - nowS) / 60)); return m ? `${m} min` : 'now'; }) : [];
-  const other = key === 'gcm' ? 'jamaica' : 'gcm';
-  $('chg-top').innerHTML = `<ol class="cm-steps">${g.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+  const n = lirrPennNotice(), advice = lirrAdvice(n);
+  const others = Object.keys(LIRR_GUIDES).filter((k) => k !== key);
+  $('chg-top').innerHTML = `${advice.length ? `<div class="cm-mta"><b>From the MTA:</b>${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}${altMapLink(n)}</div>` : ''}
+    <ol class="cm-steps">${g.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
     ${next.length ? `<p class="cm-sum"><b>Queens-bound ${lineName('E')} trains from Penn:</b> ${next.join(', ')}</p>` : ''}
-    <button type="button" class="cm-back" data-lguide="${other}">${other === 'gcm' ? 'LIRR from Grand Central Madison instead' : 'To Jamaica by subway instead'} →</button>`;
+    <p class="lchips">${others.map((k) => `<button type="button" class="cm-back" data-lguide="${k}">${esc(LIRR_GUIDES[k].title)} →</button>`).join(' ')}</p>`;
   const d = directionsTo(g.at, g.name);
   const notes = ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'lirr' && happeningNow(n));
-  $('chg-below').innerHTML = `<p class="cm-live">The subway charges its own fare unless the MTA says LIRR tickets are accepted (cross-honoring); check the LIRR notices.</p>
+  const honored = advice.some((x) => /honou?ring LIRR/i.test(x));
+  $('chg-below').innerHTML = `${honored ? '' : '<p class="cm-live">The subway charges its own fare unless the MTA says LIRR tickets are accepted (cross-honoring); check the LIRR notices.</p>'}
     <p class="cm-live">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></p>
     ${notes.length ? `<h3 class="cm-h">From the LIRR</h3><div class="cm-mta">${notes.map((n) => `<p>${noticeText(n.text)}</p>`).join('')}</div>` : ''}`;
   openSheet();
@@ -2237,8 +2265,17 @@ function lirrDisrupted() {
   const late = rows.filter((r) => (r.lateMin || 0) >= 15 || (r.leaves ?? r.time) < nowS - 600).length;
   return rows.length >= 4 && late >= 3 && late / rows.length >= 0.4 ? 'delayed' : '';
 }
-const lirrAltHtml = () => { const d = lirrDisrupted(); return d ? `<div class="njt-alt lirr-alt"><p><b>${d === 'suspended' ? 'LIRR service into and out of Penn is suspended.' : 'LIRR trains from Penn are badly delayed.'}</b> Other ways to Long Island:</p>
-  <div><button type="button" data-lguide="gcm">LIRR from Grand Central Madison</button><button type="button" data-lguide="jamaica">To Jamaica by subway</button></div></div>` : ''; };
+// The banner carries the MTA's own advice (diversions, which subway lines
+// take LIRR fares) and its map, then the guides.
+const lirrAltHtml = () => {
+  const d = lirrDisrupted();
+  if (!d) return '';
+  const n = lirrPennNotice(), advice = lirrAdvice(n);
+  return `<div class="njt-alt lirr-alt"><p><b>${d === 'suspended' ? 'LIRR service into and out of Penn is suspended.' : 'LIRR trains from Penn are badly delayed.'}</b></p>
+  ${advice.length ? `<div class="lirr-advice">${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}${altMapLink(n)}</div>` : ''}
+  <p>Other ways to Long Island:</p>
+  <div><button type="button" data-lguide="gcm">LIRR from Grand Central Madison</button><button type="button" data-lguide="woodside">By the 7 to Woodside</button><button type="button" data-lguide="jamaica">By the E to Forest Hills, Kew Gardens or Jamaica</button></div></div>`;
+};
 // Railroad banners for the chosen railroad (all: LIRR first).
 const railAltHtml = () => `${carrier === 'all' || carrier === 'lirr' ? lirrAltHtml() : ''}${carrier === 'all' || carrier === 'njt' ? njtAltHtml() : ''}`;
 // When to offer the guides: several NJ Transit trains from Penn cancelled, or

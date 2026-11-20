@@ -495,3 +495,7 @@ details.row-alert .al-map { margin: .1rem 0 .25rem; }
 
 /* LIRR's banner: the LIRR blue instead of NJ Transit purple */
 .njt-alt.lirr-alt { border-color: #1f56c8; background: #14203a; }
+.lirr-advice { margin: 0 0 .6rem; padding: .45rem .6rem; border-left: 3px solid #6f93e8; background: rgba(255,255,255,.04); font-size: .88rem; }
+.lirr-advice p { margin: 0 0 .3rem; }
+.lirr-advice .bullet.tiny, .cm-mta .bullet.tiny { display: inline-grid; width: 1.2rem; height: 1.2rem; font-size: .72rem; vertical-align: -.2em; box-shadow: none; }
+a.alt-map { display: inline-block; margin-top: .15rem; color: var(--gold); font-weight: 700; }
