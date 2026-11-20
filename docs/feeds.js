@@ -469,8 +469,12 @@ const njtPlace = (d) => String(d || '').replace(/&nbsp;/g, ' ').replace(/&#9992;
 // trains (ids "A2127") with their tracks, which Amtrak doesn't publish.
 function parseNjt(items) {
   return (items || []).map((it) => {
-    const raw = String(it.STATUS || '').trim();
     const lateSec = Math.max(0, +it.SEC_LATE || 0);
+    let raw = String(it.STATUS || '').trim();
+    // NJ Transit sometimes sends "DEPARTED" for a train that hasn't left yet
+    // (seen 45 min before its time). A train can't leave more than a few
+    // minutes early, so that status is set aside and the board's own is used.
+    if (/^departed$/i.test(raw) && njtTime(it.SCHED_DEP_DATE) + lateSec > now() + 5 * 60) raw = '';
     const lateMin = Math.round(lateSec / 60);
     const up = raw.toUpperCase();
     // NJ Transit's terms ask that its data be shown as-is: its status text is
@@ -496,7 +500,8 @@ function parseNjt(items) {
       track: String(it.TRACK || '').trim(),
       trackLikely: '',
       status, tone,
-      via: (it.STOPS || []).map((x) => x.STATIONNAME).filter(Boolean).slice(0, -1),
+      // Its stops after New York (NJ Transit's list starts with New York itself).
+      via: (it.STOPS || []).map((x) => x.STATIONNAME).filter((x) => x && !/^new york penn/i.test(x)).slice(0, -1),
     };
   });
 }
