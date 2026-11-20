@@ -805,7 +805,7 @@ function mergeNightBanners(html) {
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 // Subway: the pill opens the MTA's late-night subway map in a new tab.
 const MTA_NIGHT_MAP = 'https://www.mta.info/map/5336';
-const SUB_LATE_PILL = `<a class="late-pill" href="${MTA_NIGHT_MAP}" target="_blank" rel="noopener" title="MTA late-night subway map (opens in a new tab)">${ICON.moon}Late night<span class="ext" aria-hidden="true">↗</span><span class="sr">, MTA late-night map, opens in a new tab</span></a>`;
+const SUB_LATE_PILL = `<a class="late-pill" href="${MTA_NIGHT_MAP}" target="_blank" rel="noopener" title="MTA late-night subway map (opens in a new tab)">${ICON.moon}Late night<span class="ext" aria-hidden="true">↗&#xFE0E;</span><span class="sr">, MTA late-night map, opens in a new tab</span></a>`;
 // Trouble on a line (delays, skipped stops, reroutes): a pill on its rows.
 // The notice itself, its map and other options are in the service notices.
 const WARN_IC = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 1.5 21h21zM11 9h2v6h-2zm0 8h2v2h-2z" fill="currentColor" fill-rule="evenodd"/></svg>';
@@ -2151,10 +2151,10 @@ const NJT_GUIDES = {
     state: { 'JSQ-33': 'focus', 'NWK-WTC': 'focus', 'HOB-33': 'faint', 'HOB-WTC': 'faint' },
     marks: { '33S': 'Board a Journal Square train', JSQ: 'Change for Newark', NWK: 'NJ Transit and Amtrak here' },
     steps: [
-      'Walk to PATH’s 33 St station, at Sixth Av and 32 St (about 5 minutes).',
-      'Take a Journal Square train. Late nights and weekends it runs via Hoboken.',
-      'At Journal Square, change to a Newark train. Newark Penn Station is two stops on, after Harrison.',
-      'Or: take the downtown E to World Trade Center and PATH’s Newark train from there, no change.',
+      'Walk to PATH 33 St (6 Av at 32 St, about 5 min).',
+      'Take a Journal Square train (via Hoboken late nights and weekends).',
+      'Change at Journal Square for Newark, 2 stops on.',
+      'Or: downtown [E] to World Trade Center, then PATH direct to Newark.',
     ],
   },
   hoboken: {
@@ -2162,9 +2162,9 @@ const NJT_GUIDES = {
     state: { 'HOB-33': 'focus', 'JSQ-33': 'faint', 'NWK-WTC': 'faint', 'HOB-WTC': 'faint' },
     marks: { '33S': 'Board a Hoboken train', HOB: 'NJ Transit trains here' },
     steps: [
-      'Walk to PATH’s 33 St station, at Sixth Av and 32 St (about 5 minutes).',
-      'Take a Hoboken train, direct. When it isn’t running (late nights and weekends), take the Journal Square via Hoboken train.',
-      'Hoboken is the last stop. NJ Transit trains leave from the same terminal.',
+      'Walk to PATH 33 St (6 Av at 32 St, about 5 min).',
+      'Take a Hoboken train (late nights and weekends: Journal Square via Hoboken).',
+      'NJ Transit trains leave from Hoboken Terminal.',
     ],
   },
 };
@@ -2177,7 +2177,7 @@ async function openGuide(key) {
   const next = ((board && board.path) || []).filter((x) => g.live.test(x.dest || '') && x.time >= nowS - 30).slice(0, 3)
     .map((x) => { const m = Math.max(0, Math.round((x.time - nowS) / 60)); return m ? `${m} min` : 'now'; });
   const other = key === 'newark' ? 'hoboken' : 'newark';
-  $('chg-top').innerHTML = `<ol class="cm-steps">${g.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol>
+  $('chg-top').innerHTML = `<ol class="cm-steps">${g.steps.map((s) => `<li>${noticeText(s)}</li>`).join('')}</ol>
     ${next.length ? `<p class="cm-sum"><b>${esc(g.liveLabel)}:</b> ${next.join(', ')}</p>` : ''}
     <button type="button" class="cm-back" data-guide="${other}">${other === 'hoboken' ? 'To Hoboken instead' : 'To Newark Penn instead'} →</button>`;
   const d = directionsTo(PP(g.dest), key === 'newark' ? 'Newark Penn Station' : 'Hoboken Terminal');
@@ -2191,26 +2191,25 @@ async function openGuide(key) {
 // ---------- LIRR: other ways to Long Island when Penn is suspended or badly delayed ----------
 const LIRR_GUIDES = {
   gcm: {
-    title: 'LIRR from Grand Central Madison', at: [40.7527, -73.9772], name: 'Grand Central Madison',
+    title: 'LIRR from Grand Central Madison', short: 'Grand Central Madison', at: [40.7527, -73.9772], name: 'Grand Central Madison',
     steps: [
-      'LIRR trains also leave from Grand Central Madison, under Grand Central Terminal (Madison Av at 44 St). Most branches run from there; check that its trains are running before you go.',
-      'From Penn: take an uptown 1, 2 or 3 one stop to Times Sq–42 St, then the S shuttle to Grand Central. About 15 minutes.',
-      'Or walk, about 25 minutes: east on 34 St, then north on Madison Av.',
-    ],
-  },
-  jamaica: {
-    title: 'By the E to Forest Hills, Kew Gardens or Jamaica', at: [40.7003, -73.808], name: 'Jamaica Station', live: 'E',
-    steps: [
-      'Take a Queens-bound E from 34 St–Penn Station (the 8 Av side, under Penn).',
-      'For the LIRR at Forest Hills, get off at Forest Hills–71 Av (about 25 minutes); at Kew Gardens, Kew Gardens–Union Tpke; at Jamaica, Sutphin Blvd–Archer Av–JFK Airport (about 35 minutes), right under LIRR’s Jamaica station.',
-      'Every branch except Port Washington stops at Jamaica.',
+      'Some LIRR trains run from Grand Central Madison (Madison Av at 44 St). Check its board before you go.',
+      'From Penn: uptown [1] [2] [3] one stop to Times Sq, then the shuttle (about 15 min). Or walk, about 25 min.',
     ],
   },
   woodside: {
-    title: 'By the 7 to Woodside', at: [40.7459, -73.9029], name: 'Woodside Station',
+    title: 'By the 7 to Woodside', short: '[7] to Woodside', at: [40.7459, -73.9029], name: 'Woodside Station',
     steps: [
-      'Take the 7 to 61 St–Woodside: from 34 St–Hudson Yards (a 10-minute walk west, at 11 Av), or take an uptown 1, 2 or 3 one stop to Times Sq–42 St and change to the 7. From Grand Central, the 7 is in the same station.',
-      'LIRR’s Woodside station is right under the 7 there. Port Washington trains and most Main Line trains stop at Woodside.',
+      'Take the [7] to 61 St–Woodside from Grand Central, Times Sq (uptown [1] [2] [3] one stop) or 34 St–Hudson Yards (10 min walk west).',
+      'LIRR Woodside is right below. Port Washington and most Main Line trains stop there.',
+    ],
+  },
+  jamaica: {
+    title: 'By the E to Forest Hills, Kew Gardens or Jamaica', short: '[E] to Forest Hills or Jamaica', at: [40.7003, -73.808], name: 'Jamaica Station', live: 'E',
+    steps: [
+      'Take a Queens-bound [E] from 34 St–Penn (8 Av side).',
+      'Change to the LIRR at Forest Hills–71 Av (about 25 min), Kew Gardens–Union Tpke, or Sutphin Blvd for Jamaica (about 35 min).',
+      'All branches except Port Washington stop at Jamaica.',
     ],
   },
 };
@@ -2231,7 +2230,7 @@ function lirrAdvice(n) {
 // is suspended (owner, Nov 2026: a dedicated map, not tonight's only). Shown
 // with every LIRR disruption banner and guide; linked, not copied here.
 const MTA_LIRR_ALT_MAP = 'https://www.mta.info/image/186211';
-const altMapLink = () => `<a class="alt-map" href="${MTA_LIRR_ALT_MAP}" target="_blank" rel="noopener">MTA map of travel alternatives ↗</a>`;
+const altMapLink = () => `<a class="alt-map" href="${MTA_LIRR_ALT_MAP}" target="_blank" rel="noopener">MTA map of travel alternatives ↗&#xFE0E;</a>`;
 function openLirrGuide(key) {
   const g = LIRR_GUIDES[key];
   changeOpen = { id: `lguide-${key}`, view: 1 };
@@ -2245,9 +2244,9 @@ function openLirrGuide(key) {
   const n = lirrPennNotice(), advice = lirrAdvice(n);
   const others = Object.keys(LIRR_GUIDES).filter((k) => k !== key);
   $('chg-top').innerHTML = `<div class="cm-mta">${advice.length ? `<b>From the MTA:</b>${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}` : ''}${altMapLink()}</div>
-    <ol class="cm-steps">${g.steps.map((x) => `<li>${esc(x)}</li>`).join('')}</ol>
+    <ol class="cm-steps">${g.steps.map((x) => `<li>${noticeText(x)}</li>`).join('')}</ol>
     ${next.length ? `<p class="cm-sum"><b>Queens-bound ${lineName('E')} trains from Penn:</b> ${next.join(', ')}</p>` : ''}
-    <p class="lchips">${others.map((k) => `<button type="button" class="cm-back" data-lguide="${k}">${esc(LIRR_GUIDES[k].title)} →</button>`).join(' ')}</p>`;
+    <p class="lchips">${others.map((k) => `<button type="button" class="cm-back" data-lguide="${k}">${noticeText(LIRR_GUIDES[k].short)} →</button>`).join(' ')}</p>`;
   const d = directionsTo(g.at, g.name);
   const notes = ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'lirr' && happeningNow(n));
   const honored = advice.some((x) => /honou?ring LIRR/i.test(x));
@@ -2275,7 +2274,7 @@ const lirrAltHtml = () => {
   return `<div class="njt-alt lirr-alt"><p><b>${d === 'suspended' ? 'LIRR service into and out of Penn is suspended.' : 'LIRR trains from Penn are badly delayed.'}</b></p>
   <div class="lirr-advice">${advice.map((x) => `<p>${noticeText(x)}</p>`).join('')}${altMapLink()}</div>
   <p>Other ways to Long Island:</p>
-  <div><button type="button" data-lguide="gcm">LIRR from Grand Central Madison</button><button type="button" data-lguide="woodside">By the 7 to Woodside</button><button type="button" data-lguide="jamaica">By the E to Forest Hills, Kew Gardens or Jamaica</button></div></div>`;
+  <div>${Object.keys(LIRR_GUIDES).map((k) => `<button type="button" data-lguide="${k}">${noticeText(LIRR_GUIDES[k].short)}</button>`).join('')}</div></div>`;
 };
 // Railroad banners for the chosen railroad (all: LIRR first).
 const railAltHtml = () => `${carrier === 'all' || carrier === 'lirr' ? lirrAltHtml() : ''}${carrier === 'all' || carrier === 'njt' ? njtAltHtml() : ''}`;
