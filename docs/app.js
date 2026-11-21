@@ -1059,7 +1059,7 @@ $('subway').addEventListener('click', (e) => {
   if (lp) {
     allLatePills = lp.dataset.latepills === 'all';
     try { localStorage.setItem('subwayLatePills', allLatePills ? 'all' : 'advisory'); } catch {}
-    slideStarted = -Infinity; renderSubway();
+    slideStarted = -Infinity; renderSubway(); renderPath();
     return;
   }
   const b = e.target.closest('[data-sstyle]');
@@ -2150,7 +2150,31 @@ function pathTrouble(dest, epoch) {
     else if (m.state[id] === 'delay' && !worst) worst = 'delay';
   }
   // (Live times only: an on-time train loses its "Delays" pill.)
-  return worst === 'off' ? warnPill('Suspended') : worst === 'delay' && !pathOnTime(dest, epoch) ? warnPill('Delays') : '';
+  if (worst === 'off') return warnPill('Suspended');
+  if (worst === 'delay') return pathOnTime(dest, epoch) ? '' : warnPill('Delays');
+  // "All late trains" (the subway panel's toggle): a train 5+ min behind.
+  if (allLatePills && epoch) {
+    const late = pathLateBy(dest, epoch);
+    if (late != null && late >= LATE_PILL_MIN * 60) return warnPill(`${Math.round(late / 60)} min late`);
+  }
+  return '';
+}
+// How late a live PATH train from 33 St is, in seconds (null if unknown).
+// 33 St is where the trains start, and they don't leave early, so a train
+// due after a scheduled departure (and before the next) is that departure
+// running late: measured from the latest scheduled time at or before it.
+function pathLateBy(dest, epoch) {
+  if (!pathSchedule || !epoch) return null;
+  let best = null;
+  for (const off of [-1, 0, 1]) {
+    const day = off === 0 ? scheduleToday(nyNow().day) : nyNow(off).day;
+    for (const d of pathSchedule.days[day] || []) {
+      if (d.to !== dest) continue;
+      const t = minsToEpoch(off * 1440 + d.t);
+      if (t <= epoch + 60 && (best == null || t > best)) best = t;
+    }
+  }
+  return best != null && epoch - best < 60 * 60 ? Math.max(0, epoch - best) : null;
 }
 const pathModels = () => ((board && board.notices && board.notices.path) || []).map(pathModel).filter(Boolean);
 
