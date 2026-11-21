@@ -967,8 +967,9 @@ function renderPathPattern() {
   const st = pathState();
   const tags = [];
   const day = nyNow().day;
-  if (day === 'saturday' || day === 'sunday') tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
+  // Late night or weekend, not both (owner: keep the two patterns distinct).
   if (st && st.phase === 'night') tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
+  else if (day === 'saturday' || day === 'sunday') tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
   $('path-h').innerHTML = `PATH${tags.join('')}<span>33 St station, Sixth Av at 32 St</span>`;
   if (!st) return '';
   if (st.phase === 'countdown') {
@@ -1258,8 +1259,10 @@ function renderSubwayTags(states) {
   const tags = [];
   if (states.length && states.every((st) => st.phase === 'night' || st.phase === 'morning')) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
   const day = nyNow().day;
+  // Late night or weekend, not both (owner: keep the two patterns distinct).
+  const night = tags.length > 0;
   if (holidayNotice()) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
-  else if (day === 'saturday' || day === 'sunday') tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
+  else if (!night && (day === 'saturday' || day === 'sunday')) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
   if (weatherNotice()) tags.push(`<span class="tag wx">${ICON.snow}Severe weather service</span>`);
   $('sub-h').innerHTML = `Subway${tags.join('')}<span>34 St–Penn Station</span>`;
 }
