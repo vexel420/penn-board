@@ -533,10 +533,15 @@ function loadSubwayData() {
 const lineInfo = (route) => (subwayData && subwayData.routes[route]) || { label: route, color: '#6b7a70', text: '#ffffff' };
 const stationName = (id) => (subwayData && subwayData.stops[id] ? subwayData.stops[id][0] : '');
 // Stations on this train's way that its line doesn't normally serve.
+// A stop the line doesn't usually make. Another platform of a station the
+// line does serve (145 St's lower level, for a C ending there) isn't one:
+// same name, same place.
+const placeKey = (id) => { const x = subwayData.stops[id]; return x ? `${x[0]}|${x[1].toFixed(3)}|${x[2].toFixed(3)}` : id; };
 function unusualStops(route, train) {
   const r = subwayData && subwayData.routes[route];
   if (!r || !train.stops) return [];
-  return train.stops.filter((id) => subwayData.stops[id] && !r.normalSet.has(id));
+  if (!r.normalPlaces) r.normalPlaces = new Set([...r.normalSet].map(placeKey));
+  return train.stops.filter((id) => subwayData.stops[id] && !r.normalSet.has(id) && !r.normalPlaces.has(placeKey(id)));
 }
 // A line named in a sentence ("Use the 2."): its badge, at text size.
 const lineName = (route) => bulletHtml(route, 'inl');
@@ -1293,7 +1298,9 @@ async function openReroute({ route, svc, train }) {
     .map((r) => ({ r, n: odd.filter((id) => subwayData.routes[r].normalSet.has(id)).length }))
     .sort((a, b) => b.n - a.n)[0];
   const viaText = via && via.n >= Math.ceil(odd.length / 2)
-    ? `running via the ${lineInfo(via.r).label} line from ${stationName(odd[0])} to ${stationName(odd[odd.length - 1])}`
+    ? (odd.length === 1 || stationName(odd[0]) === stationName(odd[odd.length - 1])
+      ? `running via the ${lineInfo(via.r).label} line at ${stationName(odd[0])}`
+      : `running via the ${lineInfo(via.r).label} line from ${stationName(odd[0])} to ${stationName(odd[odd.length - 1])}`)
     : 'running on a different route from normal';
   $('reroute-note').textContent = `This ${l.label} train is ${viaText}, ${svc === 'express' ? 'express' : 'local'} from Penn. ` +
     `${unusual.size === 1 ? 'The station in gold is one' : `The ${unusual.size} stations in gold are ones`} the ${l.label} doesn’t usually stop at.`;
@@ -1324,9 +1331,12 @@ async function openReroute({ route, svc, train }) {
         color: odd ? '#e6b751' : '#121d18', fillColor: odd ? '#e6b751' : '#f2ead8', fillOpacity: 1,
       }).addTo(rerouteMap);
       const label = i === 0 ? `${stationName(id)} (you are here)` : stationName(id);
-      m.bindTooltip(label, { permanent: end, direction: 'auto', className: 'rr-label' });
+      // Penn and the last stop are always named; the others once zoomed in.
+      m.bindTooltip(label, { permanent: true, direction: 'auto', className: `rr-label${end ? '' : ' rr-mid'}` });
     });
     rerouteMap.fitBounds(L.latLngBounds(pts), { padding: [28, 28] });
+    const names = () => box.classList.toggle('show-names', rerouteMap.getZoom() >= 14);
+    rerouteMap.on('zoomend', names); names();
     setTimeout(() => rerouteMap && rerouteMap.invalidateSize(), 50);
   } catch {
     box.classList.add('unavailable'); // the list of stops still shows

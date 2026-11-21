@@ -500,3 +500,4 @@ details.row-alert .al-map { margin: .1rem 0 .25rem; }
 .lirr-advice .bullet.tiny, .cm-mta .bullet.tiny { display: inline-grid; width: 1.2rem; height: 1.2rem; font-size: .72rem; vertical-align: -.2em; box-shadow: none; }
 a.alt-map { display: inline-block; margin-top: .15rem; color: var(--gold); font-weight: 700; }
 .njt-alt button .bullet.tiny, .cm-back .bullet.tiny { display: inline-grid; width: 1.25em; height: 1.25em; font-size: .78em; vertical-align: -.2em; box-shadow: none; }
+.leaflet-container:not(.show-names) .leaflet-tooltip.rr-mid { display: none; }
