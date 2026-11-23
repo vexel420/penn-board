@@ -730,25 +730,44 @@ function lineSection(here, stnId, line, dir) {
   return any ? any.svc : (['2', '3', 'A'].includes(line) ? 'express' : 'local');
 }
 // Other lines at this station to use instead of `line` going this way,
-// judged by where the trains go (owner, Nov 23): the ones that share its
-// stops beyond the station in that direction (at least 3, see below). Uptown C: the A (the E turns off to Queens);
-// downtown C: the A or E. `skip` leaves out lines not running.
+// judged by where the trains go on the map, not by stops in common (owner,
+// Nov 23): a line counts if it takes you at least ALT_REACH of the way
+// toward the missing line's last stop (its main last stops, from the
+// timetable), measured as the distance covered before the two lines part.
+// Uptown C (168 St): the A, which goes on to Inwood; not the E, which turns
+// off to Queens. Downtown C (Euclid Av): the A. Missing E uptown (Jamaica):
+// nothing here goes there. Two stations within 400 m count as one (Chambers
+// St for World Trade Center). Best first; none if nothing goes that way.
+// `skip` leaves out lines not running.
+const ALT_REACH = 0.7;
+const kmBetween = (a, b) => { const dy = (a[1] - b[1]) * 111.2, dx = (a[2] - b[2]) * 111.2 * Math.cos(a[1] * Math.PI / 180); return Math.hypot(dx, dy); };
 function directionAlts(stn, line, dir, skip = () => false) {
   const r = subwayData && subwayData.routes[line];
   const here = subwayData && subwayData.stops[stn.id];
-  if (!r || !here) return stn.lines.filter((l) => l !== line && !skip(l));
-  const places = (rt) => rt.normalPlaces || (rt.normalPlaces = new Set([...rt.normalSet].map(placeKey)));
-  const beyond = [...r.normalSet].filter((id) => { const x = subwayData.stops[id]; return x && id !== stn.id && (dir === 'N' ? x[1] > here[1] + 0.001 : x[1] < here[1] - 0.001); });
+  const ends = ((subwayData && subwayData.terminals && subwayData.terminals[line]) || {})[dir] || [];
+  if (!r || !here || !ends.length) return [];
+  const pos = (id) => subwayData.stops[id];
   const scores = stn.lines.filter((l) => l !== line && !skip(l) && subwayData.routes[l]).map((l) => {
-    const rt = subwayData.routes[l];
-    return { l, n: beyond.filter((id) => rt.normalSet.has(id) || places(rt).has(placeKey(id))).length };
+    const alt = [...subwayData.routes[l].normalSet].map(pos).filter(Boolean);
+    let reach = 0;
+    for (const end of ends) {
+      const t = pos(end);
+      if (!t) continue;
+      const total = kmBetween(here, t);
+      if (total < 0.5) continue;
+      // The missing line's stops the other line also serves (or has a
+      // station beside), beyond this station: the one nearest its last stop.
+      let nearest = Infinity;
+      for (const id of r.normalSet) {
+        const x = pos(id);
+        if (!x || kmBetween(x, here) < 0.3 || kmBetween(x, t) >= total) continue;
+        if (alt.some((y) => kmBetween(x, y) < 0.4)) nearest = Math.min(nearest, kmBetween(x, t));
+      }
+      if (isFinite(nearest)) reach = Math.max(reach, (total - nearest) / total);
+    }
+    return { l, reach };
   });
-  // A real alternative serves at least 3 of the line's stops that way
-  // (downtown C: the A, and the E down to Canal St; uptown C: just the A, as
-  // the E turns off to Queens after 2). If none does, the one serving most.
-  const sorted = scores.filter((x) => x.n > 0).sort((a, b) => b.n - a.n);
-  const real = sorted.filter((x) => x.n >= 3);
-  return (real.length ? real : sorted.slice(0, 1)).map((x) => x.l);
+  return scores.filter((x) => x.reach >= ALT_REACH).sort((a, b) => b.reach - a.reach).map((x) => x.l);
 }
 const useText = (alts) => (alts.length ? `, use the ${alts.slice(0, -1).map(lineName).join(', ')}${alts.length > 1 ? ' or ' : ''}${lineName(alts[alts.length - 1])}` : '');
 // The lines a notice itself names, at this station (the MTA's own advice).
