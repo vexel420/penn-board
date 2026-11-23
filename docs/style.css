@@ -501,3 +501,17 @@ details.row-alert .al-map { margin: .1rem 0 .25rem; }
 a.alt-map { display: inline-block; margin-top: .15rem; color: var(--gold); font-weight: 700; }
 .njt-alt button .bullet.tiny, .cm-back .bullet.tiny { display: inline-grid; width: 1.25em; height: 1.25em; font-size: .78em; vertical-align: -.2em; box-shadow: none; }
 .leaflet-container:not(.show-names) .leaflet-tooltip.rr-mid { display: none; }
+/* Pills that open a dropdown (owner, Nov 23) */
+button.late-pill { border: 0; font: inherit; font-size: .72rem; font-weight: 700; cursor: pointer; }
+.late-pill .chev { margin-left: .15rem; opacity: .75; font-size: .9em; }
+.info-pill { background: #1f2d3a; color: #a9cdf0; }
+.drop { display: block; margin: .35rem 0 .25rem; padding: .45rem .6rem; border-left: 3px solid var(--late); background: rgba(240, 169, 74, .08); border-radius: 0 4px 4px 0; font-size: .85rem; font-weight: 400; color: var(--ivory); line-height: 1.35; }
+.drop-n { display: block; margin-bottom: .3rem; }
+.drop-n small { display: block; color: var(--dim); }
+.drop-links { display: flex; flex-wrap: wrap; gap: .4rem; }
+.drop .al-map { margin: 0; }
+.drop .bullet.tiny { display: inline-grid; width: 1.15rem; height: 1.15rem; font-size: .7rem; vertical-align: -.15em; box-shadow: none; }
+.al-item.flash, .al-card.flash { outline: 2px solid var(--gold); outline-offset: 2px; }
+.drop.info { border-left-color: #6f93e8; background: rgba(111, 147, 232, .08); }
+.sline:has(.drop), .b-row:has(.drop) { align-items: start; }
+.sline:has(.drop) .smins { padding-top: .2rem; }
