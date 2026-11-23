@@ -126,7 +126,7 @@ h1 {
 .rows { list-style: none; margin: 0; padding: 0; }
 .row { padding: .7rem .9rem; border-bottom: 1px solid var(--line); border-left: 4px solid transparent; }
 .row.go { background: var(--enamel-2); border-left-color: var(--gold); }
-.row.stop .place, .row.stop .time b { text-decoration: line-through; text-decoration-thickness: 2px; color: var(--dim); }
+.row.stop .place, .row.stop .time b { text-decoration: line-through; text-decoration-thickness: 2px; }
 .row.gone { opacity: .5; }
 .row.departed .place, .row.departed .time b { color: var(--dim); }
 .row.departed .track b { background: none; color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); font-weight: 500; }
@@ -283,7 +283,7 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
   .only-narrow { display: inline-block; }
   .subway { position: static; display: none; }
   body[data-view="subway"] .subway { display: block; }
-  body[data-view="subway"] .rail, body[data-view="subway"] .chips, body[data-view="subway"] #rail-notices { display: none; }
+  body[data-view="subway"] .rail, body[data-view="subway"] .chips, body[data-view="subway"] #rail-notices, body[data-view="subway"] .style-bar { display: none; }
 }
 @media (max-width: 640px) {
   .mast-in, .wrap { padding-inline: 1rem; }

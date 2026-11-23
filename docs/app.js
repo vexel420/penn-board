@@ -457,7 +457,11 @@ function rowHtml(r) {
   const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
   // Departures never fade by the clock: only a train its railroad reports
   // gone ("Departed") is dimmed. (Arrivals past their time still fade.)
-  return `<li class="row ${r.tone}${view === 'arrivals' && left === 'gone' && !gone && !due && !heldBy ? ' gone' : ''}">
+  // A cancelled train keeps full colour until its last 30 s on the board.
+  const nowS2 = Date.now() / 1000;
+  const fading = r.tone === 'stop' ? nowS2 > r.time + CANCELLED_SHOWN_S - 30
+    : view === 'arrivals' && left === 'gone' && !gone && !due && !heldBy;
+  return `<li class="row ${r.tone}${fading ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
     <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${rowAlertHtml(r)}</div>
@@ -1055,7 +1059,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const body = `<span class="b-wrap">${html}</span>`;
   return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>`;
 }
-$('subway').addEventListener('click', (e) => {
+$('sub-toggles').addEventListener('click', (e) => {
   const lp = e.target.closest('[data-latepills]');
   if (lp) {
     allLatePills = lp.dataset.latepills === 'all';
@@ -1248,7 +1252,8 @@ function renderSubway() {
   }).join('');
   const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('');
   return `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
-  }).join('') + subwayStyleHtml();
+  }).join('');
+  $('sub-toggles').innerHTML = subwayStyleHtml();
   renderSubwayTags(states);
 }
 
