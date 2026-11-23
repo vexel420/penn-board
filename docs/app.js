@@ -2509,7 +2509,10 @@ const dirMatch = (n, dir) => {
   if (!dir || down === up) return true;
   return dir === 'S' ? down : up;
 };
-const isSwitchNotice = (n) => happeningNow(n) && /\b(running|runs|run|operating|operates)\s+express\b|\bexpress (between|from|to|in)\b|local to express/i.test(`${n.type} ${n.text}`);
+// Trains skipping local stops ("running express", "local to express"). Not
+// "express to local": that's an express line making extra local stops.
+const isSwitchNotice = (n) => happeningNow(n) && !/express to local/i.test(`${n.type} ${n.text}`)
+  && /\b(running|runs|run|operating|operates)\s+express\b|\bexpress (between|from|in)\b|\bexpress to (?!local)|local to express/i.test(`${n.type} ${n.text}`);
 const subwayExpressSwitch = (route, dir) => ((board && board.notices && board.notices.subway) || []).filter((n) => isSwitchNotice(n) && (n.lines || []).includes(route) && dirMatch(n, dir));
 // (Only used when the line has no local row to carry the pill.)
 const switchNoteHtml = (route, dir) => (subwayExpressSwitch(route, dir).length
