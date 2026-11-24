@@ -963,11 +963,21 @@ function untilText(n) {
   const day = sameDay ? '' : `${new Date(p[1] * 1000).toLocaleDateString('en-US', { timeZone: 'America/New_York', weekday: 'short' })} `;
   return `until ${day}${clockText(p[1])}`;
 }
+// A headline that leads into a list ("The following trains will make added
+// stops at Elmont-UBS Arena tonight:") is shown with the list that follows it
+// in the notice (owner, Nov 24: it was cut off).
+const leadsIn = (n) => /(:|following[^.]*)\s*$/i.test(String(n.text || '').trim()) && String(n.desc || n.more || '').trim();
+function noticeFull(n) {
+  if (!leadsIn(n)) return noticeText(n.text);
+  const rows = String(n.desc || n.more).split(/\n+/).map((x) => x.trim()).filter(Boolean)
+    .map((x) => (/:$/.test(x) && x.length < 40 ? `<b>${noticeText(x)}</b>` : noticeText(x)));
+  return `${noticeText(n.text)}<span class="n-more">${rows.join('<br>')}</span>`;
+}
 function dropPill(key, label, kind, ns, extra = '') {
   const open = openDrops.has(key);
   ns = ns.filter(Boolean);
   if (open) {
-    const items = ns.map((n) => { const u = untilText(n); return `<span class="drop-n">${noticeText(n.text)}${u ? `<small>${esc(u)}</small>` : ''}</span>`; }).join('');
+    const items = ns.map((n) => { const u = untilText(n); return `<span class="drop-n">${noticeFull(n)}${u ? `<small>${esc(u)}</small>` : ''}</span>`; }).join('');
     const link = ns.length ? `<button type="button" class="al-map" data-goto="${esc(ns[0].id)}">See full alert</button>` : '';
     dropBodies.set(key, `<span class="drop${kind === 'warn' ? '' : ' info'}">${items}<span class="drop-links">${link}${extra}</span></span>`);
   }
@@ -1880,7 +1890,7 @@ async function openChange(id, view = 1) {
   } else {
     $('chg-h').innerHTML = `Getting around it`;
     $('chg-top').innerHTML = `<button type="button" class="cm-back" data-view="1">← Whole ${label} line</button>
-      <p class="cm-sum">${noticeText(n.text)}</p>`;
+      <p class="cm-sum">${noticeFull(n)}</p>`;
     const chips = alt.transfers.map((t, i) => {
       const d = directionsTo(LL(t.ids[0]), t.name);
       return `<li class="cm-stn"><button type="button" class="cm-zoom" data-zoom="t${i}"><b>${noticeText(t.name)}</b><span class="ls">${t.lines.map((l) => bulletHtml(l, 'tiny')).join('')}</span></button>
@@ -2551,7 +2561,7 @@ async function openGuide(key) {
   const njtNotes = ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'njt');
   $('chg-below').innerHTML = `<p class="cm-live">PATH charges its own fare. During major disruptions NJ Transit sometimes accepts its tickets on PATH (cross-honoring); check NJ Transit’s notices before you go.</p>
     <p class="cm-live">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></p>
-    ${njtNotes.length ? `<h3 class="cm-h">From NJ Transit</h3><div class="cm-mta">${njtNotes.map((n) => `<p>${noticeText(n.text)}</p>`).join('')}</div>` : ''}`;
+    ${njtNotes.length ? `<h3 class="cm-h">From NJ Transit</h3><div class="cm-mta">${njtNotes.map((n) => `<p>${noticeFull(n)}</p>`).join('')}</div>` : ''}`;
   openSheet();
   try { drawPathMap(await freshMap(), { state: g.state, marks: g.marks, fit: ['33S', g.dest, 'JSQ'] }); } catch (e) { console.warn('guide map:', e); $('chg-map').hidden = true; }
 }
@@ -2619,7 +2629,7 @@ function openLirrGuide(key) {
   const honored = advice.some((x) => /honou?ring LIRR/i.test(x));
   $('chg-below').innerHTML = `${honored ? '' : '<p class="cm-live">The subway charges its own fare unless the MTA says LIRR tickets are accepted (cross-honoring); check the LIRR notices.</p>'}
     <p class="cm-live">Directions: <a href="${esc(d.google)}" target="_blank" rel="noopener">Google Maps</a> · <a href="${esc(d.apple)}" target="_blank" rel="noopener">Apple Maps</a></p>
-    ${notes.length ? `<h3 class="cm-h">From the LIRR</h3><div class="cm-mta">${notes.map((n) => `<p>${noticeText(n.text)}</p>`).join('')}</div>` : ''}`;
+    ${notes.length ? `<h3 class="cm-h">From the LIRR</h3><div class="cm-mta">${notes.map((n) => `<p>${noticeFull(n)}</p>`).join('')}</div>` : ''}`;
   openSheet();
 }
 // LIRR service into and out of Penn suspended, or most of the next hour's
@@ -2831,7 +2841,7 @@ function openOptions(r) {
   const ns = rowNotices(r);
   $('chg-kind').textContent = 'Other options';
   $('chg-h').innerHTML = `${esc(r.line)} to ${esc(r.place)}`;
-  $('chg-top').innerHTML = ns.map((n) => `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`).join('');
+  $('chg-top').innerHTML = ns.map((n) => `<p class="cm-sum">⚠ ${noticeFull(n)}</p>`).join('');
   const mine = new Set([...(r.via || []), r.place].map(normName2));
   const going = board.departures.filter((x) => x.carrier === r.carrier && x.id !== r.id && x.tone !== 'stop' && x.tone !== 'departed' && (x.leaves ?? x.time) > nowS && x.time < nowS + 3 * 3600 && rowNotices(x).length === 0);
   // Other trains from Penn (not affected by the notice) calling at stations
@@ -2874,7 +2884,7 @@ function openSubwayOptions(route, dir, stnId, mode) {
   $('chg-map').hidden = true;
   $('chg-kind').textContent = 'Other options';
   $('chg-h').innerHTML = `${bulletHtml(route, 'tiny')} ${dir === 'N' ? 'uptown' : 'downtown'} from ${esc(stationName(stnId))}`;
-  $('chg-top').innerHTML = (mode === 'local' ? subwayExpressSwitch(route, dir) : subwayDelays(route, dir)).map((n) => `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`).join('');
+  $('chg-top').innerHTML = (mode === 'local' ? subwayExpressSwitch(route, dir) : subwayDelays(route, dir)).map((n) => `<p class="cm-sum">⚠ ${noticeFull(n)}</p>`).join('');
   $('chg-below').innerHTML = subwayOptionsHtml(route, dir, stnId, mode);
   openSheet();
 }
@@ -2893,7 +2903,7 @@ function openNoticeOptions(id) {
   $('chg-kind').textContent = 'Other options';
   const lines = n.lines.filter((l) => PENN_SUBWAY[l] && subwayData.routes[l]);
   $('chg-h').innerHTML = `${lines.map((l) => bulletHtml(l, 'tiny')).join('')} from 34 St-Penn Station`;
-  $('chg-top').innerHTML = `<p class="cm-sum">⚠ ${noticeText(n.text)}</p>`;
+  $('chg-top').innerHTML = `<p class="cm-sum">⚠ ${noticeFull(n)}</p>`;
   const dirs = ['N', 'S'].filter((d) => dirMatch(n, d));
   $('chg-below').innerHTML = lines.flatMap((l) => dirs.map((d) => `<h3 class="cm-h">Instead of the ${dirs.length > 1 ? (d === 'N' ? 'uptown ' : 'downtown ') : ''}${lineName(l)}</h3>${subwayOptionsHtml(l, d, PENN_SUBWAY[l], mode, true)}`)).join('');
   openSheet();
@@ -3108,7 +3118,7 @@ function noticeStrip(list, where) {
   const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : 'Service notices for trains at Penn';
   // Notices that close or reroute part of a line open a map.
   const mapBtn = (n) => (typeof changeModel === 'function' && (changeModel(n) || lirrModel(n) || pathModel(n)) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
-  const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}" data-nid="${esc(n.id)}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${mapBtn(n)}${optionsBtn(n)}</p></div>`).join('');
+  const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}" data-nid="${esc(n.id)}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeFull(n)}${mapBtn(n)}${optionsBtn(n)}</p></div>`).join('');
   return `<details class="al-strip${urgent ? ' urgent' : ''}" data-where="${where}" data-sig="${esc(sig)}"${opened ? ' open' : ''}><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${items}</details>`;
 }
 // Add #preview to the address to see the next week's planned LIRR and subway
@@ -3141,7 +3151,7 @@ function renderAlertsTab() {
   const card = (n) => {
     const map = typeof changeModel === 'function' && (changeModel(n) || lirrModel(n) || pathModel(n)) ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
     const opts = optionsBtn(n);
-    return `<div class="al-card${n.urgent ? ' urgent' : ''}" data-nid="${esc(n.id)}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeText(n.text)}${map || opts ? `<br>${map}${opts}` : ''}</p></div>`;
+    return `<div class="al-card${n.urgent ? ' urgent' : ''}" data-nid="${esc(n.id)}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeFull(n)}${map || opts ? `<br>${map}${opts}` : ''}</p></div>`;
   };
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
   $('alerts').innerHTML = lirrAltHtml() + njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')

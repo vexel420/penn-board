@@ -581,3 +581,5 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .ent.ex { background: #7a7a7a; }
 .cm-key .ent-li { display: block; font-size: .82rem; color: var(--dim); }
 .cm-key .ent-li .ent { display: inline-grid; transform: none; width: 14px; height: 14px; vertical-align: -2px; margin: 0 .1rem 0 .35rem; }
+.n-more { display: block; margin-top: .3rem; }
+.n-more b { display: inline-block; margin-top: .25rem; }
