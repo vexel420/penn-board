@@ -686,3 +686,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - End of style.css, "Readability": one color per message (notes, card details, fares, bus notes); gray only for a purpose (departed/not-running, crossed-off stops, unselected tabs, fine print `.foot`/`.cm-live` #9aa79b); `--dim` lightened to #c4ccc2; small text raised to about 13.5px minimum (pills .84rem, tags, gates, line labels), supporting text about 10% bigger; `.time span` stays on one line.
 - `glueBullets` (end of app.js, MutationObserver): a line bullet keeps the punctuation after it on the same line.
 - Keep new styles to these rules: no gray for ordinary text, no text under ~.82rem.
+
+## "NJ Transit data didn't load" blips (Nov 24, 2026)
+- Relay and NJ Transit were fine (no relay errors in 24 h, sign-in valid, not blocked). Cause: phones cancel requests in flight when the screen locks or the app switches, and the next read only came a full ttl later, so the banner flashed.
+- feeds.js `source()`: a failed read retries once after 2 s, then 5 s later instead of a full ttl; failures aren't reported while the last good copy is under ERROR_GRACE (90 s) old. A real outage still shows the message. `plainError` words connection drops plainly.

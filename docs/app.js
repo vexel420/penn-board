@@ -498,9 +498,9 @@ function emptyMessage() {
   if (carrier === 'njt') {
     if (view === 'arrivals') return 'NJ Transit publishes departures only, so its arriving trains can’t be listed here.';
     if (s.njt.needsServer || s.njt.needsLogin) return 'NJ Transit data not yet available.';
-    if (s.njt.error) return `NJ Transit data didn’t load: ${s.njt.error}. Trying again shortly.`;
+    if (s.njt.error) return `NJ Transit data didn’t load${plainError(s.njt.error)}. Trying again shortly.`;
   }
-  if (carrier !== 'all' && s[carrier] && s[carrier].error) return `${CARRIERS[carrier]} data didn’t load: ${s[carrier].error}. Trying again shortly.`;
+  if (carrier !== 'all' && s[carrier] && s[carrier].error) return `${CARRIERS[carrier]} data didn’t load${plainError(s[carrier].error)}. Trying again shortly.`;
   return `No ${carrier === 'all' ? '' : CARRIERS[carrier] + ' '}${view} in the next few hours.`;
 }
 
@@ -973,6 +973,9 @@ function noticeFull(n) {
     .map((x) => (/:$/.test(x) && x.length < 40 ? `<b>${noticeText(x)}</b>` : noticeText(x)));
   return `${noticeText(n.text)}<span class="n-more">${rows.join('<br>')}</span>`;
 }
+// Errors in plain words: a dropped connection is "the connection dropped", not
+// "Failed to fetch"; anything else keeps the railroad's own message.
+const plainError = (e) => (/failed to fetch|load failed|networkerror|network|aborted|timed? ?out|timeout/i.test(String(e)) ? ' (the connection dropped)' : `: ${esc(e)}`);
 function dropPill(key, label, kind, ns, extra = '') {
   const open = openDrops.has(key);
   ns = ns.filter(Boolean);
@@ -3161,7 +3164,7 @@ function renderNotices() {
   $('njt-note').textContent = s.njt.needsServer || s.njt.needsLogin ? 'NJ Transit data not yet available.' : '';
   if (s.njt.error) out.push('NJ Transit data didn’t load. The NJ Transit trains shown may not be real time.');
   else if (s.njt.staleSince) out.push(`NJ Transit times are from ${Math.max(1, Math.round((Date.now() / 1000 - s.njt.staleSince) / 60))} min ago and may not be real time. Confirm on the station screens.`);
-  for (const k of ['lirr', 'amtrak']) if (s[k].error) out.push(`${CARRIERS[k]} data didn’t load (${esc(s[k].error)}). Showing the last trains received.`);
+  for (const k of ['lirr', 'amtrak']) if (s[k].error) out.push(`${CARRIERS[k]} data didn’t load${plainError(s[k].error)}. Showing the last trains received.`);
   if (s.subway.error) out.push('Subway times didn’t load. Showing the last times received.');
   $('notices').innerHTML = out.map((m) => `<p>${m}</p>`).join('');
 }

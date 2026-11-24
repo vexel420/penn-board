@@ -32,17 +32,24 @@ function nyToEpoch(y, mo, d, h, mi, s) {
 // the answer, unless the last fetch was under FORCE_GAP seconds ago. That gap
 // stops many open pages from multiplying requests to a feed.
 const FORCE_GAP = 10;
+// A failed read is tried again once after 2 s (a phone that was asleep or
+// switching apps cancels requests in flight), then again 5 s later rather
+// than a full ttl. While the last good copy is under ERROR_GRACE seconds old,
+// a failure isn't reported: the board keeps showing that copy quietly.
+const ERROR_GRACE = 90;
 function source(name, ttl, load) {
-  const state = { data: null, at: 0, error: null, pending: null };
+  const state = { data: null, at: 0, ok: 0, error: null, pending: null };
+  const once = () => load().catch(() => new Promise((r) => setTimeout(r, 2000)).then(load));
   return async (force = false) => {
     if (now() - state.at >= (force ? Math.min(ttl, FORCE_GAP) : ttl) && !state.pending) {
-      state.pending = load()
-        .then((data) => { state.data = data; state.error = null; })
-        .catch((e) => { state.error = e.message || String(e); if (typeof window === 'undefined') console.error(`[${name}]`, state.error); })
-        .finally(() => { state.at = now(); state.pending = null; });
+      state.pending = once()
+        .then((data) => { state.data = data; state.error = null; state.ok = now(); state.at = now(); })
+        .catch((e) => { state.error = e.message || String(e); state.at = now() - ttl + 5; if (typeof window === 'undefined') console.error(`[${name}]`, state.error); })
+        .finally(() => { state.pending = null; });
     }
     if (state.pending && (force || state.data === null || now() - state.at > ttl * 3)) await state.pending;
-    return { data: state.data, error: state.error };
+    const quiet = state.data !== null && now() - state.ok < ERROR_GRACE;
+    return { data: state.data, error: quiet ? null : state.error };
   };
 }
 
