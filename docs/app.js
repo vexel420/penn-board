@@ -3433,6 +3433,8 @@ function busLiveFor(o) {
     return { in: inMin > 1200 ? inMin - 1440 : inMin, soon: !!m, t, gate: String(x.lanegate || '').split('_')[0] };
   }).filter((x) => x.in != null && x.in >= 0).sort((a, b) => a.in - b.in);
 }
+// Distances in miles: "about 2 miles", "about 1.5 miles", "under a mile".
+const milesText = (m) => { const mi = m / 1609.344; if (mi < 1) return 'a mile'; const r = mi < 3 ? Math.round(mi * 2) / 2 : Math.round(mi); return `about ${r} mile${r === 1 ? '' : 's'}`; };
 const clockOf = (t) => `${fmtMins(t)} ${(t % 1440) < 720 ? 'AM' : 'PM'}`;
 // "300 - NYC - Middletown" under route 300: drop the repeated number and "Westbound".
 function busName(o) {
@@ -3492,7 +3494,7 @@ function renderBuses() {
       }
       const gates = !(live && live.length) && o.gates.length ? ` <span class="gate">Gate ${esc(o.gates.slice(0, 2).join(' or '))}</span>` : '';
       const where = o.far
-        ? `Gets within ${(o.walkM / 1000).toFixed(1)} km of the station at ${esc(o.stop)}; you’ll need a taxi or local ride from there.`
+        ? `Gets within ${milesText(o.walkM)} of the station at ${esc(o.stop)}; you’ll need a taxi or local ride from there.`
         : `Get off at ${esc(o.stop)}, ${o.walk} min walk to the station.`;
       const from = o.from ? ` Leaves from ${esc(o.from)}, not inside Port Authority.` : '';
       const often = o.gap && o.gap <= 60 ? `; by day about every ${o.gap} min` : o.weekdayTrips ? `; ${o.weekdayTrips} trip${o.weekdayTrips === 1 ? '' : 's'} on weekdays` : '';
