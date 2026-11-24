@@ -2426,9 +2426,11 @@ async function freshMap() {
 // PATH's network with each line in a state: 'run' (normal), 'focus' (the
 // route to take), 'delay', 'off' (no trains), 'faint' (not part of this).
 // `marks`: station code -> label text; flagged stations get a red ring.
-function drawPathMap(map, { state = {}, marks = {}, flagged = [], fit = null }) {
+function drawPathMap(map, { state = {}, marks = {}, flagged = [], fit = null, near = false }) {
   // (The map needs its view before anything is drawn on it.)
-  const b = L.latLngBounds([PENN_LL, ...(fit || Object.keys(PATH_STATIONS)).map(PP)]);
+  // `near`: zoomed to a problem spot (Penn only included when it's close by).
+  const pts0 = (fit || Object.keys(PATH_STATIONS)).map(PP);
+  const b = L.latLngBounds(near && !fit.some((c) => ['33S', '23S', '14S'].includes(c)) ? pts0 : [PENN_LL, ...pts0]);
   map.fitBounds(b, { padding: [28, 28] });
   const lines = L.layerGroup().addTo(map);
   const draw = () => {
@@ -2456,8 +2458,10 @@ function drawPathMap(map, { state = {}, marks = {}, flagged = [], fit = null }) 
   for (const [c, text] of Object.entries(marks)) if (c !== '33S') labels.push({ at: PP(c), must: true, cls: flagged.includes(c) ? 'off' : '', html: `${esc(PATH_STATIONS[c][0])}${text ? `<small${flagged.includes(c) ? ' style="color:#ffd9d3"' : ''}>${esc(text)}</small>` : ''}`, w: textWidth(Math.max(PATH_STATIONS[c][0].length, text.length) > 18 ? text : PATH_STATIONS[c][0]) + 10, h: text ? 36 : 26 });
   for (const ln of PATH_LINES) {
     const s = state[ln.id];
-    if (s === 'delay' || s === 'off') { const mid = ln.stops[Math.floor(ln.stops.length / 2)]; labels.push({ at: PP(mid), must: true, cls: 'off', html: `${esc(ln.name)}<small style="color:#ffd9d3">${s === 'off' ? 'No trains' : 'Delays'}</small>`, w: textWidth(ln.name), h: 36 }); }
+    if ((s === 'delay' || s === 'off') && !near) { const mid = ln.stops[Math.floor(ln.stops.length / 2)]; labels.push({ at: PP(mid), must: true, cls: 'off', html: `${esc(ln.name)}<small style="color:#ffd9d3">${s === 'off' ? 'No trains' : 'Delays'}</small>`, w: textWidth(ln.name), h: 36 }); }
   }
+  // Every station named where there's room (owner, Nov 24), after the ones that must show.
+  for (const c of Object.keys(PATH_STATIONS)) if (c !== '33S' && !(c in marks)) labels.push({ at: PP(c), html: esc(PATH_STATIONS[c][0]), w: textWidth(PATH_STATIONS[c][0]) + 10, h: 26 });
   const layer = L.layerGroup().addTo(map);
   const sync = () => placeLabels(map, layer, labels);
   map.on('zoomend moveend', sync); sync();
@@ -2486,11 +2490,20 @@ function pathModel(n) {
     const s = /suspend|no service|not running|no trains/i.test(clause) ? 'off' : /delay|slow|congest/i.test(clause) ? 'delay' : /running|resum|normal/i.test(clause) ? 'run' : 'delay';
     for (const id of ids) if (!state[id] || s !== 'run') state[id] = s;
   }
+  // "JSQ-33 via HOB" (late nights, weekends) runs through Hoboken: both 33 St lines.
+  if (/\bJSQ\s*-\s*33\b[^.]*\bvia\s+HOB\b/i.test(text) && state['JSQ-33'] && !state['HOB-33']) state['HOB-33'] = state['JSQ-33'];
   const first = text.replace(PATH_PAIR, ' ').split(/\.\s/)[0];
   const issue = /elevator|escalator/i.test(first) ? 'Elevator out of service' : /closed|bypass|skip/i.test(first) ? 'Closed or skipped' : '';
   const flagged = issue ? PATH_NAMES.filter(([, re]) => re.test(first)).map(([c]) => c) : [];
+  // Where a delay comes from, in PATH's words: "Crew reported a track
+  // condition at 14 St" -> 14 St, "Track condition" (owner, Nov 24: the map
+  // should zoom to it and say so, like the MTA map).
+  const rest = text.replace(PATH_PAIR, ' ');
+  const spots = Object.keys(state).length ? PATH_NAMES.filter(([c, re]) => re.test(rest) && !flagged.includes(c)).map(([c]) => c) : [];
+  const cm = rest.match(/\b(track condition|signal (?:problem|issue|trouble)s?|disabled train|switch (?:problem|issue)s?|power (?:problem|issue|outage)s?|police activity|medical emergency|sick passenger|equipment (?:problem|issue)s?|congestion|construction|maintenance|flooding|fire)\b/i);
+  const cause = cm ? cm[1].charAt(0).toUpperCase() + cm[1].slice(1).toLowerCase() : 'Delays here';
   if (!Object.keys(state).length && !flagged.length) return null;
-  return { n, state, flagged, issue };
+  return { n, state, flagged, issue, spots, cause };
 }
 // A pill for PATH trains from 33 St on a line an open PATH alert says is
 // delayed or suspended (Journal Square via Hoboken uses both 33 St lines).
@@ -2553,6 +2566,7 @@ async function openPathIssue(m) {
   if (Object.values(state).includes('delay')) key.push('<li><span class="sw" style="border-color:#888;border-top-style:dotted"></span>Delays</li>');
   if (Object.values(state).includes('off')) key.push('<li><span class="sw off"></span>No trains</li>');
   if (flagged.length) key.push(`<li><span class="sw" style="border-color:#c0392b"></span>${esc(issue)}</li>`);
+  if ((m.spots || []).length) key.push(`<li><span class="ring-key"></span>${esc(m.cause)}</li>`);
   $('chg-top').innerHTML = `<ul class="cm-key">${key.join('')}</ul>`;
   const running = PATH_LINES.filter((ln) => state[ln.id] === 'run');
   const cards = flagged.map((c) => {
@@ -2567,7 +2581,16 @@ async function openPathIssue(m) {
     const map = await freshMap();
     const marks = {};
     for (const c of flagged) marks[c] = issue;
-    drawPathMap(map, { state, marks, flagged });
+    for (const c of m.spots || []) marks[c] = m.cause;
+    // Zoomed to where it's happening: the station(s) PATH names and the ones
+    // either side on the affected lines (and 33 St, if those lines reach it).
+    let fit = null;
+    if ((m.spots || []).length || flagged.length) {
+      const ids = new Set([...(m.spots || []), ...flagged]);
+      for (const ln of PATH_LINES) if (state[ln.id] && state[ln.id] !== 'run') ln.stops.forEach((c, i) => { if (ids.has(c)) { if (ln.stops[i - 1]) ids.add(ln.stops[i - 1]); if (ln.stops[i + 1]) ids.add(ln.stops[i + 1]); } });
+      fit = [...ids];
+    }
+    drawPathMap(map, { state, marks, flagged: [...flagged, ...(m.spots || [])], fit, near: !!fit });
     $('chg-below').onclick = (e) => { const b = e.target.closest('[data-pzoom]'); if (b) map.flyTo(PP(b.dataset.pzoom), 15, { duration: 0.8 }); };
   } catch (e) { console.warn('PATH map:', e); $('chg-map').hidden = true; }
 }

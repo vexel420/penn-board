@@ -638,3 +638,6 @@ body { padding-bottom: env(safe-area-inset-bottom); }
    button below the status bar, where they can be tapped. */
 .cm-head { padding-top: calc(1rem + env(safe-area-inset-top)); }
 #reroute { max-height: calc(100dvh - 2rem - env(safe-area-inset-top)); }
+
+/* PATH map key: the ring around a station where PATH reports the problem. */
+.cm-key .ring-key { display: inline-block; width: .9rem; height: .9rem; border-radius: 50%; border: 3px solid #c0392b; background: #fff; vertical-align: -2px; margin-right: .4rem; }
