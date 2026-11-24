@@ -786,9 +786,42 @@ function directionAlts(stn, line, dir, skip = () => false) {
   });
   return scores.filter((x) => x.reach >= ALT_REACH).sort((a, b) => b.reach - a.reach).map((x) => x.l);
 }
-const useText = (alts) => (alts.length ? `, use the ${alts.slice(0, -1).map(lineName).join(', ')}${alts.length > 1 ? ' or ' : ''}${lineName(alts[alts.length - 1])}` : '');
 // The lines a notice itself names, at this station (the MTA's own advice).
 const noticeAlts = (n, stn, line) => [...new Set([...String(`${n.desc || ''}`).matchAll(/\[([A-Z0-9]{1,2})\]/g)].map((m) => m[1]))].filter((l) => l !== line && stn.lines.includes(l));
+
+// The fastest way to where a missing line goes (subway-guide.json, built
+// from the MTA timetable by scripts/build-subway-guide.py): a direct line,
+// or one change inside the subway, by travel time (owner, Nov 24).
+let subwayGuide, subwayGuideLoading = null;
+function loadSubwayGuide() {
+  if (subwayGuide !== undefined || subwayGuideLoading) return;
+  subwayGuideLoading = fetch('subway-guide.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    .then((d) => { subwayGuide = d; subwayGuideLoading = null; if (board) { slideStarted = -Infinity; renderSubway(); } });
+}
+const shortStop = (id) => String((subwayGuide && subwayGuide.names[id]) || stationName(id) || id).split('-')[0].trim();
+const linesText = (ls) => `${ls.slice(0, -1).map(lineName).join(', ')}${ls.length > 1 ? ' or ' : ''}${lineName(ls[ls.length - 1])}`;
+// The plan to show now: the fastest whose first train is running.
+function guidePlan(stn, line, dir, here, nowS) {
+  const per = (((subwayGuide && subwayGuide.plans[stn.id]) || {})[line] || {})[dir] || {};
+  const night = nyNow().mins < 5 * 60;
+  for (const p of (night ? per.night : per.day) || []) {
+    const first = p.first.filter((l) => here.some((x) => x.route === l && x.dir === p.firstDir && x.trains.some((t) => t.time >= nowS - 30)));
+    if (first.length) return { ...p, first };
+  }
+  return null;
+}
+// What to do instead, as one short sentence: the MTA notice's own advice
+// first; then the fastest plan; then a line going the same way.
+function suggestionHtml(stn, line, dir, here, nowS, n) {
+  const named = n ? noticeAlts(n, stn, line) : [];
+  if (named.length) return `Use the ${linesText(named)}.`;
+  const p = guidePlan(stn, line, dir, here, nowS);
+  if (p && !p.then) return `Use the ${linesText(p.first)}.`;
+  if (p) return `Take the ${linesText(p.first)}${p.firstDir !== dir ? (p.firstDir === 'N' ? ' uptown' : ' downtown') : ''} to ${esc(shortStop(p.change))}, then the ${lineName(p.then)}.`;
+  const alts = directionAlts(stn, line, dir, (l) => !here.some((x) => x.route === l && x.dir === dir));
+  return alts.length ? `Use the ${linesText(alts)}.` : '';
+}
+const howHtml = (h) => (h ? `<span class="how">${h}</span>` : '');
 
 // A line rerouted or suspended so it doesn't stop at this station at all
 // (the C via the D and F): shown like the overnight C, with the notice's end.
@@ -800,11 +833,9 @@ function lineAwayNote(stn, here, line, dir, svc, nowS) {
     && /reroute|suspend/i.test(x.type) && dirMatch(x, dir));
   if (!n) return null;
   if (lineSection(here, stn.id, line, dir) !== svc) return '';
-  let alts = noticeAlts(n, stn, line);
-  if (!alts.length) alts = directionAlts(stn, line, dir, (l) => !here.some((x) => x.route === l && x.dir === dir));
   const u = untilText(n);
   const map = typeof changeModel === 'function' && changeModel(n) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '';
-  return `<div class="none-row">${bulletHtml(line)}<span>No ${lineName(line)} trains at ${esc(stationName(stn.id))}${u ? ` ${esc(u)}` : ''}${useText(alts)}.${map}</span></div>`;
+  return `<div class="none-row">${bulletHtml(line)}<span>No ${lineName(line)} trains at ${esc(stationName(stn.id))}${u ? ` ${esc(u)}` : ''}.${howHtml(suggestionHtml(stn, line, dir, here, nowS, n))}${map}</span></div>`;
 }
 
 // null: no suspension to show here (the usual messages apply).
@@ -817,21 +848,17 @@ function suspensionNote(stn, here, line, dir, svc, nowS) {
   if (lineSection(here, stn.id, line, dir) !== svc) return '';
   const label = lineName(line);
   const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
-  // The lines the advisory sends people to ("[2] makes [3] stops..."), at this station.
-  const desc = String(s.n.desc || '');
-  let alts = [...new Set([...desc.matchAll(/\[([A-Z0-9]{1,2})\]/g)].map((m) => m[1]))].filter((l) => l !== line && stn.lines.includes(l));
-  if (!alts.length) alts = directionAlts(stn, line, dir, (l) => !here.some((x) => x.route === l && x.dir === dir));
-  const altNames = alts.map((l) => lineName(l));
-  // "…until 5:00 AM, use the 2." (owner: one sentence; the advisory's
-  // details stay in the notice).
-  const use = altNames.length ? `, use the ${altNames.slice(0, -1).join(', ')}${altNames.length > 1 ? ' or ' : ''}${altNames[altNames.length - 1]}.` : '.';
+  // What to take instead: the advisory's own lines ("[2] makes [3] stops..."),
+  // else the fastest way (suggestionHtml), on its own line.
+  const how = suggestionHtml(stn, line, dir, here, nowS, s.n);
+  const use = `.${how ? ` ${how}` : ''}`;
   const until = `until ${clockText(s.end)}`;
   // The last train before it starts (a late one still counts).
   const last = here.filter((x) => x.route === line && x.dir === dir).flatMap((x) => x.trains)
     .map((t) => t.time).filter((t) => t >= nowS - 30 && t <= s.start + 10 * 60).sort((a, b) => b - a)[0];
   if (last) return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${label} train leaves at ${clockText(last)}, ${inText(last, nowS)}.</b> Then no ${way}${label} trains ${until}${use}</span></p>`;
   if (nowS < s.start) return `<p class="svc-line night">${ICON.moon}<span><b>No ${way}${label} trains from ${clockText(s.start)} ${until}</b>${use}</span></p>`;
-  return `<div class="none-row">${bulletHtml(line)}<span>No ${way}${label} trains ${until}${use}</span></div>`;
+  return `<div class="none-row">${bulletHtml(line)}<span>No ${way}${label} trains ${until}.${howHtml(how)}</span></div>`;
 }
 
 // Timetable minutes (after today's midnight, may pass 24:00) -> epoch seconds.
@@ -1224,6 +1251,7 @@ function renderSubway() {
   }
   loadSubwayData();
   loadSubwayTimes();
+  loadSubwayGuide();
   if (!board.subway.length) {
     $('subway').innerHTML = `<p class="empty">${board.sources.subway.error ? 'Subway times didn’t load. Trying again shortly.' : 'No subway trains reported right now.'}</p>`;
     return;
@@ -1282,9 +1310,7 @@ function renderSubway() {
       if (g && g.phase === 'countdown') return '';
       if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
       // The other lines at this station still running this way (C: A or E; 3: 1 or 2).
-      const off = (l, d) => { const x = nightGapState(stn.id, l, d); return !!x && x.phase !== 'countdown'; };
-      const alts = directionAlts(stn, line, dir, (l) => off(l, dir)).map((l) => lineName(l));
-      const altText = alts.length ? `the ${alts.slice(0, -1).join(', ')}${alts.length > 1 ? ' or ' : ''}${alts[alts.length - 1]}` : '';
+      const how = suggestionHtml(stn, line, dir, here, nowS, null);
       const way = dir === 'N' ? 'uptown' : 'downtown';
       const label = lineName(line);
       // Short: "No C trains until 5:41 AM, use the A or E." A line not running
@@ -1292,8 +1318,8 @@ function renderSubway() {
       // ends at Penn), say which.
       const oneWay = !bothWaysOff(stn.id, line);
       const say = oneWay
-        ? `No ${label} trains ${way} until ${fmtClock(g.until)}${altText ? `, use ${altText}` : ''}.`
-        : `No ${label} trains until ${fmtClock(g.until)}${altText ? `, use ${altText}` : ''}.`;
+        ? `No ${label} trains ${way} until ${fmtClock(g.until)}.${howHtml(how)}`
+        : `No ${label} trains until ${fmtClock(g.until)}.${howHtml(how)}`;
       return `<div class="none-row">${bulletHtml(line)}<span>${say}</span></div>`;
     }).join('');
     if (svc === 'express') {

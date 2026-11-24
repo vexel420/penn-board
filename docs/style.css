@@ -515,3 +515,4 @@ button.late-pill { border: 0; font: inherit; font-size: .72rem; font-weight: 700
 .drop.info { border-left-color: #6f93e8; background: rgba(111, 147, 232, .08); }
 .sline:has(.drop), .b-row:has(.drop) { align-items: start; }
 .sline:has(.drop) .smins { padding-top: .2rem; }
+.none-row .how { display: block; margin-top: .15rem; color: var(--ivory); }
