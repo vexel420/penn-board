@@ -573,3 +573,11 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .p-mtabus { background: #0b5fa5; }
 #chg-below .skip-bus { margin-top: .8rem; font-size: .92rem; }
 .skip-bus .sb-mta p { margin: .2rem 0; }
+
+/* Subway entrances on the maps (zoomed in). */
+.ent { border-radius: 50%; background: #0f7a3c; border: 1.5px solid #fff; box-shadow: 0 1px 2px rgba(0,0,0,.45); display: grid; place-items: center; transform: translate(-50%, -50%); }
+.ent svg { width: 62%; height: 62%; fill: #fff; }
+.ent.el { background: #1c5fb8; }
+.ent.ex { background: #7a7a7a; }
+.cm-key .ent-li { display: block; font-size: .82rem; color: var(--dim); }
+.cm-key .ent-li .ent { display: inline-grid; transform: none; width: 14px; height: 14px; vertical-align: -2px; margin: 0 .1rem 0 .35rem; }

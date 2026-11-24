@@ -1871,6 +1871,7 @@ async function openChange(id, view = 1) {
     $('chg-top').innerHTML = `<ul class="cm-key">
         ${model.whole ? '' : `<li><span class="sw" style="border-color:${esc(lineInfo(route).color)}"></span>${label} trains running</li>`}
         <li><span class="sw off"></span>${model.skip ? `${label} trains skip these stations` : `No ${label} trains`}</li>
+        <li class="ent-li">Zoom in for entrances: <span class="ent">${ENT_STAIR}</span> stairs <span class="ent el">${ENT_ELEV}</span> elevator <span class="ent ex">${ENT_STAIR}</span> exit only</li>
         ${alt.buses.length ? '<li><span class="sw bus"></span>Free shuttle bus</li>' : ''}
         ${model.via && model.via.length ? `<li>${bulletHtml(route, 'tiny')} on its temporary route, via the ${[...new Set(model.via.map((v) => v.line))].map((l) => bulletHtml(l, 'tiny')).join(' and ')}</li>` : ''}
       </ul>
@@ -1943,6 +1944,21 @@ function offsetLine(map, pts, px) {
     return map.unproject(L.point(p.x - dy * px, p.y + dx * px), z);
   });
   return out;
+}
+
+// ---------- subway entrances on the maps (docs/subway-entrances.json, MTA open data) ----------
+const ENT_MIN_ZOOM = 16;
+let subwayEntrances = null, entLoading = null;
+const loadSubwayEntrances = () => entLoading || (entLoading = fetch('subway-entrances.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => { subwayEntrances = d; }));
+const ENT_STAIR = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h5v-4h4v-4h4V8h5V4h-7v4h-4v4H6v4H3z"/></svg>';
+const ENT_ELEV = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm3.5 7h7L12 5.5zm0 4L12 18.5l3.5-4.5z"/></svg>';
+// Small at 16, a bit bigger closer in; elevator blue, exit-only gray.
+function entMarker([la, lo, t, way], z) {
+  const size = z >= 17.5 ? 18 : z >= 16.75 ? 15 : 12;
+  const cls = t === 'E' ? 'ent el' : way === 'X' ? 'ent ex' : 'ent';
+  const title = t === 'E' ? 'Elevator' : way === 'X' ? 'Exit only' : way === 'N' ? 'Entry only' : 'Entrance';
+  return L.marker([la, lo], { interactive: false, zIndexOffset: 3000, title,
+    icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="${cls}" style="width:${size}px;height:${size}px">${t === 'E' ? ENT_ELEV : ENT_STAIR}</div>` }) });
 }
 
 function drawChange(map, model, view) {
@@ -2102,7 +2118,25 @@ function drawChange(map, model, view) {
   }
   const labelLayer = L.layerGroup().addTo(map);
   const ring = L.layerGroup().addTo(map);
+  // Entrances (owner, Nov 24): only at the stations the advisory sends you to
+  // (where the closed or skipped stretch starts and ends, where trains end,
+  // the MTA's transfer stations, and Penn), and only zoomed in close.
+  const entLayer = L.layerGroup().addTo(map);
+  const openEdge = (id) => !closed.has(id) && lineIds.includes(id);
+  const entIds = new Set([...live.lastStops,
+    ...[...closed].flatMap((id) => { const i = lineIds.indexOf(id); return [lineIds[i - 1], lineIds[i + 1]]; }).filter((id) => id && openEdge(id)),
+    ...(view === 2 ? alt.transfers.flatMap((t) => t.ids) : []),
+    ...['128', 'A28'].filter((id) => lineIds.includes(id))]);
+  const drawEntrances = () => {
+    entLayer.clearLayers();
+    const z = map.getZoom();
+    if (z < ENT_MIN_ZOOM || !subwayEntrances) return;
+    const bnd = map.getBounds().pad(0.2);
+    for (const id of entIds) for (const e of subwayEntrances[id] || []) if (bnd.contains([e[0], e[1]])) entMarker(e, z).addTo(entLayer);
+  };
+  loadSubwayEntrances().then(drawEntrances);
   const sync = () => {
+    drawEntrances();
     for (const [small, m] of dots) { m.setRadius(dotSize(small)); m.setStyle({ weight: map.getZoom() < 11.5 ? 1.2 : small ? 1.5 : 2 }); }
     if (map.getZoom() >= 14) { labelLayer.clearLayers(); names.addTo(map); }
     else { names.remove(); placeLabels(map, labelLayer, labels); }
