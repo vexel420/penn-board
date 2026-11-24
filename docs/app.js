@@ -1017,8 +1017,78 @@ function subwayPills(route, dir, svc, stnId, train) {
     + (skip.length ? dropPill(k('skip'), 'Stops skipped', 'warn', skip, skipMapBtn(skip)) : '')
     + (red.length ? dropPill(k('reduced'), 'Reduced service', 'info', red) : '');
 }
-// "See map" in a skipped-stops dropdown, when the notice names the stations.
-const skipMapBtn = (ns) => { const n = ns.find((x) => changeModel(x)); return n ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : ''; };
+// "See map" in a skipped-stops dropdown, when the notice names the stations,
+// and the buses to those stations (below).
+const skipMapBtn = (ns) => { const n = ns.find((x) => changeModel(x)); const m = n && changeModel(n); return n ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>${m.skip ? skipBusHtml(m) : ''}` : ''; };
+
+// ---------- buses to skipped stops (MTA Bus Time) ----------
+// When trains skip stations, each skipped station gets the quickest MTA bus
+// from the station either side of the skipped stretch (owner, Nov 24).
+// docs/subway-bus-links.json (scripts/build-subway-bus-links.py) has the bus
+// links between nearby stations; live times come from the relay's
+// /mta-bus-stop (MTA Bus Time, key kept on the relay).
+let subwayBusLinks;        // undefined: not loaded; null: couldn't load
+let busLinksLoading = null;
+const mtaBusLive = new Map(); // stop code -> { at, buses } | { at, error } | { loading }
+function loadBusLinks() {
+  if (subwayBusLinks !== undefined || busLinksLoading) return;
+  busLinksLoading = fetch('subway-bus-links.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    .then((d) => { subwayBusLinks = d; busLinksLoading = null; refreshSkipBuses(); });
+}
+function loadMtaBusStop(stop) {
+  const c = mtaBusLive.get(stop);
+  if (!window.PENN_RELAY || (c && (c.loading || Date.now() - c.at < 30000))) return;
+  mtaBusLive.set(stop, { ...(c || {}), loading: true });
+  fetch(`${window.PENN_RELAY}/mta-bus-stop?stop=${encodeURIComponent(stop)}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((d) => mtaBusLive.set(stop, { at: Date.now(), buses: d.buses || [] }))
+    .catch(() => mtaBusLive.set(stop, { at: Date.now(), error: true }))
+    .finally(refreshSkipBuses);
+}
+// Each skipped station's best bus: from the open station just before or just after the skipped stretch.
+function skipBusPlan(model) {
+  const ids = subwayData.routes[model.route].normal.filter((id) => subwayData.stops[id]);
+  const idx = [...model.closed].map((id) => ids.indexOf(id)).filter((i) => i >= 0);
+  if (!idx.length || !subwayBusLinks) return [];
+  const ends = [ids[Math.min(...idx) - 1], ids[Math.max(...idx) + 1]].filter((id) => id && !model.closed.has(id));
+  return ids.filter((id) => model.closed.has(id)).map((id) => {
+    const opts = ends.flatMap((e) => (subwayBusLinks[`${e}|${id}`] || []).map((o) => ({ ...o, end: e })));
+    opts.sort((a, b) => (a.t + (a.gap || 10) / 2) - (b.t + (b.gap || 10) / 2));
+    return { id, opt: opts[0] || null };
+  });
+}
+function skipBusHtml(model) {
+  loadBusLinks();
+  const key = `data-skipbus="${esc(model.n.id)}"`;
+  if (subwayBusLinks === undefined) return `<div class="skip-bus" ${key}><span class="sb-h">Buses to the skipped stops</span><span class="sb-dim">Finding buses…</span></div>`;
+  const plan = skipBusPlan(model);
+  if (!plan.some((x) => x.opt)) return '';
+  const nowMs = Date.now();
+  // Stations reached by the same bus from the same stop share one line.
+  const groups = [];
+  for (const { id, opt } of plan) {
+    const g = opt && groups.find((x) => x.opt && x.opt.from === opt.from && x.opt.r === opt.r);
+    if (g) { g.ids.push(id); g.rides.push(opt.ride); } else groups.push({ ids: [id], opt, rides: opt ? [opt.ride] : [] });
+  }
+  const items = groups.map(({ ids: gi, opt, rides }) => {
+    const names = gi.map((id) => esc(stationName(id))).join(', ');
+    if (!opt) return `<li><b>${names}</b><span class="sb-dim">No bus nearby</span></li>`;
+    loadMtaBusStop(opt.from);
+    const live = mtaBusLive.get(opt.from);
+    const next = live && live.buses ? live.buses.filter((b) => String(b.line).toUpperCase() === opt.r.toUpperCase() && b.at)
+      .map((b) => Math.round((Date.parse(b.at) - nowMs) / 60000)).filter((m) => m >= 0).sort((a, b) => a - b).slice(0, 2) : null;
+    const when = next && next.length ? `<span class="sb-live">next ${next[0] === 0 ? 'now' : `in ${next[0]} min`}${next[1] != null ? `, ${next[1]}` : ''}</span>`
+      : next ? '<span class="sb-dim">none due soon</span>' : opt.gap ? `<span class="sb-dim">about every ${opt.gap} min</span>` : '';
+    const lo = Math.min(...rides), hi = Math.max(...rides);
+    return `<li><b>${names}</b><span>Get off at ${esc(stationName(opt.end))}, then the <span class="pl p-mtabus">${esc(opt.r)}</span> (${lo === hi ? lo : `${lo}–${hi}`} min ride) · ${when}</span></li>`;
+  }).join('');
+  return `<div class="skip-bus" ${key}><span class="sb-h">Buses to the skipped stops</span><ul>${items}</ul><span class="sb-dim">Live bus times from MTA Bus Time.</span></div>`;
+}
+function refreshSkipBuses() {
+  document.querySelectorAll('[data-skipbus]').forEach((el) => {
+    const m = changeModels().find((x) => x.n.id === el.dataset.skipbus);
+    if (m) el.outerHTML = skipBusHtml(m) || '<span></span>';
+  });
+}
 // A reroute pill, with the notice behind it (and its map) when there is one.
 function reroutePill(stnId, route, dir) {
   const m = changeFor(route);
@@ -1800,7 +1870,7 @@ async function openChange(id, view = 1) {
         ${model.via && model.via.length ? `<li>${bulletHtml(route, 'tiny')} on its temporary route, via the ${[...new Set(model.via.map((v) => v.line))].map((l) => bulletHtml(l, 'tiny')).join(' and ')}</li>` : ''}
       </ul>
       ${hasAlt ? '<button type="button" class="cm-go" data-view="2">How to get around this <span aria-hidden="true">→</span></button>' : liveDirectionsHtml()}`;
-    $('chg-below').innerHTML = '';
+    $('chg-below').innerHTML = model.skip ? skipBusHtml(model) : '';
   } else {
     $('chg-h').innerHTML = `Getting around it`;
     $('chg-top').innerHTML = `<button type="button" class="cm-back" data-view="1">← Whole ${label} line</button>

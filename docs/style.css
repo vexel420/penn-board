@@ -560,3 +560,15 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .bf-bus .gate { display: inline-block; border: 1px solid var(--gold); color: var(--gold); border-radius: 4px; padding: 0 .3rem; font-size: .72rem; font-weight: 800; margin-left: .25rem; vertical-align: .1em; }
 .bf-bus .kind { font-size: .7rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); margin-left: .3rem; }
 .p-partner { background: #5b5b5b; }
+
+/* Buses to skipped subway stops (MTA Bus Time). */
+.skip-bus { flex-basis: 100%; order: -1; display: block; margin: .1rem 0 .3rem; }
+.skip-bus .sb-h { display: block; font-weight: 800; font-size: .78rem; letter-spacing: .04em; text-transform: uppercase; color: var(--gold); margin-bottom: .2rem; }
+.skip-bus ul { list-style: none; margin: 0 0 .25rem; padding: 0; }
+.skip-bus li { padding: .2rem 0; border-top: 1px solid rgba(255,255,255,.08); }
+.skip-bus li b { display: block; }
+.skip-bus .sb-live { color: var(--go); font-weight: 700; }
+.skip-bus .sb-dim { color: var(--dim); font-size: .8rem; display: inline; }
+.skip-bus > .sb-dim { display: block; }
+.p-mtabus { background: #0b5fa5; }
+#chg-below .skip-bus { margin-top: .8rem; font-size: .92rem; }

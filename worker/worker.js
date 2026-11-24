@@ -272,6 +272,31 @@ export default {
         await getToken(env, false).catch(() => {});
         return json(JSON.stringify({ server: new URL(NJT_API).host }), 0);
       }
+      if (pathname === '/mta-bus-stop') {
+        // Next MTA buses at one stop (MTA Bus Time, SIRI stop monitoring; owner's key
+        // MTA_BUSTIME_KEY stays here). ?stop= is the Bus Time stop code. Cached 30 s.
+        const stop = new URL(request.url).searchParams.get('stop') || '';
+        if (!/^\d{6}$/.test(stop)) return fail(400, 'stop must be a 6-digit Bus Time stop code');
+        if (!env.MTA_BUSTIME_KEY) return fail(503, 'MTA Bus Time key not set');
+        const cache = caches.default, key = new Request(`https://cache.local/mta-bus-stop/${stop}`);
+        const hit = await cache.match(key);
+        if (hit) return hit;
+        const u = `https://bustime.mta.info/api/siri/stop-monitoring.json?version=2&key=${encodeURIComponent(String(env.MTA_BUSTIME_KEY).trim())}&MonitoringRef=${stop}&MaximumStopVisits=12`;
+        const r = await fetch(u, { headers: { accept: 'application/json' } });
+        if (!r.ok) return fail(502, `MTA Bus Time answered ${r.status}`);
+        const d = await r.json();
+        const visits = (((d.Siri || {}).ServiceDelivery || {}).StopMonitoringDelivery || [])[0]?.MonitoredStopVisit || [];
+        const arr = (x) => (Array.isArray(x) ? x[0] : x) || '';
+        const buses = visits.map((v) => {
+          const j = v.MonitoredVehicleJourney || {}, c = j.MonitoredCall || {};
+          return { line: arr(j.PublishedLineName), dest: arr(j.DestinationName), dir: j.DirectionRef,
+            at: c.ExpectedArrivalTime || c.ExpectedDepartureTime || c.AimedArrivalTime || null,
+            away: (c.Extensions && c.Extensions.Distances && c.Extensions.Distances.PresentableDistance) || arr(c.ArrivalProximityText) || '' };
+        });
+        const res = json(JSON.stringify({ stop, buses }), 30);
+        ctx.waitUntil(cache.put(key, res.clone()));
+        return res;
+      }
       if (pathname === '/njt-bus-pabt') {
         // Live NJ Transit bus departures from Port Authority Bus Terminal (next hour), cached 30 s.
         const cache = caches.default, key = new Request(request.url, { method: 'GET' });

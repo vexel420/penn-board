@@ -667,3 +667,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 ## Subway entrances data (Nov 24, 2026; not used by the page yet)
 - `scripts/build-subway-entrances.py` → `docs/subway-entrances.json` from the MTA's "Subway Entrances and Exits" on data.ny.gov (i9wp-a4ja; host added to the environment). {GTFS stop id: [[lat, lon, type S/E/X/R/D, way B/X/N]]}, 2,120 entrances at 485 stations.
 - For the map redesign (owner wants entrances shown like Google Maps). Mock-up proposed: show only at stations you'd use (transfers, destination, Penn), smaller markers, zoomed in; awaiting approval.
+
+## Buses to skipped subway stops (Nov 24, 2026)
+- Relay `/mta-bus-stop?stop=NNNNNN`: MTA Bus Time SIRI stop monitoring with the owner's key (Worker secret `MTA_BUSTIME_KEY`), simplified to {line, dest, dir, at, away}, cached 30 s.
+- `scripts/build-subway-bus-links.py` → `docs/subway-bus-links.json` (~600 KB, loaded only when needed): for station pairs up to 6 stops apart on a line, MTA bus routes stopping within 300 m of both (in order), with the Bus Time stop codes, ride, walks, sign, daytime gap. Weekly rebuild downloads the six MTA bus GTFS files.
+- On a skipped-stops / local-to-express notice (dropdown and map sheet): "Buses to the skipped stops", grouped by bus, from the open station just before or after the skipped stretch, with live next arrivals. E.g. the 1 express 207–242 St: Bx9 from Van Cortlandt Park-242 St to 238/231/225 St; M100 from 207 St to 215 St.
