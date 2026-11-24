@@ -628,3 +628,8 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
    page's name stays in the tab title only, not under the heading. */
 .mast-kicker { display: block; font-size: .42em; letter-spacing: .18em; margin-bottom: .15em; text-transform: uppercase; }
 .mast .h1-sub { display: none; }
+
+/* Installed on an iPhone (full screen, translucent status bar): keep the
+   masthead clear of the clock and notch. */
+.mast-in { padding-top: max(1.1rem, env(safe-area-inset-top)); }
+body { padding-bottom: env(safe-area-inset-bottom); }

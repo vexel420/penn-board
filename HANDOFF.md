@@ -708,3 +708,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 
 ## Masthead (owner's pick T3, Nov 24, 2026)
 - "NEW YORK" kicker (`.mast-kicker`) over "Penn Station"; the view name (#h1-sub) is hidden on the page and kept only in the browser tab title.
+
+## Installable app (Nov 24, 2026)
+- `docs/manifest.webmanifest` (name "Penn Station", standalone, theme #7d2f26), icons in `docs/icons/` ("NYP" in Limelight gold on Tuscan red with the masthead's gold rules; maskable version for Android; apple-touch-icon 180). No railroad logos.
+- `docs/sw.js`: network first for this site's own files (always the latest version, last copy kept for no connection); never touches live data from other hosts. Registered at the end of app.js.
+- iPhone: apple-mobile-web-app meta tags, `viewport-fit=cover`, safe-area padding on the masthead.
+- Install: iPhone Safari → Share → Add to Home Screen. Android Chrome → menu → Install app / Add to Home screen.

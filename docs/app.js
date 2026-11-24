@@ -3829,3 +3829,8 @@ new MutationObserver(() => {
   requestAnimationFrame(() => { glueQueued = false; glueBullets(document.body); });
 }).observe(document.body, { childList: true, subtree: true });
 glueBullets(document.body);
+
+
+// Installed as an app: the offline helper (docs/sw.js) keeps the page itself
+// available with no connection; live data still comes fresh.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
