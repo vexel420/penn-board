@@ -633,3 +633,8 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
    masthead clear of the clock and notch. */
 .mast-in { padding-top: calc(1.1rem + env(safe-area-inset-top)); }
 body { padding-bottom: env(safe-area-inset-bottom); }
+
+/* Installed on an iPhone: full-screen sheets keep their title and Close
+   button below the status bar, where they can be tapped. */
+.cm-head { padding-top: calc(1rem + env(safe-area-inset-top)); }
+#reroute { max-height: calc(100dvh - 2rem - env(safe-area-inset-top)); }

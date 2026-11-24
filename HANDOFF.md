@@ -714,3 +714,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - `docs/sw.js`: network first for this site's own files (always the latest version, last copy kept for no connection); never touches live data from other hosts. Registered at the end of app.js.
 - iPhone: apple-mobile-web-app meta tags, `viewport-fit=cover`, safe-area padding on the masthead.
 - Install: iPhone Safari → Share → Add to Home Screen. Android Chrome → menu → Install app / Add to Home screen.
+- Nov 24 fixes: full-screen sheets (`.cm-head`) pad for the iPhone status bar in the installed app (Close button was under it). PATH "Delays" pills no longer drop for an on-time departure: PATH trains start at 33 St, so the delay is further along (the on-time removal stays for the subway, where Penn is mid-route).

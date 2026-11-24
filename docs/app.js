@@ -2511,10 +2511,13 @@ function pathTrouble(dest, epoch) {
     if (m.state[id] === 'off') worst = 'off';
     else if (m.state[id] === 'delay' && !worst) worst = 'delay';
   }
-  // (Live times only: an on-time train loses its "Delays" pill.)
+  // PATH trains start at 33 St, so they leave on time even when the delay is
+  // further along (Nov 24: "track condition at 14 St"): unlike the subway,
+  // where Penn is mid-route, an on-time departure here doesn't mean an on-time
+  // trip, so the pill stays while PATH's notice applies.
   const ns = pathModels().filter((m) => ids.some((id) => m.state[id] === 'off' || m.state[id] === 'delay')).map((m) => m.n);
   if (worst === 'off') return dropPill(`path|${dest}|off`, 'Suspended', 'warn', ns);
-  if (worst === 'delay') return pathOnTime(dest, epoch) ? '' : dropPill(`path|${dest}|delay`, 'Delays', 'warn', ns);
+  if (worst === 'delay') return dropPill(`path|${dest}|delay`, 'Delays', 'warn', ns);
   // "All late trains" (the subway panel's toggle): a train 5+ min behind.
   if (allLatePills && epoch) {
     const late = pathLateBy(dest, epoch);

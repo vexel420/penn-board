@@ -3,7 +3,7 @@
 // version, with the last copy kept for when there's no connection.
 // Live data (the relay, the MTA, Amtrak...) is never cached here: the board
 // keeps its own last good copy and says when data is old.
-const CACHE = 'penn-board-v1';
+const CACHE = 'penn-board-v2';
 self.addEventListener('install', (e) => { self.skipWaiting(); });
 self.addEventListener('activate', (e) => {
   e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
