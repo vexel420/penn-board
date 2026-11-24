@@ -572,3 +572,4 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .skip-bus > .sb-dim { display: block; }
 .p-mtabus { background: #0b5fa5; }
 #chg-below .skip-bus { margin-top: .8rem; font-size: .92rem; }
+.skip-bus .sb-mta p { margin: .2rem 0; }

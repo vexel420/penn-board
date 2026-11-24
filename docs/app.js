@@ -1003,16 +1003,14 @@ const subNotices = (route, dir, re) => ((board && board.notices && board.notices
 function subwayPills(route, dir, svc, stnId, train) {
   const k = (x) => `${stnId}|${route}|${dir}|${x}`;
   const sw = subwayExpressSwitch(route, dir);
-  // "Express to local" by type, or an express line the notice says is running local.
-  const e2l = ((board && board.notices && board.notices.subway) || []).filter((n) => happeningNow(n) && (n.lines || []).includes(route) && dirMatch(n, dir)
-    && (/express to local/i.test(n.type) || /\b(running|runs|run|operating|operates|making)\s+(local|all local)\b|\bmake(s)? all local stops\b/i.test(n.text)));
+  const e2l = subNotices(route, dir, /express to local/i);
   const red = subNotices(route, dir, /reduced service/i);
-  // A local line running express is "Local to express" (owner, Nov 24), even
-  // when the MTA files it under "Stops Skipped"; it isn't shown twice.
+  // The pill says what the MTA calls it (owner, Nov 24); a notice already on
+  // the switch pill isn't shown again as a second pill.
   const swIds = new Set(svc === 'local' ? sw.map((n) => n.id) : []);
   const skip = subNotices(route, dir, /stops skipped/i).filter((n) => !swIds.has(n.id) && !e2l.includes(n));
   return subwayDelayPill(route, dir, stnId, train)
-    + (svc === 'local' && sw.length ? dropPill(k('switch'), 'Local to express', 'warn', sw, skipMapBtn(sw)) : '')
+    + (svc === 'local' && sw.length ? dropPill(k('switch'), mtaType(sw[0].type), 'warn', sw, skipMapBtn(sw)) : '')
     + (e2l.length ? dropPill(k('e2l'), 'Express to local', 'info', e2l) : '')
     + (skip.length ? dropPill(k('skip'), 'Stops skipped', 'warn', skip, skipMapBtn(skip)) : '')
     + (red.length ? dropPill(k('reduced'), 'Reduced service', 'info', red) : '');
@@ -1056,12 +1054,19 @@ function skipBusPlan(model) {
     return { id, opt: opts[0] || null };
   });
 }
+// Subway first (owner, Nov 24): the MTA's own advice in the notice, or other
+// lines at the skipped station; a bus only for stations with neither.
 function skipBusHtml(model) {
-  loadBusLinks();
   const key = `data-skipbus="${esc(model.n.id)}"`;
-  if (subwayBusLinks === undefined) return `<div class="skip-bus" ${key}><span class="sb-h">Buses to the skipped stops</span><span class="sb-dim">Finding buses…</span></div>`;
-  const plan = skipBusPlan(model);
-  if (!plan.some((x) => x.opt)) return '';
+  if (model.alt && model.alt.text) return `<div class="skip-bus" ${key}><span class="sb-h">Getting to the skipped stops</span><div class="sb-mta">${mtaTextHtml(model.alt.text)}</div></div>`;
+  const otherLines = (id) => [...stationLines(id)].filter((l) => l !== model.route);
+  const byTrain = [...model.closed].filter((id) => subwayData.stops[id] && otherLines(id).length);
+  const trainHtml = byTrain.map((id) => `<li><b>${esc(stationName(id))}</b><span>Take the ${otherLines(id).map((l) => bulletHtml(l, 'tiny')).join(' ')} instead</span></li>`).join('');
+  if (byTrain.length === [...model.closed].filter((id) => subwayData.stops[id]).length) return trainHtml ? `<div class="skip-bus" ${key}><span class="sb-h">Getting to the skipped stops</span><ul>${trainHtml}</ul></div>` : '';
+  loadBusLinks();
+  if (subwayBusLinks === undefined) return `<div class="skip-bus" ${key}><span class="sb-h">Getting to the skipped stops</span>${trainHtml ? `<ul>${trainHtml}</ul>` : ''}<span class="sb-dim">Finding buses…</span></div>`;
+  const plan = skipBusPlan(model).filter((x) => !byTrain.includes(x.id));
+  if (!plan.some((x) => x.opt)) return trainHtml ? `<div class="skip-bus" ${key}><span class="sb-h">Getting to the skipped stops</span><ul>${trainHtml}</ul></div>` : '';
   const nowMs = Date.now();
   // Stations reached by the same bus from the same stop share one line.
   const groups = [];
@@ -1081,7 +1086,7 @@ function skipBusHtml(model) {
     const lo = Math.min(...rides), hi = Math.max(...rides);
     return `<li><b>${names}</b><span>Get off at ${esc(stationName(opt.end))}, then the <span class="pl p-mtabus">${esc(opt.r)}</span> (${lo === hi ? lo : `${lo}–${hi}`} min ride) · ${when}</span></li>`;
   }).join('');
-  return `<div class="skip-bus" ${key}><span class="sb-h">Buses to the skipped stops</span><ul>${items}</ul><span class="sb-dim">Live bus times from MTA Bus Time.</span></div>`;
+  return `<div class="skip-bus" ${key}><span class="sb-h">Getting to the skipped stops</span><ul>${trainHtml}${items}</ul><span class="sb-dim">No other subway line stops at ${byTrain.length ? 'the rest' : 'these'}, so here are buses. Live times from MTA Bus Time.</span></div>`;
 }
 function refreshSkipBuses() {
   document.querySelectorAll('[data-skipbus]').forEach((el) => {
@@ -1858,7 +1863,7 @@ async function openChange(id, view = 1) {
   changeOpen = { id, view };
   const { n, route, alt } = model;
   const label = lineName(route);
-  $('chg-kind').textContent = model.skip && isSwitchNotice(n) ? 'Local to express' : friendlyType(n.type);
+  $('chg-kind').textContent = friendlyType(n.type);
   const hasAlt = alt.text.length > 0;
   const canMapAlt = alt.transfers.length || alt.buses.length;
   if (view === 1) {
