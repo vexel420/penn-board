@@ -681,3 +681,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - "Other options" cards (owner, Nov 24): no more "Shares N stations with the X". From the live trains' upcoming stops: "Makes all the same stops as the X", "Goes as far as <station>, then change for the X", or for an express "Stops at A, B and C. Change for the X for other stops".
 - Alerts whose headline leads into a list ("...tonight:", "The following trains...") now show the rest of the notice (its description, with line breaks; short "Westbound:" lines in bold) everywhere notice text is shown (`noticeFull`). Fixed the LIRR Elmont-UBS Arena notice being cut off.
 - Update (owner): "Other options" cards are back to "Shares N stations with the X", now counted only along the other train's way from Penn, and tapping it lists those stations in order (`details.shared`).
+
+## Readability pass (owner-approved, Nov 24, 2026)
+- End of style.css, "Readability": one color per message (notes, card details, fares, bus notes); gray only for a purpose (departed/not-running, crossed-off stops, unselected tabs, fine print `.foot`/`.cm-live` #9aa79b); `--dim` lightened to #c4ccc2; small text raised to about 13.5px minimum (pills .84rem, tags, gates, line labels), supporting text about 10% bigger; `.time span` stays on one line.
+- `glueBullets` (end of app.js, MutationObserver): a line bullet keeps the punctuation after it on the same line.
+- Keep new styles to these rules: no gray for ordinary text, no text under ~.82rem.

@@ -3662,3 +3662,26 @@ document.addEventListener('change', (e) => {
   renderBuses();
 });
 setInterval(() => { if (view === 'buses') renderBuses(); }, 30000);
+
+
+// A line bullet keeps the punctuation after it on the same line ("on the 2."
+// never leaves the period alone on the next line). Runs on whatever the board
+// draws, wherever bullets appear.
+function glueBullets(root) {
+  for (const b of root.querySelectorAll('.bullet')) {
+    const n = b.nextSibling;
+    if (!n || n.nodeType !== 3 || !/^[.,:;)]/.test(n.data) || (b.parentNode && b.parentNode.classList && b.parentNode.classList.contains('nowrap-b'))) continue;
+    const w = document.createElement('span');
+    w.className = 'nowrap-b';
+    b.replaceWith(w);
+    w.append(b, n.data[0]);
+    n.data = n.data.slice(1);
+  }
+}
+let glueQueued = false;
+new MutationObserver(() => {
+  if (glueQueued) return;
+  glueQueued = true;
+  requestAnimationFrame(() => { glueQueued = false; glueBullets(document.body); });
+}).observe(document.body, { childList: true, subtree: true });
+glueBullets(document.body);

@@ -587,3 +587,38 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .cm-dir details.shared ul { list-style: none; margin: .35rem 0 0; padding: 0; color: var(--ivory); font-size: 1rem; line-height: 1.6; }
 .cm-dir details.shared li { padding-left: .9rem; position: relative; }
 .cm-dir details.shared li::before { content: ''; position: absolute; left: 0; top: .65em; width: .4rem; height: .4rem; border-radius: 50%; background: var(--dim); }
+
+/* ---------- Readability (owner, Nov 24, 2026) ---------- */
+/* Gray only where it means something (departed or not-running trains, unselected
+   tabs, fine print); one color per message; nothing smaller than about 13.5px. */
+:root { --dim: #c4ccc2; }
+/* Messages: one color. */
+.none-row, .none-row .how, .none-row .src, .cm-sum, .cm-dir, .opt-h span, .drop-n small, .bf-get .dim, .bf-bus .sub,
+.skip-bus .sb-dim, .legs li span:first-child, .legs li:last-child span:last-child, .opt-card .air-fare, .bf-intro,
+.every-sub, .sched-note, .meta, details.via summary, .status small, .time span, details.row-alert .ra-n { color: var(--ivory); }
+/* Purposeful gray stays: departed rows, not-running bullets, crossed-off stops, fine print. */
+.row.departed .place, .row.departed .time b, .status.departed, details.via s, .foot, .cm-live { color: #9aa79b; }
+/* Sizes. */
+.late-pill, button.late-pill { font-size: .84rem; padding: .12rem .55rem; }
+.smins { font-size: 1rem; color: #dcd5c3; }
+.none-row, .walk, .drop, .svc-line { font-size: .95rem; }
+.sched-note, .every-sub, .status small, .meta, details.via summary, .subway h2 span { font-size: .95rem; }
+.time span { font-size: .9rem; white-space: nowrap; }
+.svc h4, .dir h3 { font-size: .92rem; }
+.track small { font-size: .82rem; }
+.al-item .kind, .al-card .kind { font-size: .9rem; }
+.rail .al-item, .subway .al-item { font-size: .95rem; }
+.cm-dir, .opt-h span { font-size: .95rem; }
+.cm-h { font-size: 1rem; }
+.cm-kind { font-size: .82rem; }
+.legs { font-size: .98rem; }
+.pl { font-size: .82rem; }
+.tagx { font-size: .76rem; }
+.opt-card .air-fare, .opt-card .air-note { font-size: .92rem; }
+.sheet-air button small { font-size: .82rem; }
+.bf-h, .skip-bus .sb-h { font-size: .82rem; }
+.bf-get .dim, .bf-bus .sub, .skip-bus .sb-dim { font-size: .92rem; }
+.bf-bus .gate { font-size: .82rem; }
+.bf-bus .kind { font-size: .78rem; }
+.fare { font-size: .82rem; }
+.nowrap-b { white-space: nowrap; }
