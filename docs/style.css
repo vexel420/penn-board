@@ -631,5 +631,5 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 
 /* Installed on an iPhone (full screen, translucent status bar): keep the
    masthead clear of the clock and notch. */
-.mast-in { padding-top: max(1.1rem, env(safe-area-inset-top)); }
+.mast-in { padding-top: calc(1.1rem + env(safe-area-inset-top)); }
 body { padding-bottom: env(safe-area-inset-bottom); }
