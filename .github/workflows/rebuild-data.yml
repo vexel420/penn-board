@@ -55,6 +55,9 @@ jobs:
       - name: LIRR map data
         run: python3 scripts/build-lirr-data.py "$RUNNER_TEMP/gtfslirr.zip"
 
+      - name: LIRR timetable (other options for delayed trains)
+        run: python3 scripts/build-lirr-timetable.py "$RUNNER_TEMP/gtfslirr.zip"
+
       - name: PATH timetable
         # PATH's site is sometimes unreachable; keep the last good timetable then.
         continue-on-error: true

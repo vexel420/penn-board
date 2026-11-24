@@ -622,3 +622,4 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .bf-bus .kind { font-size: .78rem; }
 .fare { font-size: .82rem; }
 .nowrap-b { white-space: nowrap; }
+.tag-sched { background: #2c3530; color: var(--ivory); }

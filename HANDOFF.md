@@ -690,3 +690,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 ## "NJ Transit data didn't load" blips (Nov 24, 2026)
 - Relay and NJ Transit were fine (no relay errors in 24 h, sign-in valid, not blocked). Cause: phones cancel requests in flight when the screen locks or the app switches, and the next read only came a full ttl later, so the banner flashed.
 - feeds.js `source()`: a failed read retries once after 2 s, then 5 s later instead of a full ttl; failures aren't reported while the last good copy is under ERROR_GRACE (90 s) old. A real outage still shows the message. `plainError` words connection drops plainly.
+
+## LIRR "Other options" from the timetable (Nov 24, 2026)
+- `scripts/build-lirr-timetable.py gtfslirr.zip` → `docs/lirr-timetable.json` (~190 KB, ~60 KB gzipped; weekly rebuild): every LIRR trip with train number, headsign, service, and [stop, minutes] pairs; `dates` maps YYYYMMDD to running services (holidays included).
+- `lirrPlans` (app.js): for the delayed train's stations, earliest arrival from Penn in the next 12 h, direct or one change (≥3 min, ≤90 min wait, at any station), never using the delayed train; same arrival → no change, then the later Penn train. Grouped into cards by the trains used.
+- A card's first train shows "Live" with the board's time and track once a train with that number is on the live board, else "Scheduled". Replaces the old guess from branch maps (which claimed Montauk trains stop at Mineola) and the separate live-only list for the LIRR. NJ Transit options unchanged.
