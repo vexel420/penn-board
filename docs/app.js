@@ -1003,15 +1003,22 @@ const subNotices = (route, dir, re) => ((board && board.notices && board.notices
 function subwayPills(route, dir, svc, stnId, train) {
   const k = (x) => `${stnId}|${route}|${dir}|${x}`;
   const sw = subwayExpressSwitch(route, dir);
-  const e2l = subNotices(route, dir, /express to local/i);
+  // "Express to local" by type, or an express line the notice says is running local.
+  const e2l = ((board && board.notices && board.notices.subway) || []).filter((n) => happeningNow(n) && (n.lines || []).includes(route) && dirMatch(n, dir)
+    && (/express to local/i.test(n.type) || /\b(running|runs|run|operating|operates|making)\s+(local|all local)\b|\bmake(s)? all local stops\b/i.test(n.text)));
   const red = subNotices(route, dir, /reduced service/i);
-  const skip = subNotices(route, dir, /stops skipped/i);
+  // A local line running express is "Local to express" (owner, Nov 24), even
+  // when the MTA files it under "Stops Skipped"; it isn't shown twice.
+  const swIds = new Set(svc === 'local' ? sw.map((n) => n.id) : []);
+  const skip = subNotices(route, dir, /stops skipped/i).filter((n) => !swIds.has(n.id) && !e2l.includes(n));
   return subwayDelayPill(route, dir, stnId, train)
-    + (svc === 'local' && sw.length ? dropPill(k('switch'), mtaType(sw[0].type), 'warn', sw) : '')
+    + (svc === 'local' && sw.length ? dropPill(k('switch'), 'Local to express', 'warn', sw, skipMapBtn(sw)) : '')
     + (e2l.length ? dropPill(k('e2l'), 'Express to local', 'info', e2l) : '')
-    + (skip.length ? dropPill(k('skip'), 'Stops skipped', 'warn', skip) : '')
+    + (skip.length ? dropPill(k('skip'), 'Stops skipped', 'warn', skip, skipMapBtn(skip)) : '')
     + (red.length ? dropPill(k('reduced'), 'Reduced service', 'info', red) : '');
 }
+// "See map" in a skipped-stops dropdown, when the notice names the stations.
+const skipMapBtn = (ns) => { const n = ns.find((x) => changeModel(x)); return n ? `<button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : ''; };
 // A reroute pill, with the notice behind it (and its map) when there is one.
 function reroutePill(stnId, route, dir) {
   const m = changeFor(route);
@@ -1405,7 +1412,7 @@ function renderSubway() {
       const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
       minsShown.set(rowKey, firstMin + rest);
-      const rerouted = trains.find((x) => unusualStops(g.route, x).length);
+      const rerouted = !skipFor(g.route) && trains.find((x) => unusualStops(g.route, x).length);
       // Delays and skipped stops: pills on the row (the notice, its map and
       // other options are in the service notices).
       const linePills = subwayPills(g.route, dir, svc, stn.id, trains[0]);
@@ -1665,8 +1672,13 @@ function readAlternatives(desc, route) {
 
 // The notice as a map: its main line, the stations closed on it, and the
 // alternatives. Null for notices that don't close or reroute part of a line.
+// Skipped stops and a local line running express get a map too (owner, Nov 24):
+// the skipped stations grayed out, zoomed in on that stretch.
+const SKIP_TYPES = /stops skipped|local to express/i;
 function changeModel(n) {
-  if (!n || n.carrier !== 'subway' || !subwayData || !CHANGE_TYPES.test(n.type)) return null;
+  if (!n || n.carrier !== 'subway' || !subwayData) return null;
+  const skip = !CHANGE_TYPES.test(n.type) && (SKIP_TYPES.test(n.type) || isSwitchNotice(n));
+  if (!CHANGE_TYPES.test(n.type) && !skip) return null;
   const named = Object.keys(n.affected || {}).filter((r) => subwayData.routes[r]);
   if (!named.length) return null;
   const route = bulletsIn(n.text).find((r) => named.includes(r)) || named[0];
@@ -1678,7 +1690,7 @@ function changeModel(n) {
   const whole = /suspended/i.test(n.type) && !/part/i.test(n.type);
   if (whole) for (const id of subwayData.routes[route].normal) if (subwayData.stops[id]) closed.add(id);
   if (!closed.size) return null;
-  return { n, route, closed, whole, alt: readAlternatives(n.desc, route), via: readVia(n.desc, route) };
+  return { n, route, closed, whole, skip, alt: readAlternatives(n.desc, route), via: readVia(n.desc, route) };
 }
 const changeModels = () => ((board && board.notices && board.notices.subway) || []).map(changeModel).filter(Boolean);
 
@@ -1776,14 +1788,14 @@ async function openChange(id, view = 1) {
   changeOpen = { id, view };
   const { n, route, alt } = model;
   const label = lineName(route);
-  $('chg-kind').textContent = friendlyType(n.type);
+  $('chg-kind').textContent = model.skip && isSwitchNotice(n) ? 'Local to express' : friendlyType(n.type);
   const hasAlt = alt.text.length > 0;
   const canMapAlt = alt.transfers.length || alt.buses.length;
   if (view === 1) {
     $('chg-h').innerHTML = noticeText(n.text);
     $('chg-top').innerHTML = `<ul class="cm-key">
         ${model.whole ? '' : `<li><span class="sw" style="border-color:${esc(lineInfo(route).color)}"></span>${label} trains running</li>`}
-        <li><span class="sw off"></span>No ${label} trains</li>
+        <li><span class="sw off"></span>${model.skip ? `${label} trains skip these stations` : `No ${label} trains`}</li>
         ${alt.buses.length ? '<li><span class="sw bus"></span>Free shuttle bus</li>' : ''}
         ${model.via && model.via.length ? `<li>${bulletHtml(route, 'tiny')} on its temporary route, via the ${[...new Set(model.via.map((v) => v.line))].map((l) => bulletHtml(l, 'tiny')).join(' and ')}</li>` : ''}
       </ul>
@@ -1996,7 +2008,7 @@ function drawChange(map, model, view) {
   }
   const closedList = [...closed].filter((id) => subwayData.stops[id]);
   const mid = closedList[Math.floor(closedList.length / 2)];
-  if (mid) labels.push({ at: LL(mid), must: true, cls: 'off', html: `No ${lineLabel(info)} trains`, w: textWidth(`No ${info.label} trains`) });
+  if (mid) labels.push({ at: LL(mid), must: true, cls: 'off', html: model.skip ? `${lineLabel(info)} trains skip` : `No ${lineLabel(info)} trains`, w: textWidth(model.skip ? `${info.label} trains skip` : `No ${info.label} trains`) });
   if (view === 1) {
     // Where the line ends and starts again around the closed part, and its far ends.
     const open = (id) => segs.some((s) => !s.closed && (s.a === id || s.b === id));
@@ -2020,7 +2032,9 @@ function drawChange(map, model, view) {
     if (map.getZoom() >= 14) { labelLayer.clearLayers(); names.addTo(map); }
     else { names.remove(); placeLabels(map, labelLayer, labels); }
   };
-  const fit = view === 2 ? area : L.latLngBounds([...lineIds, ...closed].map(LL));
+  // Skipped stops: zoomed in on them and the stations either side.
+  const near = () => { const ids = new Set(closed); for (const id of closed) { const i = lineIds.indexOf(id); if (i > 0) ids.add(lineIds[i - 1]); if (i >= 0 && i < lineIds.length - 1) ids.add(lineIds[i + 1]); } return [...ids].filter((id) => subwayData.stops[id]); };
+  const fit = view === 2 ? area : model.skip ? L.latLngBounds(near().map(LL)).pad(0.3) : L.latLngBounds([...lineIds, ...closed].map(LL));
   map.fitBounds(fit, { padding: [24, 24] });
   // (Only once the map has a view: dots and labels are sized from it.)
   map.on('zoomend moveend', sync);
@@ -2826,8 +2840,15 @@ $('subway-notices').addEventListener('click', (e) => {
   const b = e.target.closest('[data-change]');
   if (b) openChange(b.dataset.change);
 });
+// "See map" inside a pill's dropdown on the subway list (reroutes, skipped stops).
+$('subway').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-change]');
+  if (b) openChange(b.dataset.change);
+});
 // A "Rerouted, see map" row opens the notice behind it when there is one.
-const changeFor = (route) => changeModels().find((m) => m.route === route && happeningNow(m.n));
+const changeFor = (route) => changeModels().find((m) => m.route === route && !m.skip && happeningNow(m.n));
+// Trains skipping stops under a notice aren't "rerouted": the notice's own pill covers them.
+const skipFor = (route) => changeModels().find((m) => m.route === route && m.skip && happeningNow(m.n));
 
 function renderPath() {
   if (!board) return;
@@ -3360,7 +3381,7 @@ function renderAirport() {
   const cheapest = priced.length ? priced.reduce((a, b) => (b.fare < a.fare || (b.fare === a.fare && b.at < a.at) ? b : a)) : null;
   $('chg-top').innerHTML = `<div class="sheet-air">${[['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark']].map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>`;
   $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}<span class="tagx tag-live">Live</span></span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
-    <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>At the airport, about</span></li></ul>
+    <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at the airport (estimated)</span></li></ul>
     <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
     : '<p class="cm-live">No trains to there are listed from Penn right now.</p>')
     + '<p class="cm-live">First train: live times from the board. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; check before you travel.</p>';

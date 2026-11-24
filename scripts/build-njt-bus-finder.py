@@ -29,7 +29,13 @@ OUT = Path(__file__).resolve().parent.parent / 'docs' / 'njt-bus-finder.json'
 PABT = '26229'
 PABT_PT = (40.75637, -73.99075)
 ORIGIN_M = 350           # partner stops this close to Port Authority count as leaving from it
-FERRIES = {'Seastreak'}  # ferries leave from Manhattan piers instead
+FERRIES = {'Seastreak'}
+SAME_STATION_M = 150     # rail stops this close are one station (Secaucus upper and lower levels)
+# Station names as riders know them (NJ Transit's file abbreviates some).
+NAME_FIX = {'SE': 'Secaucus Junction', 'TS': 'Secaucus Junction', 'UV': 'Montclair State University',
+            '23': 'Wayne/Route 23', 'UF': 'Ho-Ho-Kus', '17': 'Ramsey Route 17', 'NA': 'Newark Airport',
+            'JA': 'Jersey Avenue', 'PJ': 'Princeton Junction', 'TR': 'Trenton', 'MR': 'Morristown',
+            'MP': 'Metropark'}  # ferries leave from Manhattan piers instead
 
 
 def manhattan(sid, s, pt):
@@ -64,7 +70,8 @@ def title(s):
     for i, w in enumerate(s.strip().split()):
         lw = w.lower()
         out.append(lw if i and lw in small else (w if len(w) <= 3 and w.isupper() and w in ('NJ', 'NY', 'US', 'PNC', 'NJT') else w.capitalize()))
-    return ' '.join(out).replace(' St.', ' St').replace('Phl.', 'Phila.')
+    t = ' '.join(out).replace(' St.', ' St').replace('Phl.', 'Phila.')
+    return re.sub(r'([-/])([a-z])', lambda m: m.group(1) + m.group(2).upper(), t)
 
 
 def active_on(z, day):
@@ -225,7 +232,16 @@ def main(bus_zip, rail_zip, extras):
     stations = {}
     for s in rows(rz, 'stops.txt'):
         if s['stop_id'] in lines_at and s['stop_code'] != 'NY':
-            stations[s['stop_code']] = {'name': title(s['stop_name']), 'pt': (float(s['stop_lat']), float(s['stop_lon'])), 'lines': sorted(lines_at[s['stop_id']])}
+            code = s['stop_code']
+            pt = (float(s['stop_lat']), float(s['stop_lon']))
+            # One station, several levels or platforms (Secaucus): riders just
+            # need to get to the station, so it's listed once (owner, Nov 24).
+            same = next((c for c, x in stations.items() if metres(x['pt'], pt) < SAME_STATION_M), None)
+            if same:
+                stations[same]['lines'] = sorted(set(stations[same]['lines']) | lines_at[s['stop_id']])
+                stations[same]['name'] = NAME_FIX.get(same, NAME_FIX.get(code, stations[same]['name']))
+                continue
+            stations[code] = {'name': NAME_FIX.get(code, title(s['stop_name'])), 'pt': pt, 'lines': sorted(lines_at[s['stop_id']])}
 
     near_pabt = lambda sid, s, pt: metres(pt, PABT_PT) <= ORIGIN_M
     feeds = [('NJ Transit', zipfile.ZipFile(bus_zip), lambda sid, s, pt: sid.startswith(PABT + '-'))]

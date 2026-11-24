@@ -657,3 +657,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Pick a station (remembered in localStorage `busStation`). Step 1, get to Port Authority: next live uptown A/C/E from 34 St-Penn Station that stop at 42 St-Port Authority (A27); if none, the 1/2/3 to Times Sq-42 St (127) and the underground passage; and the 10-minute walk up 8 Av.
 - Step 2, buses: NJ Transit routes show live departures from `/njt-bus-pabt` (refreshed every 30 s), kept only when the bus's sign is one of the signs whose trips reach the station (`heads` in njt-bus-finder.json; live headers match NJT's GTFS trip_headsign exactly). If none are listed live, or for partner companies, the next scheduled times (`times.wk/sa/su`, minutes after midnight at Port Authority). Ordered by which gets there first. No bus: link to NJT's alternate service plans (njtransit.com/abc).
 - Later: show it from the NJ Transit banner only during big delays, cancellations or a strike, and remove the tab.
+
+## Nov 24 fixes: express pills, skip maps, Secaucus, airport wording
+- A local line the MTA says is "running express" gets a "Local to express" pill (once; it was showing the MTA's "Stops skipped" type and again as a second Stops skipped pill). An express line a notice says is "running local" gets "Express to local" whatever the notice type.
+- Skipped stops and local-to-express notices now have a map (`changeModel` with `skip: true`): zoomed to the skipped stations and their neighbours, grayed out, "N trains skip". "See map" in the pill's dropdown; `#subway` now opens `[data-change]`. `changeFor` ignores skip models; `skipFor` stops those trains also showing as rerouted.
+- Airport helper: "Arrive at the airport (estimated)".
+- Bus finder: rail stops within 150 m are one station (Secaucus Junction); NAME_FIX for names riders know (Montclair State University, Ho-Ho-Kus, Wayne/Route 23...); title() capitalizes after - and /.
