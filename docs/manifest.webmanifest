@@ -1,6 +1,6 @@
 {
-  "name": "Penn Station",
-  "short_name": "Penn Station",
+  "name": "NYP Board",
+  "short_name": "NYP Board",
   "description": "Live departures, arrivals, subway and PATH at New York Penn Station.",
   "start_url": "./?app=1",
   "scope": "./",
