@@ -344,6 +344,7 @@ export default {
           const j = v.MonitoredVehicleJourney || {}, c = j.MonitoredCall || {};
           return { line: arr(j.PublishedLineName), dest: arr(j.DestinationName), dir: j.DirectionRef,
             at: c.ExpectedArrivalTime || c.ExpectedDepartureTime || c.AimedArrivalTime || null,
+            aimed: c.AimedArrivalTime || c.AimedDepartureTime || null,
             away: (c.Extensions && c.Extensions.Distances && c.Extensions.Distances.PresentableDistance) || arr(c.ArrivalProximityText) || '' };
         });
         const res = json(JSON.stringify({ stop, buses }), 30);

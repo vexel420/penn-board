@@ -1140,9 +1140,13 @@ function skipBusHtml(model) {
     if (!opt) return `<li><b>${names}</b><span class="sb-dim">No bus nearby</span></li>`;
     loadMtaBusStop(opt.from);
     const live = mtaBusLive.get(opt.from);
-    const next = live && live.buses ? live.buses.filter((b) => String(b.line).toUpperCase() === opt.r.toUpperCase() && b.at)
-      .map((b) => Math.round((Date.parse(b.at) - nowMs) / 60000)).filter((m) => m >= 0).sort((a, b) => a - b).slice(0, 2) : null;
-    const when = next && next.length ? `<span class="sb-live">next ${next[0] === 0 ? 'now' : `in ${next[0]} min`}${next[1] != null ? `, ${next[1]}` : ''}</span>`
+    const buses = live && live.buses ? live.buses.filter((b) => String(b.line).toUpperCase() === opt.r.toUpperCase() && b.at)
+      .map((b) => ({ m: Math.round((Date.parse(b.at) - nowMs) / 60000), late: b.aimed ? Math.round((Date.parse(b.at) - Date.parse(b.aimed)) / 60000) : 0 }))
+      .filter((b) => b.m >= 0).sort((a, b) => a.m - b.m).slice(0, 2) : null;
+    const next = buses ? buses.map((b) => b.m) : null;
+    // Late by MTA Bus Time's own schedule (2+ min).
+    const lateTxt = buses && buses[0] && buses[0].late >= 2 ? ` <span class="bus-late">${buses[0].late} min late</span>` : '';
+    const when = next && next.length ? `<span class="sb-live">next ${next[0] === 0 ? 'now' : `in ${next[0]} min`}${next[1] != null ? `, ${next[1]}` : ''}</span>${lateTxt}`
       : next ? '<span class="sb-dim">none due soon</span>' : opt.gap ? `<span class="sb-dim">about every ${opt.gap} min</span>` : '';
     const lo = Math.min(...rides), hi = Math.max(...rides);
     return `<li><b>${names}</b><span>Get off at ${esc(stationName(opt.end))}, then the <span class="pl p-mtabus">${esc(opt.r)}</span> (${lo === hi ? lo : `${lo}–${hi}`} min ride) · ${when}</span></li>`;
@@ -2771,21 +2775,27 @@ const SERVICE_SWITCH = /\b(running|runs|run|operating|operates)\s+(express|local
 // MTA shows ahead of their start, nor #preview's upcoming work.
 const happeningNow = (n) => n.activeNow !== false && !n.preview;
 const isDelayNotice = (n) => happeningNow(n) && (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text);
-// Late by NJ Transit's own numbers (2+ min), or 2+ min past its time and not
-// gone, while its status says nothing about it ("BOARDING", "On time").
-function njtHiddenDelay(r) {
-  if (r.tone === 'stop' || r.tone === 'departed' || r.departed) return false;
-  if (/late|delay|stand ?by/i.test(String(r.status || ''))) return false;
-  const late = (r.lateMin || 0) >= 2;
-  const overdue = (r.leaves ?? r.time) < Date.now() / 1000 - 120;
-  return late || overdue;
+// A train running late whose status on the board doesn't say so (owner,
+// Nov 24): late by its railroad's own numbers (2+ min), or 2+ min past its
+// time and not gone, while the board shows "BOARDING", "On time" and the like.
+// Returns the minutes late (0 if only overdue), or null. Any railroad.
+function hiddenDelayMin(r) {
+  if (r.tone === 'stop' || r.tone === 'departed' || r.departed || departedAt(r) !== null) return null;
+  const shown = shownStatus(r, 'departures');
+  if (shown.tone === 'departed' || shown.tone === 'stop' || /late|delay|stand ?by|no update|held/i.test(String(shown.status || ''))) return null;
+  if ((r.lateMin || 0) >= 2) return r.lateMin;
+  return (r.leaves ?? r.time) < Date.now() / 1000 - 120 ? 0 : null;
 }
+const njtHiddenDelay = (r) => hiddenDelayMin(r) !== null;
 const NJT_SYSTEMWIDE = /\bNJ ?TRANSIT (rail )?(service|trains)\b|\ball (NJ ?TRANSIT )?(rail )?(service|trains)\b|\b(into and out of|to and from|in and out of) (Penn Station New York|PSNY|New York Penn|Penn Station)\b/i;
 function rowNotices(r) {
   const all = (board && board.notices && board.notices.rail) || [];
   if (r.carrier === 'lirr' && lirrData) {
     const id = lirrRouteFor(r.line);
-    return id ? all.filter((n) => n.carrier === 'lirr' && isDelayNotice(n) && (n.lines || []).includes(id)) : [];
+    // A notice covering (nearly) every branch is about the LIRR as a whole: only
+    // on trains actually running late whose status doesn't say so, like NJ Transit's.
+    return id ? all.filter((n) => n.carrier === 'lirr' && isDelayNotice(n) && (n.lines || []).includes(id)
+      && ((n.lines || []).length < 8 || hiddenDelayMin(r) !== null)) : [];
   }
   if (r.carrier === 'njt') {
     return all.filter((n) => {
@@ -2890,7 +2900,10 @@ function rowAlertHtml(r) {
   const boarding = r.carrier === 'lirr' ? ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'lirr' && happeningNow(n) && /boarding change/i.test(n.type)
     && stops.some((st) => st && normName2(n.text).includes(st))) : [];
   const board2 = boarding.length ? dropPill(`${r.id}|boarding`, 'Boarding change', 'info', boarding) : '';
-  return pills(delay, board2);
+  // Running late with no notice to explain it, and a status that doesn't say so.
+  const hid = ns.length ? null : hiddenDelayMin(r);
+  const late = hid === null ? '' : warnPill(hid ? `${hid} min late` : 'Running late');
+  return pills(late, delay, board2);
 }
 document.addEventListener('toggle', (e) => {
   const d = e.target;
@@ -3764,7 +3777,12 @@ function busLiveFor(o) {
     const c = /(\d+):(\d+)\s*(AM|PM)/i.exec(x.departuretime || '');
     const t = c ? (+c[1] % 12) * 60 + +c[2] + (/pm/i.test(c[3]) ? 720 : 0) : null;
     const inMin = m ? +m[1] : t != null ? ((t - now + 1440) % 1440) : null;
-    return { in: inMin > 1200 ? inMin - 1440 : inMin, soon: !!m, t, gate: String(x.lanegate || '').split('_')[0] };
+    // Late: the live departure against its scheduled time ("05:30:00 PM").
+    const sc = /(\d+):(\d+):\d+\s*(AM|PM)/i.exec(x.sched_dep_time || '');
+    const st = sc ? (+sc[1] % 12) * 60 + +sc[2] + (/pm/i.test(sc[3]) ? 720 : 0) : null;
+    let late = t != null && st != null ? ((t - st + 1440) % 1440) : 0;
+    if (late > 720) late = 0;
+    return { in: inMin > 1200 ? inMin - 1440 : inMin, soon: !!m, t, late, gate: String(x.lanegate || '').split('_')[0] };
   }).filter((x) => x.in != null && x.in >= 0).sort((a, b) => a.in - b.in);
 }
 // Distances in miles: "about 2 miles", "about 1.5 miles", "under a mile".
@@ -3820,7 +3838,7 @@ function renderBuses() {
     for (const { o, live, sched } of opts) {
       let deps;
       if (live && live.length) {
-        deps = `<div class="deps">${live.slice(0, 3).map((x) => `<span>${x.soon || x.t == null ? `in ${x.in} min` : clockOf(x.t)}${x.gate && x.gate !== 'EMPTY' ? `<span class="gate">Gate ${esc(x.gate)}</span>` : ''}</span>`).join('')}</div>`;
+        deps = `<div class="deps">${live.slice(0, 3).map((x) => `<span>${x.soon || x.t == null ? `in ${x.in} min` : clockOf(x.t)}${x.late >= 2 ? ` <span class="bus-late">${x.late} min late</span>` : ''}${x.gate && x.gate !== 'EMPTY' ? `<span class="gate">Gate ${esc(x.gate)}</span>` : ''}</span>`).join('')}</div>`;
       } else {
         const why = o.agency !== 'NJ Transit' ? 'Scheduled' : busLive && !busLive.error ? 'None listed live now · scheduled' : 'Scheduled';
         deps = sched.length ? `<div class="deps sched">${sched.slice(0, 3).map((x) => `<span>${clockOf(x.t)}${x.tomorrow ? ' tomorrow' : ''}</span>`).join('')}<span class="kind">${why}</span></div>`

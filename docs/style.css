@@ -641,3 +641,6 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 
 /* PATH map key: the ring around a station where PATH reports the problem. */
 .cm-key .ring-key { display: inline-block; width: .9rem; height: .9rem; border-radius: 50%; border: 3px solid #c0392b; background: #fff; vertical-align: -2px; margin-right: .4rem; }
+
+/* A bus running behind its schedule. */
+.bus-late { color: var(--late); font-weight: 700; white-space: nowrap; }
