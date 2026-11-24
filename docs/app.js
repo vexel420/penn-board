@@ -575,12 +575,29 @@ const ICON = {
 const subwayNoticeText = () => ((board && board.notices && board.notices.subway) || []).map((n) => `${n.type} ${n.text}`).join('\n');
 const holidayNotice = () => /holiday/i.test(subwayNoticeText());
 const weatherNotice = () => /severe weather|winter weather|snow|storm|hurricane|flood/i.test(subwayNoticeText());
-// On a holiday the MTA says which schedule runs; use that day's switch times.
-function scheduleToday(day) {
-  if (!holidayNotice()) return day;
-  const t = subwayNoticeText();
-  return /sunday schedule/i.test(t) ? 'sunday' : /saturday schedule/i.test(t) ? 'saturday' : day;
+// Major holidays, when the subway runs its Sunday schedule (the MTA's
+// pattern: New Year's Day, Memorial Day, July 4, Labor Day, Thanksgiving,
+// Christmas). date: "2026-11-26".
+function subwayHoliday(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 Sunday
+  const nth = Math.ceil(d / 7), last = d + 7 > new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return (m === 1 && d === 1) || (m === 7 && d === 4) || (m === 12 && d === 25)
+    || (m === 5 && wd === 1 && last) || (m === 9 && wd === 1 && nth === 1) || (m === 11 && wd === 4 && nth === 4);
 }
+// On a holiday the MTA says which schedule runs; use that day's switch times.
+// Without a notice, the holiday calendar above (Sunday schedule).
+function scheduleToday(day) {
+  if (holidayNotice()) {
+    const t = subwayNoticeText();
+    if (/sunday schedule/i.test(t)) return 'sunday';
+    if (/saturday schedule/i.test(t)) return 'saturday';
+  }
+  return subwayHoliday(nyNow().date) ? 'sunday' : day;
+}
+// The subway schedule a day runs (x: from nyNow or nyDayAt): today's as
+// above, other days by the holiday calendar.
+const subSched = (x) => (x.date === nyNow().date ? scheduleToday(x.day) : subwayHoliday(x.date) ? 'sunday' : x.day);
 const fmtClock = (t) => {
   const m = ((t % 1440) + 1440) % 1440, h = Math.floor(m / 60);
   return `${h % 12 || 12}:${String(m % 60).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
@@ -591,7 +608,7 @@ function switchState(stationId, line, dir) {
   const sw = subwayData && subwayData.switches && ((subwayData.switches[stationId] || {})[line] || {})[dir];
   if (!sw) return null;
   const today = nyNow(), yest = nyNow(-1), tom = nyNow(1);
-  const T = sw[scheduleToday(today.day)], Y = sw[yest.day], N = sw[tom.day];
+  const T = sw[subSched(today)], Y = sw[subSched(yest)], N = sw[subSched(tom)];
   if (!T) return null;
   const m = today.mins;
   const key = `${today.date}|${stationId}|${line}|${dir}`;
@@ -624,7 +641,7 @@ function nightGapState(stationId, line, dir) {
   const g = subwayData && subwayData.nightGaps && ((subwayData.nightGaps[stationId] || {})[line] || {})[dir];
   if (!g) return null;
   const today = nyNow(), tom = nyNow(1);
-  const T = g[scheduleToday(today.day)], N = g[tom.day] || T;
+  const T = g[subSched(today)], N = g[subSched(tom)] || T;
   if (!T) return null;
   const m = today.mins;
   const key = `${today.date}|${stationId}|${line}|${dir}|gap`;
@@ -644,26 +661,26 @@ function nightGapState(stationId, line, dir) {
 const nyDayAt = (epoch) => {
   const p = {};
   nyParts.formatToParts(new Date(epoch * 1000)).forEach((x) => { p[x.type] = x.value; });
-  return { day: p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday', mins: +p.hour * 60 + +p.minute };
+  return { day: p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday', mins: +p.hour * 60 + +p.minute, date: `${p.year}-${p.month}-${p.day}` };
 };
 function lateNightTrain(stationId, route, dir, epoch, code) {
   const w = subwayData && subwayData.night && ((subwayData.night[stationId] || {})[route] || {})[dir];
   if (!w) return false;
-  const { day, mins: m } = nyDayAt(epoch);
-  const sched = (d) => w[d === nyNow().day ? scheduleToday(d) : d];
+  const at = nyDayAt(epoch), m = at.mins, day = at;
+  const sched = (x) => w[subSched(x)];
   // Like PATH: go by which scheduled trip this train is (its id in the live
   // feed). A night train running late keeps its pill until it leaves Penn; a
   // day train never gets one. Morning: today's early trips, or last night's
   // trips listed past midnight (start 24:00+, id 144000 and up).
   if (code) {
-    const T = sched(day), Y = sched(nyDayAt(epoch - 86400).day);
+    const T = sched(day), Y = sched(nyDayAt(epoch - 86400));
     const inT = !!(T && T.trips && T.trips.includes(code));
     if (m >= 12 * 60) return inT;
     return (inT && code < '144000') || !!(Y && Y.trips && Y.trips.includes(code) && code >= '144000');
   }
   if (m >= 12 * 60) { const T = sched(day); return !!T && T.from >= 12 * 60 && m >= T.from; }
   // After midnight: the night began the evening before (or just after midnight).
-  const T = sched(day), Y = sched(nyDayAt(epoch - 86400).day);
+  const T = sched(day), Y = sched(nyDayAt(epoch - 86400));
   if (!T || m >= T.to) return false;
   return !Y || Y.from >= 12 * 60 || m >= Y.from;
 }
@@ -685,8 +702,8 @@ const localNight = (stationId, g, dir, epoch) => {
   const sw = subwayData && subwayData.switches && ((subwayData.switches[stationId] || {})[g.route] || {})[dir];
   if (!sw) return false;
   const t = epoch ?? (g.trains && g.trains[0] && g.trains[0].time) ?? Date.now() / 1000;
-  const { day, mins } = nyDayAt(t);
-  const T = sw[day === nyNow().day ? scheduleToday(day) : day];
+  const at = nyDayAt(t), mins = at.mins;
+  const T = sw[subSched(at)];
   if (!T) return false;
   return mins >= 12 * 60 ? mins >= T.nightStart : mins < T.firstExpressPenn;
 };
@@ -699,12 +716,12 @@ const cutbackNight = (stationId, route, dir, epoch) => {
   const ng = subwayData && subwayData.nightGaps && (subwayData.nightGaps[stationId] || {})[route];
   const other = dir === 'N' ? 'S' : 'N';
   if (!ng || ng[dir] || !ng[other]) return false;
-  const { day, mins } = nyDayAt(epoch);
+  const at = nyDayAt(epoch), mins = at.mins;
   if (mins >= 12 * 60) {
-    const g = ng[other][day === nyNow().day ? scheduleToday(day) : day];
+    const g = ng[other][subSched(at)];
     return !!g && g.after >= 12 * 60 && mins > g.after;
   }
-  const g = ng[other][nyDayAt(epoch - 86400).day];
+  const g = ng[other][subSched(nyDayAt(epoch - 86400))];
   return !!g && mins < g.until && (g.after >= 12 * 60 || mins > g.after);
 };
 
@@ -862,7 +879,7 @@ function subwayLateBy(stnId, route, dir, x) {
   let best = null;
   // Its service day: today's, yesterday's (trains after midnight) or tomorrow's.
   for (const off of [-1, 0, 1]) {
-    const day = off === 0 ? scheduleToday(nyNow().day) : nyNow(off).day;
+    const day = subSched(nyNow(off));
     const m = (subwayTimes.get(`${stnId}|${route}|${dir}|${day}`) || new Map()).get(x.code);
     if (m == null) continue;
     const diff = x.time - minsToEpoch(off * 1440 + m);
@@ -1381,7 +1398,7 @@ function renderSubwayTags(states) {
   const day = nyNow().day;
   // Late night or weekend, not both (owner: keep the two patterns distinct).
   const night = tags.length > 0;
-  if (holidayNotice()) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
+  if (holidayNotice() || subwayHoliday(nyNow().date)) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
   else if (!night && (day === 'saturday' || day === 'sunday')) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
   if (weatherNotice()) tags.push(`<span class="tag wx">${ICON.snow}Severe weather service</span>`);
   $('sub-h').innerHTML = `Subway${tags.join('')}<span>34 St–Penn Station</span>`;
@@ -2260,7 +2277,7 @@ function pathModel(n) {
 function pathOnTime(dest, epoch) {
   if (!pathSchedule || !epoch) return false;
   for (const off of [-1, 0, 1]) {
-    const day = off === 0 ? scheduleToday(nyNow().day) : nyNow(off).day;
+    const day = nyNow(off).day; // PATH's own timetable by the real day
     for (const d of pathSchedule.days[day] || []) if (d.to === dest && Math.abs(minsToEpoch(off * 1440 + d.t) - epoch) <= 120) return true;
   }
   return false;
@@ -2291,7 +2308,7 @@ function pathLateBy(dest, epoch) {
   if (!pathSchedule || !epoch) return null;
   let best = null;
   for (const off of [-1, 0, 1]) {
-    const day = off === 0 ? scheduleToday(nyNow().day) : nyNow(off).day;
+    const day = nyNow(off).day; // PATH's own timetable by the real day
     for (const d of pathSchedule.days[day] || []) {
       if (d.to !== dest) continue;
       const t = minsToEpoch(off * 1440 + d.t);
