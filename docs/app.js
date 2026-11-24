@@ -2771,6 +2771,15 @@ const SERVICE_SWITCH = /\b(running|runs|run|operating|operates)\s+(express|local
 // MTA shows ahead of their start, nor #preview's upcoming work.
 const happeningNow = (n) => n.activeNow !== false && !n.preview;
 const isDelayNotice = (n) => happeningNow(n) && (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text);
+// Late by NJ Transit's own numbers (2+ min), or 2+ min past its time and not
+// gone, while its status says nothing about it ("BOARDING", "On time").
+function njtHiddenDelay(r) {
+  if (r.tone === 'stop' || r.tone === 'departed' || r.departed) return false;
+  if (/late|delay|stand ?by/i.test(String(r.status || ''))) return false;
+  const late = (r.lateMin || 0) >= 2;
+  const overdue = (r.leaves ?? r.time) < Date.now() / 1000 - 120;
+  return late || overdue;
+}
 const NJT_SYSTEMWIDE = /\bNJ ?TRANSIT (rail )?(service|trains)\b|\ball (NJ ?TRANSIT )?(rail )?(service|trains)\b|\b(into and out of|to and from|in and out of) (Penn Station New York|PSNY|New York Penn|Penn Station)\b/i;
 function rowNotices(r) {
   const all = (board && board.notices && board.notices.rail) || [];
@@ -2786,8 +2795,9 @@ function rowNotices(r) {
       if (NJT_LINE_WORDS.some(([inText, inLine]) => inText.test(n.text) && inLine.test(r.line || ''))) return true;
       // About NJ Transit service as a whole, naming no line or train ("NJ
       // TRANSIT rail service is subject to up to 20-minute delays into and out
-      // of Penn Station New York"): every NJ Transit train (owner, Nov 24).
-      return !NJT_LINE_WORDS.some(([inText]) => inText.test(n.text)) && NJT_SYSTEMWIDE.test(n.text);
+      // of Penn Station New York"): only trains actually running late whose
+      // status doesn't already say so (owner, Nov 24), not every train.
+      return !NJT_LINE_WORDS.some(([inText]) => inText.test(n.text)) && NJT_SYSTEMWIDE.test(n.text) && njtHiddenDelay(r);
     });
   }
   return [];
