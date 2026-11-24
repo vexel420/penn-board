@@ -509,6 +509,8 @@ function parseNjt(items) {
       status, tone,
       // Its stops after New York (NJ Transit's list starts with New York itself).
       via: (it.STOPS || []).map((x) => x.STATIONNAME).filter((x) => x && !/^new york penn/i.test(x)).slice(0, -1),
+      // The same stops as NJ Transit's station codes (for its timetable), last stop included.
+      viaCodes: (it.STOPS || []).map((x) => x.STATION_2CHAR).filter((c) => c && c !== 'NY'),
     };
   });
 }

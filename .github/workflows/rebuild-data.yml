@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write   # a GitHub-signed token proves this workflow to the relay (NJ Transit timetable)
 
 concurrency:
   group: rebuild-data
@@ -57,6 +58,15 @@ jobs:
 
       - name: LIRR timetable (other options for delayed trains)
         run: python3 scripts/build-lirr-timetable.py "$RUNNER_TEMP/gtfslirr.zip"
+
+      - name: NJ Transit timetable (through the relay, locked to this repository)
+        # NJ Transit's file needs the owner's login, which only the relay holds.
+        # The relay hands it over only with a GitHub-signed token for this repo.
+        continue-on-error: true
+        run: |
+          T=$(curl -fsSL -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=penn-board-relay" | python3 -c 'import json,sys; print(json.load(sys.stdin)["value"])')
+          curl -fsSL --retry 2 -H "Authorization: Bearer $T" -o "$RUNNER_TEMP/njt-rail.zip" https://penn-board-relay.pennstationboard.workers.dev/njt-rail-gtfs
+          python3 scripts/build-njt-timetable.py "$RUNNER_TEMP/njt-rail.zip"
 
       - name: PATH timetable
         # PATH's site is sometimes unreachable; keep the last good timetable then.

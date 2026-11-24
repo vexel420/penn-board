@@ -259,6 +259,31 @@ async function busCall(env, endpoint, fields) {
   return r;
 }
 
+
+// ---------- GitHub Actions caller check (OIDC) ----------
+// A workflow in the owner's repository can ask GitHub for a short-lived signed
+// ID token (audience "penn-board-relay"). It's checked here against GitHub's
+// published keys: signature, issuer, audience, expiry and repository.
+const GH_ISS = 'https://token.actions.githubusercontent.com';
+const GH_REPO = 'vexel420/penn-board';
+const b64u = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+async function githubActionsCaller(request) {
+  try {
+    const m = /^Bearer\s+(.+)$/i.exec(request.headers.get('authorization') || '');
+    if (!m) return false;
+    const [h, p, sig] = m[1].split('.');
+    const head = JSON.parse(new TextDecoder().decode(b64u(h)));
+    const claims = JSON.parse(new TextDecoder().decode(b64u(p)));
+    const now = Date.now() / 1000;
+    if (head.alg !== 'RS256' || claims.iss !== GH_ISS || claims.aud !== 'penn-board-relay' || claims.repository !== GH_REPO || !(claims.exp > now) || claims.nbf > now + 60) return false;
+    const jwks = await (await fetch(`${GH_ISS}/.well-known/jwks`, { cf: { cacheTtl: 3600 } })).json();
+    const jwk = (jwks.keys || []).find((k) => k.kid === head.kid);
+    if (!jwk) return false;
+    const key = await crypto.subtle.importKey('jwk', jwk, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['verify']);
+    return await crypto.subtle.verify('RSASSA-PKCS1-v1_5', key, b64u(sig), new TextEncoder().encode(`${h}.${p}`));
+  } catch { return false; }
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -271,6 +296,34 @@ export default {
         // Which NJ Transit server the relay is using (no data, no secrets).
         await getToken(env, false).catch(() => {});
         return json(JSON.stringify({ server: new URL(NJT_API).host }), 0);
+      }
+      if (pathname === '/njt-rail-gtfs') {
+        // NJ Transit's rail timetable (GTFS zip) for the weekly rebuild only.
+        // Locked: the caller must show a GitHub Actions ID token signed by GitHub
+        // for the vexel420/penn-board repository (no shared secret to leak), or
+        // the Worker secret REBUILD_KEY. The owner's login stays here.
+        const given = request.headers.get('x-rebuild-key') || '';
+        const keyOk = env.REBUILD_KEY && given.length === env.REBUILD_KEY.length && given === env.REBUILD_KEY;
+        if (!keyOk && !(await githubActionsCaller(request))) return fail(403, 'Forbidden');
+        const kv = env.NJT_KV;
+        const base = 'https://raildata.njtransit.com/api/GTFSRT/';
+        const post = async (url, fields) => { const b = new FormData(); for (const [k, v] of Object.entries(fields)) b.append(k, v); return fetch(url, { method: 'POST', body: b }); };
+        let tok = kv && await kv.get('gtfs-token-rail');
+        for (let attempt = 0; attempt < 2; attempt++) {
+          if (!tok) {
+            const r = await post(base + 'getToken', { username: String(env.NJT_USERNAME).trim(), password: String(env.NJT_PASSWORD).trim() });
+            let j = null; try { j = await r.json(); } catch {}
+            if (!j || !j.UserToken) return fail(502, 'NJ Transit timetable sign-in not accepted');
+            tok = j.UserToken;
+            if (kv) await kv.put('gtfs-token-rail', tok, { expirationTtl: 20 * 3600 });
+          }
+          const r = await post(base + 'getGTFS', { token: tok });
+          const type = r.headers.get('content-type') || '';
+          if (r.ok && !/json/i.test(type)) return new Response(r.body, { headers: { 'content-type': 'application/zip' } });
+          tok = null;  // token refused: sign in again once
+          if (kv) await kv.delete('gtfs-token-rail');
+        }
+        return fail(502, 'NJ Transit timetable not available');
       }
       if (pathname === '/mta-bus-stop') {
         // Next MTA buses at one stop (MTA Bus Time, SIRI stop monitoring; owner's key

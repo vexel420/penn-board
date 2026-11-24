@@ -2885,39 +2885,44 @@ const switchNoteHtml = (route, dir) => (subwayExpressSwitch(route, dir).length
 // Stations every train shares (Penn itself, the hubs on the way out): not a reason to switch.
 const SHARED_SKIP = /^(new york penn station|penn station|jamaica|woodside|forest hills|kew gardens|secaucus.*|newark penn station)$/i;
 const normName2 = (s) => String(s || '').toLowerCase().replace(/-sec\b|✈|&#9992;?/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-// ---------- LIRR timetable (scripts/build-lirr-timetable.py) ----------
-// For a delayed LIRR train: the quickest ways from Penn to the stations it
-// serves, direct or with one change (at Jamaica, say), from the MTA's
-// timetable. A first train that's on the live board shows its live time and
-// track instead (matched by train number), so a card switches from
-// "Scheduled" to "Live" by itself (owner, Nov 24).
-let lirrTT;               // undefined: not loaded; null: couldn't load
-let lirrTTLoading = null;
-const loadLirrTT = () => lirrTTLoading || (lirrTTLoading = fetch('lirr-timetable.json').then((x) => (x.ok ? x.json() : null)).catch(() => null).then((d) => { lirrTT = d; lastLirrCache.clear(); }));
+// ---------- Railroad timetables: LIRR and NJ Transit ----------
+// For a delayed train: the quickest ways from Penn to the stations it serves,
+// direct or with one change (at Jamaica, Secaucus, Newark…), from the
+// railroad's timetable (scripts/build-lirr-timetable.py, build-njt-timetable.py).
+// A first train that's on the live board shows its live time and track
+// instead (matched by train number), so a card switches from "Scheduled" to
+// "Live" by itself (owner, Nov 24).
+const TT = { lirr: { file: 'lirr-timetable.json', change: 180 }, njt: { file: 'njt-timetable.json', change: 240 } };
+let lirrTT, njtTT;        // undefined: not loaded; null: couldn't load
+const ttLoading = {};
+const ttOf = (c) => (c === 'lirr' ? lirrTT : njtTT);
+const loadTT = (c) => ttLoading[c] || (ttLoading[c] = fetch(TT[c].file).then((x) => (x.ok ? x.json() : null)).catch(() => null).then((d) => { if (c === 'lirr') { lirrTT = d; lastLirrCache.clear(); } else njtTT = d; }));
+const loadLirrTT = () => loadTT('lirr');
 setTimeout(loadLirrTT, 3000); // for last trains of the night (final call)
-const LIRR_CHANGE_S = 180;  // at least 3 minutes to change trains
-// Today's and tomorrow's trains as { route, head, train, calls: [[stop id, epoch s], ...] }.
-function lirrTripsNear() {
+const trainNo = (x) => String(x || '').replace(/^0+(?=\d)/, '');
+// Today's and tomorrow's trains as { route, head, train, calls: [[stop, epoch s], ...] }.
+function ttTripsNear(tt) {
   const out = [];
   const nowS = Date.now() / 1000;
   for (let k = 0; k < 2; k++) {
-    const day = new Set(lirrTT.dates[nyNow(k).date.replace(/-/g, '')] || []);
+    const day = new Set(tt.dates[nyNow(k).date.replace(/-/g, '')] || []);
     const midnight = nowS + k * 86400 - nyNow().mins * 60 - (nowS % 60);
-    for (const [route, head, train, svc, flat] of lirrTT.trips) {
+    for (const [route, head, train, svc, flat] of tt.trips) {
       if (!day.has(svc)) continue;
       const calls = [];
-      for (let i = 0; i < flat.length; i += 2) calls.push([lirrTT.stops[flat[i]], midnight + flat[i + 1] * 60]);
+      for (let i = 0; i < flat.length; i += 2) calls.push([tt.stops[flat[i]], midnight + flat[i + 1] * 60]);
       if (calls[calls.length - 1][1] < nowS || calls[0][1] > nowS + 14 * 3600) continue;
-      out.push({ route, head, train, calls });
+      out.push({ route, head, train: trainNo(train), calls });
     }
   }
   return out;
 }
-// Best plan to each target station: { first, change?: { at, second }, arrive }.
-function lirrPlans(targets, skipTrain, fromS) {
-  const trips = lirrTripsNear();
-  const penn = lirrTT.penn;
-  const byStop = new Map();  // stop -> [[trip, index]]
+const lirrTripsNear = () => ttTripsNear(lirrTT);
+// Best plan to each target station: { first, leave, change?: { at, time, second }, arrive }.
+function ttPlans(tt, changeS, targets, skipTrain, fromS) {
+  const trips = ttTripsNear(tt);
+  const penn = tt.penn;
+  const byStop = new Map();
   for (const t of trips) t.calls.forEach(([sid], i) => { if (!byStop.has(sid)) byStop.set(sid, []); byStop.get(sid).push([t, i]); });
   const firsts = trips.map((t) => [t, t.calls.findIndex(([sid]) => sid === penn)])
     .filter(([t, i]) => i >= 0 && i < t.calls.length - 1 && t.calls[i][1] >= fromS && t.calls[i][1] <= fromS + 12 * 3600 && t.train !== skipTrain);
@@ -2934,22 +2939,30 @@ function lirrPlans(targets, skipTrain, fromS) {
       const [hub, at] = t.calls[j];
       if (targets.has(hub)) offer(hub, { first: t, leave, arrive: at });
       for (const [u, k] of byStop.get(hub) || []) {
-        if (u === t || u.train === skipTrain || u.calls[k][1] < at + LIRR_CHANGE_S || u.calls[k][1] > at + 90 * 60) continue;
+        if (u === t || u.train === skipTrain || u.calls[k][1] < at + changeS || u.calls[k][1] > at + 90 * 60) continue;
+        if (u.calls.slice(k + 1).some(([sid]) => sid === penn)) continue; // heading back toward Penn
         for (let m = k + 1; m < u.calls.length; m++) if (targets.has(u.calls[m][0])) offer(u.calls[m][0], { first: t, leave, change: { at: hub, time: u.calls[k][1], second: u }, arrive: u.calls[m][1] });
       }
     }
   }
   return best;
 }
-const lirrStopName = (id) => (lirrData && lirrData.stops[id] ? lirrData.stops[id][0] : id);
 const hmap = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
-function lirrPlansHtml(r, mineNames) {
-  if (lirrTT === undefined) return null;
-  if (!lirrTT || !lirrData) return '';
-  const targets = new Set(Object.keys(lirrData.stops).filter((id) => mineNames.has(normName2(lirrData.stops[id][0])) && !SHARED_SKIP.test(normName2(lirrData.stops[id][0]))));
+const ttStopName = (c, id) => (c === 'lirr' ? (lirrData && lirrData.stops[id] ? lirrData.stops[id][0] : id) : ((njtTT && njtTT.names[id]) || id));
+const ttChip = (c, route) => (c === 'lirr'
+  ? lirrChip((lirrData && lirrData.routes[route]) || { name: 'LIRR', color: '#555', text: '#fff' })
+  : `<span class="pl p-njt">${esc((typeof NJT_LINE_NAMES !== 'undefined' && NJT_LINE_NAMES[route]) || route)}</span>`);
+// The options cards for a delayed train; null while its timetable loads.
+function ttPlansHtml(r, mineNames) {
+  const c = r.carrier;
+  const tt = ttOf(c);
+  if (tt === undefined) return null;
+  if (!tt || (c === 'lirr' && !lirrData)) return '';
+  const targets = c === 'njt'
+    ? new Set((r.viaCodes || []).filter((x) => x !== 'SE' && x !== 'NP'))
+    : new Set(Object.keys(lirrData.stops).filter((id) => mineNames.has(normName2(lirrData.stops[id][0])) && !SHARED_SKIP.test(normName2(lirrData.stops[id][0]))));
   if (!targets.size) return '';
-  const best = lirrPlans(targets, String(r.train || ''), Date.now() / 1000 + 60);
-  // Stations reached by the same trains share one card.
+  const best = ttPlans(tt, TT[c].change, targets, trainNo(r.train), Date.now() / 1000 + 60);
   const groups = new Map();
   for (const [sid, p] of best) {
     const key = `${p.first.train}|${p.change ? p.change.second.train : ''}`;
@@ -2957,16 +2970,13 @@ function lirrPlansHtml(r, mineNames) {
     groups.get(key).stops.push([sid, p.arrive]);
   }
   const cards = [...groups.values()].sort((a, b) => a.p.leave - b.p.leave || b.stops.length - a.stops.length).slice(0, 5).map(({ p, stops }) => {
-    const live = board.departures.find((x) => x.carrier === 'lirr' && String(x.train) === String(p.first.train) && x.tone !== 'departed');
+    const live = board.departures.find((x) => x.carrier === c && trainNo(x.train) === p.first.train && x.tone !== 'departed');
     const leave = live ? (live.leaves ?? live.time) : p.leave;
     const tag = live ? '<span class="tagx tag-live">Live</span>' : '<span class="tagx tag-sched">Scheduled</span>';
-    const chip = lirrChip(lirrData.routes[p.first.route] || { name: 'LIRR', color: '#555', text: '#fff' });
-    const how = p.change
-      ? `Change at ${esc(lirrStopName(p.change.at))} for the ${hmap(p.change.time)} train to ${esc(p.change.second.head)}.`
-      : 'No change.';
+    const how = p.change ? `Change at ${esc(ttStopName(c, p.change.at))} for the ${hmap(p.change.time)} train to ${esc(p.change.second.head)}.` : 'No change.';
     stops.sort((a, b) => a[1] - b[1]);
-    const gets = stops.slice(0, 6).map(([sid, at]) => `${esc(lirrStopName(sid))} ${hmap(at)}`).join(', ') + (stops.length > 6 ? ` and ${stops.length - 6} more` : '');
-    return `<li class="cm-stn"><div class="opt-h">${chip}<span>${tag} ${hmap(leave)}${live && live.track ? `, track ${esc(live.track)}` : ''}</span></div>
+    const gets = stops.slice(0, 6).map(([sid, at]) => `${esc(ttStopName(c, sid))} ${hmap(at)}`).join(', ') + (stops.length > 6 ? ` and ${stops.length - 6} more` : '');
+    return `<li class="cm-stn"><div class="opt-h">${ttChip(c, p.first.route)}<span>${tag} ${hmap(leave)}${live && live.track ? `, track ${esc(live.track)}` : ''}</span></div>
       <span class="cm-dir">To ${esc(p.first.head)}. ${how} Gets you to ${gets}.</span></li>`;
   }).join('');
   return cards ? `<h3 class="cm-h">Other ways to the same stations</h3><ul class="cm-stns">${cards}</ul>` : '';
@@ -2991,11 +3001,11 @@ function openOptions(r) {
     if (!byLine.has(k)) byLine.set(k, { line: k, next: x, shared: new Set() });
     shared.forEach((s) => byLine.get(k).shared.add(s));
   }
-  // LIRR: direct or one-change trips from the timetable, live once on the board.
+  // LIRR and NJ Transit: direct or one-change trips from the timetable, live once on the board.
   let timetable = '';
-  if (r.carrier === 'lirr') {
-    const html = lirrPlansHtml(r, mine);
-    if (html === null) { loadLirrTT().then(() => { if (changeOpen && changeOpen.id === 'options' && $('change').open) openOptions(r); }); timetable = '<p class="cm-live">Checking the timetable…</p>'; }
+  if (TT[r.carrier]) {
+    const html = ttPlansHtml(r, mine);
+    if (html === null) { loadTT(r.carrier).then(() => { if (changeOpen && changeOpen.id === 'options' && $('change').open) openOptions(r); }); timetable = '<p class="cm-live">Checking the timetable…</p>'; }
     else timetable = html;
   }
   const items = [...byLine.values()].sort((a, b) => b.shared.size - a.shared.size).slice(0, 6).map((o) => {
@@ -3004,11 +3014,11 @@ function openOptions(r) {
     return `<li class="cm-stn"><div class="opt-h"><b>${esc(o.line)}</b><span>next ${t.hm} ${t.ap}${o.next.track ? `, track ${esc(o.next.track)}` : ''} to ${esc(o.next.place)}</span></div>
       <span class="cm-dir">Also stops at ${esc(s.slice(0, 6).join(', '))}${s.length > 6 ? ` and ${s.length - 6} more` : ''}</span></li>`;
   }).join('');
-  const lirrDone = r.carrier === 'lirr' && lirrTT;
+  const lirrDone = TT[r.carrier] && ttOf(r.carrier);
   $('chg-below').innerHTML = `${lirrDone ? (timetable || '<p class="cm-live">No other train from Penn reaches these stations in the next few hours.</p>')
     : `${items ? `<h3 class="cm-h">Other trains from Penn to the same stations</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other train on the board right now stops at the same stations.</p>'}${timetable}`}
     ${r.carrier === 'njt' ? '<h3 class="cm-h">Or by PATH</h3><p class="lchips"><button type="button" class="cm-back" data-guide="newark">To Newark Penn by PATH</button> <button type="button" class="cm-back" data-guide="hoboken">To Hoboken by PATH</button></p>' : ''}
-    <p class="cm-live">${r.carrier === 'lirr' ? 'Live: time and track from the live board. Scheduled: from the LIRR timetable until the train is on the board. ' : 'Times and tracks from the live board. '}Fares and tickets differ by line; check before you board.</p>`;
+    <p class="cm-live">${TT[r.carrier] ? `Live: time and track from the live board. Scheduled: from the ${r.carrier === 'lirr' ? 'LIRR' : 'NJ Transit'} timetable until the train is on the board. ` : 'Times and tracks from the live board. '}Fares and tickets differ by line; check before you board.</p>`;
   openSheet();
 }
 // Subway delay options: other lines at the same Penn station going the same
