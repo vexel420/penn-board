@@ -799,27 +799,39 @@ function loadSubwayGuide() {
     .then((d) => { subwayGuide = d; subwayGuideLoading = null; if (board) { slideStarted = -Infinity; renderSubway(); } });
 }
 const shortStop = (id) => String((subwayGuide && subwayGuide.names[id]) || stationName(id) || id).split('-')[0].trim();
-const linesText = (ls) => `${ls.slice(0, -1).map(lineName).join(', ')}${ls.length > 1 ? ' or ' : ''}${lineName(ls[ls.length - 1])}`;
+const linesText = (ls0) => { const ls = [...ls0].sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true })); return `${ls.slice(0, -1).map(lineName).join(', ')}${ls.length > 1 ? ' or ' : ''}${lineName(ls[ls.length - 1])}`; };
 // The plan to show now: the fastest whose first train is running.
 function guidePlan(stn, line, dir, here, nowS) {
   const per = (((subwayGuide && subwayGuide.plans[stn.id]) || {})[line] || {})[dir] || {};
-  const night = nyNow().mins < 5 * 60;
-  for (const p of (night ? per.night : per.day) || []) {
-    const first = p.first.filter((l) => here.some((x) => x.route === l && x.dir === p.firstDir && x.trains.some((t) => t.time >= nowS - 30)));
-    if (first.length) return { ...p, first };
+  const e = (nyNow().mins < 5 * 60 ? per.night : per.day) || {};
+  for (const p of e.plans || []) {
+    const l0 = p.legs[0];
+    const first = l0.routes.filter((l) => here.some((x) => x.route === l && x.dir === l0.dir && x.trains.some((t) => t.time >= nowS - 30)));
+    if (first.length) return { ...p, legs: [{ ...l0, routes: first }, ...p.legs.slice(1)], walk: e.walk };
   }
-  return null;
+  return e.walk ? { legs: [], walk: e.walk } : null;
 }
-// What to do instead, as one short sentence: the MTA notice's own advice
-// first; then the fastest plan; then a line going the same way.
+// A line's name in a sentence; the 42 St and other shuttles are "the shuttle".
+const routesText = (rs) => (rs.every((r) => /^(GS|FS|H|S)$/.test(r)) ? 'shuttle' : linesText(rs.filter((r) => !/^(GS|FS|H|S)$/.test(r))));
+// What to do instead, as short sentences: the MTA notice's own advice
+// first; then the fastest plan ("Take the 3 to Times Sq, the shuttle to
+// Grand Central, then the 4 or 5."), with walking through Penn Station to
+// the other subway station as a second choice; then a line going the same way.
 function suggestionHtml(stn, line, dir, here, nowS, n) {
   const named = n ? noticeAlts(n, stn, line) : [];
   if (named.length) return `Use the ${linesText(named)}.`;
   const p = guidePlan(stn, line, dir, here, nowS);
-  if (p && !p.then) return `Use the ${linesText(p.first)}.`;
-  if (p) return `Take the ${linesText(p.first)}${p.firstDir !== dir ? (p.firstDir === 'N' ? ' uptown' : ' downtown') : ''} to ${esc(shortStop(p.change))}, then the ${lineName(p.then)}.`;
+  const walk = p && p.walk ? `<span class="src">Or walk through Penn Station to the ${routesText(p.walk.routes)}.</span>` : '';
+  if (p && p.legs.length === 1) return `Use the ${routesText(p.legs[0].routes)}${p.legs[0].dir !== dir ? (p.legs[0].dir === 'N' ? ' uptown' : ' downtown') : ''}.${walk}`;
+  if (p && p.legs.length > 1) {
+    const ls = p.legs;
+    const way = ls[0].dir !== dir ? (ls[0].dir === 'N' ? ' uptown' : ' downtown') : '';
+    const mid = ls.slice(1, -1).map((l) => `the ${routesText(l.routes)} to ${esc(shortStop(l.to))}, `).join('');
+    return `Take the ${routesText(ls[0].routes)}${way} to ${esc(shortStop(ls[0].to))}, ${mid}then the ${routesText(ls[ls.length - 1].routes)}.${walk}`;
+  }
   const alts = directionAlts(stn, line, dir, (l) => !here.some((x) => x.route === l && x.dir === dir));
-  return alts.length ? `Use the ${linesText(alts)}.` : '';
+  if (alts.length) return `Use the ${linesText(alts)}.${walk}`;
+  return walk ? walk.replace('<span class="src">Or walk', '<span>Walk') : '';
 }
 const howHtml = (h) => (h ? `<span class="how">${h}</span>` : '');
 

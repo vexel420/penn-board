@@ -1,0 +1,62 @@
+# Weekly rebuild of the board's timetable data (owner, Nov 2026).
+#
+# Downloads the MTA's current subway and LIRR timetables (GTFS) and PATH's
+# timetable pages, reruns the build scripts, and commits the data files only
+# if something changed. Most weeks nothing changes; when the MTA or PATH
+# publishes a new timetable, the board picks it up within a week.
+# Run it by hand from the Actions tab ("Run workflow") after a known change.
+name: Rebuild timetable data
+
+on:
+  schedule:
+    - cron: '23 7 * * 1'   # Mondays 07:23 UTC (about 2:23 AM in New York)
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild-data
+  cancel-in-progress: false
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download MTA timetables
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/gtfs_subway.zip" https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/gtfslirr.zip" https://rrgtfsfeeds.s3.amazonaws.com/gtfslirr.zip
+
+      - name: Subway data (lines, late nights, on-time times, shapes)
+        run: python3 scripts/build-subway-data.py "$RUNNER_TEMP/gtfs_subway.zip"
+
+      - name: Subway route guidance (fastest alternatives)
+        run: python3 scripts/build-subway-guide.py "$RUNNER_TEMP/gtfs_subway.zip"
+
+      - name: LIRR map data
+        run: python3 scripts/build-lirr-data.py "$RUNNER_TEMP/gtfslirr.zip"
+
+      - name: PATH timetable
+        # PATH's site is sometimes unreachable; keep the last good timetable then.
+        continue-on-error: true
+        run: python3 scripts/build-path-schedule.py
+
+      - name: Commit if anything changed
+        run: |
+          git add docs/*.json
+          if git diff --cached --quiet; then
+            echo "No timetable changes this week."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Weekly timetable data rebuild"
+          git push
