@@ -218,6 +218,47 @@ async function njt(env) {
   return JSON.stringify({ ITEMS: sched.ITEMS, MESSAGES: Array.isArray(msgs) ? msgs : [], ARRIVALS: arrivals });
 }
 
+// ---------- NJ Transit buses (BUSDATA web API, BUSDV2; owner's developer login) ----------
+// Per NJ Transit's BUSDATA V1 document: POST form fields; authenticateUser gives a
+// token (~24 h), kept in KV like the rail one so the relay signs in about once a day.
+const BUS_HOSTS = ['https://pcsdata.njtransit.com/api/BUSDV2/', 'https://testpcsdata.njtransit.com/api/BUSDV2/'];
+async function busPost(host, endpoint, fields) {
+  const body = new FormData();
+  for (const [k, v] of Object.entries(fields)) body.append(k, v);
+  const res = await fetch(host + endpoint, { method: 'POST', body, headers: { accept: 'application/json' } });
+  if (!res.ok) throw new Error(`NJ Transit bus answered ${res.status} to ${endpoint}`);
+  return res.json();
+}
+async function busToken(env, fresh) {
+  const kv = env.NJT_KV;
+  if (!fresh && kv) { const k = await kv.get('bus-token', 'json'); if (k && k.token) return k; }
+  if (kv && await kv.get('bus-signin-blocked')) throw new Error('NJ Transit bus sign-ins paused for today');
+  const tried = [];
+  for (const host of BUS_HOSTS) {
+    try {
+      const r = await busPost(host, 'authenticateUser', { username: String(env.NJT_USERNAME).trim(), password: String(env.NJT_PASSWORD).trim() });
+      if (r && String(r.Authenticated).toLowerCase() === 'true' && r.UserToken) {
+        const k = { token: r.UserToken, host };
+        if (kv) await kv.put('bus-token', JSON.stringify(k), { expirationTtl: 20 * 3600 });
+        return k;
+      }
+      tried.push(`${new URL(host).host}: not accepted`);
+    } catch (e) { tried.push(`${new URL(host).host}: ${e.message}`); }
+  }
+  if (kv) await kv.put('bus-signin-blocked', '1', { expirationTtl: 3600 });
+  throw new Error(`NJ Transit bus login not accepted (${tried.join('; ')})`);
+}
+async function busCall(env, endpoint, fields) {
+  let k = await busToken(env, false);
+  let r = await busPost(k.host, endpoint, { token: k.token, ...fields });
+  if (r && !Array.isArray(r) && /token/i.test(r.errorMessage || '')) {
+    if (env.NJT_KV) await env.NJT_KV.delete('bus-token');
+    k = await busToken(env, true);
+    r = await busPost(k.host, endpoint, { token: k.token, ...fields });
+  }
+  return r;
+}
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -230,6 +271,16 @@ export default {
         // Which NJ Transit server the relay is using (no data, no secrets).
         await getToken(env, false).catch(() => {});
         return json(JSON.stringify({ server: new URL(NJT_API).host }), 0);
+      }
+      if (pathname === '/njt-bus-pabt') {
+        // Live NJ Transit bus departures from Port Authority Bus Terminal (next hour), cached 30 s.
+        const cache = caches.default, key = new Request(request.url, { method: 'GET' });
+        const hit = await cache.match(key);
+        if (hit) return hit;
+        const d = await busCall(env, 'getBusDV', { stop: 'PABT', direction: '', route: '', IP: '' });
+        const res = json(JSON.stringify(d), 30);
+        ctx.waitUntil(cache.put(key, res.clone()));
+        return res;
       }
       if (pathname === '/njt-day') {
         // The day's whole schedule from Penn (NJ Transit trains only), for
