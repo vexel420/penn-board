@@ -3264,3 +3264,102 @@ setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000);
   setTimeout(() => { if (subwayTurning) renderSubway(); nextTurn(); }, ROTATE_MS - (Date.now() % ROTATE_MS) + 20);
 })(); // keep countdowns moving between refreshes
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
+
+
+// ---------- airport helper (owner, Nov 24) ----------
+// "To the airport": pick JFK, LaGuardia or Newark and see the fastest and
+// cheapest ways from Penn right now. The first train is live (the board's
+// own LIRR, NJ Transit, Amtrak and subway times); connections are the usual
+// times below. Fares only from the official pages, as of Nov 2026: subway and
+// local bus $3.00 (MTA, from Jan 4, 2026); LIRR CityTicket $5.25 off-peak,
+// $7.25 peak, Penn to Jamaica or Woodside (laguardiaairport.com); AirTrain
+// JFK $8.75 (jfkairport.com); Q70 LaGuardia Link free (laguardiaairport.com);
+// NJ Transit New York Penn to Newark Airport $17.25 with the AirTrain
+// (njtransit.com/ewr). Update here when fares change.
+const FARES = { subway: 3.00, cityOff: 5.25, cityPeak: 7.25, airtrainJfk: 8.75, njtEwr: 17.25 };
+// Usual minutes for the parts that aren't live (connections, rail rides).
+const AIR_MIN = {
+  lirrJamaica: 20, lirrWoodside: 11, njtEwr: 24, amtrakEwr: 18,
+  airtrainJfkWait: 4, airtrainJfkRide: 8, airtrainEwrWait: 3, airtrainEwrRide: 10,
+  q70Wait: 5, q70FromJacksonHts: 12, q70FromWoodside: 16, change: 3,
+};
+let airportPick = 'JFK';
+try { airportPick = localStorage.getItem('airport') || 'JFK'; } catch {}
+const money = (x) => `$${x.toFixed(2)}`;
+const hm = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
+const minsText = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
+const airPl = (txt, cls) => `<span class="pl ${cls}">${txt}</span>`;
+// The next live departures from Penn that call at a station (railroads).
+function railTo(carriers, stop, nowS) {
+  return ((board && board.departures) || []).filter((r) => carriers.includes(r.carrier) && r.tone !== 'stop' && r.tone !== 'departed' && !r.departed
+    && (r.leaves ?? r.time) >= nowS + 60 && (r.via || []).concat(r.place).some((v) => new RegExp(`^${stop}\\b`, 'i').test(v)))
+    .sort((a, b) => (a.leaves ?? a.time) - (b.leaves ?? b.time));
+}
+// The next live subway trains from Penn (8 Av) whose stops include one.
+function subwayTo(route, stopId, nowS) {
+  return ((board && board.subway) || []).filter((g) => g.route === route && g.trains[0] && g.trains[0].stops[0] === 'A28')
+    .flatMap((g) => g.trains).filter((t) => t.time >= nowS + 60 && (t.stops || []).includes(stopId)).sort((a, b) => a.time - b.time);
+}
+const subRide = (key, fallback) => { const r = subwayGuide && subwayGuide.rides && subwayGuide.rides[key]; return (r && (nyNow().mins < 5 * 60 ? r.night : r.day)) || fallback; };
+function airportOptions(code, nowS) {
+  const o = [];
+  const lirrFare = (r) => (r.fare === 'peak' ? FARES.cityPeak : FARES.cityOff);
+  if (code === 'JFK') {
+    const l = railTo(['lirr'], 'Jamaica', nowS)[0];
+    if (l) { const dep = l.leaves ?? l.time, at = dep + (AIR_MIN.lirrJamaica + AIR_MIN.change + AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60;
+      o.push({ at, fare: lirrFare(l) + FARES.airtrainJfk, legs: [[dep, `${airPl('LIRR', 'p-lirr')} to Jamaica${l.track ? `, track ${esc(l.track)}` : ''}`], [dep + (AIR_MIN.lirrJamaica + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal`]] }); }
+    const e = subwayTo('E', 'G06', nowS)[0];
+    if (e) { const ride = subRide('E|A28|G06', 35); const at = e.time + (ride + AIR_MIN.change + AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60;
+      o.push({ at, fare: FARES.subway + FARES.airtrainJfk, legs: [[e.time, `${lineName('E')} to Sutphin Blvd-Archer Av-JFK`], [e.time + (ride + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal`]] }); }
+    const a = subwayTo('A', 'H03', nowS)[0];
+    if (a) { const ride = subRide('A|A28|H03', 46); const at = a.time + (ride + AIR_MIN.change + AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60;
+      o.push({ at, fare: FARES.subway + FARES.airtrainJfk, legs: [[a.time, `${lineName('A')} to Howard Beach-JFK`], [a.time + (ride + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal`]] }); }
+  } else if (code === 'LGA') {
+    const e = subwayTo('E', 'G14', nowS)[0];
+    if (e) { const ride = subRide('E|A28|G14', 19); const at = e.time + (ride + AIR_MIN.change + AIR_MIN.q70Wait + AIR_MIN.q70FromJacksonHts) * 60;
+      o.push({ at, fare: FARES.subway, legs: [[e.time, `${lineName('E')} to Jackson Hts-Roosevelt Av`], [e.time + (ride + AIR_MIN.change) * 60, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free), about every 10 min`]] }); }
+    const l = railTo(['lirr'], 'Woodside', nowS)[0];
+    if (l) { const dep = l.leaves ?? l.time, at = dep + (AIR_MIN.lirrWoodside + AIR_MIN.change + AIR_MIN.q70Wait + AIR_MIN.q70FromWoodside) * 60;
+      o.push({ at, fare: lirrFare(l), legs: [[dep, `${airPl('LIRR', 'p-lirr')} to Woodside${l.track ? `, track ${esc(l.track)}` : ''}`], [dep + (AIR_MIN.lirrWoodside + AIR_MIN.change) * 60, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free), about every 10 min`]] }); }
+  } else {
+    const n = railTo(['njt'], 'Newark Airport', nowS)[0];
+    if (n) { const dep = n.leaves ?? n.time, at = dep + (AIR_MIN.njtEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60;
+      o.push({ at, fare: FARES.njtEwr, legs: [[dep, `${airPl('NJ Transit', 'p-njt')} to Newark Airport${n.track ? `, track ${esc(n.track)}` : ''}`], [dep + (AIR_MIN.njtEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] }); }
+    const m = railTo(['amtrak'], 'Newark Airport', nowS)[0];
+    if (m) { const dep = m.leaves ?? m.time, at = dep + (AIR_MIN.amtrakEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60;
+      o.push({ at, fare: null, legs: [[dep, `${airPl('Amtrak', 'p-amtrak')} ${esc(m.line || '')} to Newark Airport${m.track ? `, track ${esc(m.track)}` : ''}`], [dep + (AIR_MIN.amtrakEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] }); }
+  }
+  return o;
+}
+function renderAirport() {
+  const nowS = Date.now() / 1000;
+  const opts = airportOptions(airportPick, nowS).sort((a, b) => a.at - b.at);
+  const fastest = opts[0];
+  const priced = opts.filter((x) => x.fare != null);
+  const cheapest = priced.length ? priced.reduce((a, b) => (b.fare < a.fare || (b.fare === a.fare && b.at < a.at) ? b : a)) : null;
+  $('chg-top').innerHTML = `<div class="sheet-air">${[['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark']].map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>`;
+  $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}<span class="tagx tag-live">Live</span></span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
+    <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>At the airport, about</span></li></ul>
+    <div class="air-fare">${x.fare != null ? `${money(x.fare)} one way` : 'Amtrak fare varies by train'}</div></div>`).join('')
+    : '<p class="cm-live">No trains to there are listed from Penn right now.</p>')
+    + '<p class="cm-live">First train: live times from the board. Connections use usual times. Fares from the MTA, the Port Authority and NJ Transit; check before you travel.</p>';
+}
+function openAirport() {
+  changeOpen = { id: 'airport', view: 1 };
+  $('chg-map').hidden = true;
+  $('chg-kind').textContent = 'From Penn Station';
+  $('chg-h').textContent = 'To the airport';
+  loadSubwayGuide();
+  renderAirport();
+  openSheet();
+}
+$('to-airport').addEventListener('click', openAirport);
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-airport]');
+  if (!b) return;
+  airportPick = b.dataset.airport;
+  try { localStorage.setItem('airport', airportPick); } catch {}
+  renderAirport();
+});
+// Keep it current while open.
+setInterval(() => { if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }, 30000);

@@ -516,3 +516,23 @@ button.late-pill { border: 0; font: inherit; font-size: .72rem; font-weight: 700
 .sline:has(.drop), .b-row:has(.drop) { align-items: start; }
 .sline:has(.drop) .smins { padding-top: .2rem; }
 .none-row .how { display: block; margin-top: .15rem; color: var(--ivory); }
+/* Airport helper */
+.trip-bar { display: flex; gap: .5rem; flex-wrap: wrap; }
+.trip-bar button { display: inline-flex; align-items: center; gap: .4rem; background: #19271f; border: 1px solid var(--gold); color: var(--gold); border-radius: 99px; padding: .45rem .95rem; font-weight: 700; }
+.trip-bar button svg { width: 1.05em; height: 1.05em; }
+.sheet-air { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; margin: .2rem 0 .3rem; }
+.sheet-air button { text-align: center; padding: .6rem .3rem; border: 1px solid var(--line); border-radius: 10px; font-weight: 800; font-size: 1.1rem; background: none; color: var(--ivory); }
+.sheet-air button small { display: block; font-size: .7rem; font-weight: 500; color: var(--dim); }
+.sheet-air button[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); }
+.opt-card { border: 1px solid var(--line); border-radius: 10px; padding: .55rem .7rem; margin-top: .5rem; background: #19271f; }
+.opt-card .top { display: flex; justify-content: space-between; align-items: baseline; }
+.opt-card .t { font-size: 1.25rem; font-weight: 800; font-stretch: 85%; }
+.tagx { display: inline-block; padding: 0 .4rem; border-radius: 3px; font-size: .68rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; margin-right: .25rem; }
+.tag-fast { background: #1f3a2a; color: var(--go); } .tag-cheap { background: #3a321a; color: var(--gold); } .tag-live { background: #1f2d3a; color: #a9cdf0; }
+.legs { margin: .35rem 0 0; padding: 0; list-style: none; font-size: .88rem; }
+.legs li { display: grid; grid-template-columns: 4.4rem 1fr; gap: .5rem; padding: .12rem 0; }
+.legs li span:first-child { color: var(--dim); }
+.legs li:last-child span:last-child { color: var(--dim); }
+.pl { display: inline-block; padding: 0 .35rem; border-radius: 3px; font-size: .72rem; font-weight: 800; color: #fff; }
+.p-lirr { background: #1f56c8; } .p-air { background: #555; } .p-njt { background: #8a3db5; } .p-amtrak { background: #1c7a8c; } .p-sbs { background: #0b5fa5; }
+.opt-card .air-fare { color: var(--dim); font-size: .8rem; margin-top: .25rem; }

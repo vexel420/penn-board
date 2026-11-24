@@ -50,6 +50,10 @@ HUBS = {
     ('E', 'S'): 'E01',  # World Trade Center
 }
 PERIODS = {'day': (6 * 60, 21 * 60), 'night': (0, 5 * 60)}
+# Subway rides the airport helper needs (route, from, to): median minutes.
+RIDES = [('E', 'A28', 'G06'),  # Penn to Sutphin Blvd-Archer Av-JFK (AirTrain JFK)
+         ('A', 'A28', 'H03'),  # Penn to Howard Beach-JFK (AirTrain JFK)
+         ('E', 'A28', 'G14')]  # Penn to Jackson Hts-Roosevelt Av (Q70 to LaGuardia)
 CHANGE_PENALTY = 2
 MAX_LEGS = 3
 KEEP = 4
@@ -126,9 +130,13 @@ def main(zip_path):
             frontier = [x for v in nxt.values() for x in sorted(v, key=lambda y: y[0])[:3]]
         return sorted(found, key=lambda x: x[0])
 
-    out = {}
+    out, rides = {}, {}
     for period in PERIODS:
         net, gap = network(period)
+        for r, a, b in RIDES:
+            ms = [m for (r2, d, b2, m) in net.get(a, []) if r2 == r and b2 == b]
+            if ms:
+                rides.setdefault(f'{r}|{a}|{b}', {})[period] = round(min(ms))
         for stn, lines in PENN.items():
             for line in lines:
                 for d in 'NS':
@@ -170,7 +178,7 @@ def main(zip_path):
                     for p in e['plans']:
                         for l in p['legs']:
                             used.update((l['from'], l['to']))
-    doc = {'names': {k: names.get(k, k) for k in sorted(used)}, 'plans': out}
+    doc = {'names': {k: names.get(k, k) for k in sorted(used)}, 'plans': out, 'rides': rides}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT} ({OUT.stat().st_size // 1024} KB)')
     for stn, ls in out.items():
