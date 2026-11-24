@@ -2807,7 +2807,8 @@ function rowNotices(r) {
       // TRANSIT rail service is subject to up to 20-minute delays into and out
       // of Penn Station New York"): only trains actually running late whose
       // status doesn't already say so (owner, Nov 24), not every train.
-      return !NJT_LINE_WORDS.some(([inText]) => inText.test(n.text)) && NJT_SYSTEMWIDE.test(n.text) && njtHiddenDelay(r);
+      // A train on "STAND BY" (waiting for its track) gets it too (owner, Nov 24).
+      return !NJT_LINE_WORDS.some(([inText]) => inText.test(n.text)) && NJT_SYSTEMWIDE.test(n.text) && (njtHiddenDelay(r) || /stand ?by/i.test(String(r.status || '')));
     });
   }
   return [];
@@ -2881,9 +2882,11 @@ function rowAlertSummary(ns) {
   const range = all.match(/(\d+)\s*(?:-|to)\s*(\d+)[- ]?min/i);
   if (/suspend/i.test(all)) return 'Service suspended';
   if (/cancel/i.test(all) && !/delay/i.test(all)) return 'Cancellations';
-  if (range) return `Delays of ${range[1]}–${range[2]} min`;
-  if (mins.length && /delay|late/i.test(all)) return `Delays up to ${Math.max(...mins)} min`;
-  return /delay|late/i.test(all) ? 'Delays' : 'Service alert';
+  // "Subject to", "may", "could": delays that might happen, said as such.
+  const maybe = /\b(subject to|may|might|could|possible|potential)\b/i.test(all) ? 'Possible delays' : 'Delays';
+  if (range) return `${maybe} of ${range[1]}–${range[2]} min`;
+  if (mins.length && /delay|late/i.test(all)) return `${maybe} up to ${Math.max(...mins)} min`;
+  return /delay|late/i.test(all) ? maybe : 'Service alert';
 }
 // A railroad train's notices as pills that open a dropdown: its delay
 // notices (LIRR: the LIRR's own type, e.g. "Some delays"; NJ Transit, which
