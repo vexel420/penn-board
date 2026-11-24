@@ -2922,24 +2922,12 @@ function subwayOptionsHtml(route, dir, stnId, mode, bare) {
   }
   // What it does for the rider (owner, Nov 24: not "shares N stations"): how far
   // it goes along this line's route before you'd change back.
-  // This line's own stops from here, in order (from its next train; else its usual stops).
-  const ownTrain = board.subway.filter((g) => g.route === route && g.dir === dir && g.trains[0] && g.trains[0].stops && g.trains[0].stops[0] === stnId).flatMap((g) => g.trains)[0];
-  const own = ((ownTrain && ownTrain.stops) || []).filter((id) => id !== stnId);
-  const names = (ids) => (ids.length > 4 ? `${ids.slice(0, 3).map((id) => esc(stationName(id))).join(', ')} and ${ids.length - 3} more` : ids.map((id) => esc(stationName(id))).join(', ').replace(/, ([^,]*)$/, ' and $1'));
+  // "Shares N stations with the X", tap to see which (owner, Nov 24), in the
+  // order the other train reaches them.
   const helps = (o) => {
-    const theirs = new Set(o.t.stops || []);
-    if (!own.length) {
-      const along = (o.t.stops || []).filter((id) => mine.has(id) && id !== stnId);
-      return along.length ? `Take it to ${esc(stationName(along[along.length - 1]))}` : '';
-    }
-    const k = own.findIndex((id) => !theirs.has(id));
-    if (k === -1) return `Makes all the same stops as the ${lineName(route)}`;
-    const later = own.slice(k).filter((id) => theirs.has(id));
-    // Same stops for a while, then it goes elsewhere.
-    if (!later.length) return k ? `Goes as far as ${esc(stationName(own[k - 1]))}, then change for the ${lineName(route)}` : '';
-    // Express: it stops at some of them.
-    const shared = own.filter((id) => theirs.has(id));
-    return `Stops at ${names(shared)}. Change for the ${lineName(route)} for other stops`;
+    const ids = [...new Set((o.t.stops || []).filter((id) => mine.has(id) && id !== stnId))];
+    if (!ids.length) return `Shares ${o.shared} stations with the ${lineName(route)}`;
+    return `<details class="shared"><summary>Shares ${ids.length} station${ids.length === 1 ? '' : 's'} with the ${lineName(route)}</summary><span>${ids.map((id) => esc(stationName(id))).join(' · ')}</span></details>`;
   };
   const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route, dir).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">${helps(o)}</span></li>`).join('');
   if (!items) return '<p class="cm-live">No other line from this station shares its stops.</p>';
