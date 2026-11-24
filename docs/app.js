@@ -2771,6 +2771,7 @@ const SERVICE_SWITCH = /\b(running|runs|run|operating|operates)\s+(express|local
 // MTA shows ahead of their start, nor #preview's upcoming work.
 const happeningNow = (n) => n.activeNow !== false && !n.preview;
 const isDelayNotice = (n) => happeningNow(n) && (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text);
+const NJT_SYSTEMWIDE = /\bNJ ?TRANSIT (rail )?(service|trains)\b|\ball (NJ ?TRANSIT )?(rail )?(service|trains)\b|\b(into and out of|to and from|in and out of) (Penn Station New York|PSNY|New York Penn|Penn Station)\b/i;
 function rowNotices(r) {
   const all = (board && board.notices && board.notices.rail) || [];
   if (r.carrier === 'lirr' && lirrData) {
@@ -2782,7 +2783,11 @@ function rowNotices(r) {
       if (n.carrier !== 'njt' || !isDelayNotice(n)) return false;
       const nums = [...String(n.text).matchAll(/#\s?(\d{3,5})/g)].map((m) => m[1]);
       if (nums.length) return nums.includes(String(r.train));
-      return NJT_LINE_WORDS.some(([inText, inLine]) => inText.test(n.text) && inLine.test(r.line || ''));
+      if (NJT_LINE_WORDS.some(([inText, inLine]) => inText.test(n.text) && inLine.test(r.line || ''))) return true;
+      // About NJ Transit service as a whole, naming no line or train ("NJ
+      // TRANSIT rail service is subject to up to 20-minute delays into and out
+      // of Penn Station New York"): every NJ Transit train (owner, Nov 24).
+      return !NJT_LINE_WORDS.some(([inText]) => inText.test(n.text)) && NJT_SYSTEMWIDE.test(n.text);
     });
   }
   return [];
