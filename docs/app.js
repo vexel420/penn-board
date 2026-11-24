@@ -238,7 +238,11 @@ function departedAt(r) {
   if (r.departedAt) return r.departedAt;
   if (r.departed) {
     if (!flaggedAt.has(r.id)) flaggedAt.set(r.id, nowS);
-    return flaggedAt.get(r.id);
+    // Learned long after it was due out (the app was asleep, the feed was
+    // slow): it left about when it was due, not when the board found out, so
+    // "left N min ago" is right and old departures don't come back (Nov 24).
+    const due = r.leaves ?? r.time;
+    return flaggedAt.get(r.id) - due > 300 ? due : flaggedAt.get(r.id);
   }
   return null;
 }
@@ -552,9 +556,26 @@ function emptyMessage() {
   return `No ${carrier === 'all' ? '' : CARRIERS[carrier] + ' '}${view} in the next few hours.`;
 }
 
+// The final call starts on the second (owner, Nov 24: it waited for the next
+// redraw, up to 10 s late): after each draw, a redraw is set for the next
+// moment a train enters its final call (1 or 2 min before it leaves).
+let finalTimer = null;
+function scheduleFinalCall(rows) {
+  clearTimeout(finalTimer);
+  if (view !== 'departures') return;
+  const nowS = Date.now() / 1000;
+  let next = Infinity;
+  for (const r of rows) {
+    if (r.tone === 'stop' || r.tone === 'departed') continue;
+    const at = (r.leaves ?? r.time) - (isDelayed(r) || isLastTrain(r) ? 120 : 60);
+    if (at > nowS && at < next) next = at;
+  }
+  if (next - nowS < 10 * 60) finalTimer = setTimeout(renderRail, (next - nowS) * 1000 + 100);
+}
 function renderRail() {
   if (!board || view === 'subway' || view === 'alerts' || view === 'buses') return;
   const rows = visibleRows(board[view], view).filter((r) => carrier === 'all' || r.carrier === carrier);
+  scheduleFinalCall(rows);
   $('col-place').textContent = view === 'arrivals' ? 'From' : 'To';
   if (flipMode && rows.length) patchRows(rows);
   else $('rows').innerHTML = rows.length ? rows.map(rowHtml).join('') : `<li class="empty">${esc(emptyMessage())}</li>`;
