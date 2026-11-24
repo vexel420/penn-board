@@ -695,3 +695,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - `scripts/build-lirr-timetable.py gtfslirr.zip` → `docs/lirr-timetable.json` (~190 KB, ~60 KB gzipped; weekly rebuild): every LIRR trip with train number, headsign, service, and [stop, minutes] pairs; `dates` maps YYYYMMDD to running services (holidays included).
 - `lirrPlans` (app.js): for the delayed train's stations, earliest arrival from Penn in the next 12 h, direct or one change (≥3 min, ≤90 min wait, at any station), never using the delayed train; same arrival → no change, then the later Penn train. Grouped into cards by the trains used.
 - A card's first train shows "Live" with the board's time and track once a train with that number is on the live board, else "Scheduled". Replaces the old guess from branch maps (which claimed Montauk trains stop at Mineola) and the separate live-only list for the LIRR. NJ Transit options unchanged.
+
+## Nov 24: last-train final call, departed trains survive reloads, last stop
+- `isLastTrain(r)`: NJ Transit from `njtLast` (the "Last … train from Penn" list); LIRR from lirr-timetable.json (no later train on the branch from Penn for 90 min). Its final call ("All aboard"/red) starts 2 min out, like a delayed train.
+- Recently departed trains are saved in localStorage (`recentDeparted`) on every refresh and restored into `vanished` at start, for the rest of their time on the board (3 min, Amtrak 5), so a reload or tapping "Penn Station" keeps them.
+- "Last stop:" drops NJ Transit's "-SEC" and ✈ (the destination itself stays as NJ Transit sends it).

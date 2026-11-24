@@ -282,7 +282,36 @@ function noteVanished(prev, next) {
   for (const [id, r] of vanished) {
     if (r.awaiting ? nowS - (r.leaves ?? r.time) > AWAITING_MAX_S : nowS - shownSince(r, r.departedAt) > shownFor(r)) vanished.delete(id);
   }
+  saveRecentDeparted(next);
 }
+// Trains that just left stay on the board through a reload (owner, Nov 24:
+// tapping "Penn Station" or reopening the page cleared them). Kept in this
+// browser only, for the rest of their usual time on the board.
+const RECENT_KEY = 'recentDeparted';
+function saveRecentDeparted(next) {
+  const nowS = Date.now() / 1000;
+  const keep = [];
+  for (const r of [...vanished.values(), ...(next ? next.departures : [])]) {
+    if (r.awaiting || r.tone === 'stop') continue;
+    const at = r === vanished.get(r.id) ? r.departedAt : departedAt(r);
+    if (at == null || nowS - shownSince(r, at) > shownFor(r)) continue;
+    keep.push({ ...r, departed: true, departedAt: at, learned: learnedAt.get(r.id) || nowS });
+  }
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify({ at: nowS, rows: keep })); } catch {}
+}
+(function restoreRecentDeparted() {
+  try {
+    const d = JSON.parse(localStorage.getItem(RECENT_KEY) || 'null');
+    if (!d || !Array.isArray(d.rows)) return;
+    const nowS = Date.now() / 1000;
+    for (const r of d.rows) {
+      learnedAt.set(r.id, r.learned || r.departedAt);
+      if (nowS - Math.max(r.departedAt, r.learned || 0) > shownFor(r)) continue;
+      const { learned, ...row } = r;
+      vanished.set(row.id, row);
+    }
+  } catch {}
+})();
 
 function visibleRows(rows, kind) {
   const nowS = Date.now() / 1000;
@@ -324,8 +353,25 @@ function finalCall(r, kind) {
   const left = (r.leaves ?? r.time) - Date.now() / 1000;
   // Past its time but still listed and boarding (it hasn't left): final call
   // until its feed shows it has gone. (Amtrak has its own rule.)
-  return (r.departsByFeed ? left > 0 : true) && left <= (isDelayed(r) ? 120 : 60);
+  return (r.departsByFeed ? left > 0 : true) && left <= (isDelayed(r) || isLastTrain(r) ? 120 : 60);
 }
+// The last train of the night on its line (owner, Nov 24: its final call starts
+// 2 minutes out too). NJ Transit: the board's own last-train list. LIRR: no
+// later train from Penn on the same branch for 90 minutes, by the timetable.
+function isLastTrain(r) {
+  if (r.carrier === 'njt') return typeof njtLast !== 'undefined' && njtLast.has(String(r.train));
+  if (r.carrier !== 'lirr' || typeof lirrTT === 'undefined' || !lirrTT) return false;
+  if (lastLirrCache.has(r.id)) return lastLirrCache.get(r.id);
+  const leave = r.leaves ?? r.time;
+  const mine = lirrTripsNear().find((t) => String(t.train) === String(r.train));
+  let last = false;
+  if (mine) {
+    last = !lirrTripsNear().some((t) => t.route === mine.route && t !== mine && t.calls.some(([sid, at]) => sid === lirrTT.penn && at > leave + 60 && at < leave + 90 * 60) && t.calls[t.calls.length - 1][0] !== lirrTT.penn);
+  }
+  lastLirrCache.set(r.id, last);
+  return last;
+}
+const lastLirrCache = new Map();
 
 // A notice in effect now saying a railroad's service into and out of Penn
 // is suspended (signal trouble, an incident): its trains are held, whatever
@@ -426,7 +472,9 @@ function viaHtml(r) {
     ? `<small class="checking">${failed ? 'LIRR didn’t say where this train is. Trying again shortly.' : 'Checking where the train is…'}</small>` : '';
   // The list always ends with where the train finishes. An arriving train
   // finishes at Penn, unless it carries on (an Amtrak through train).
-  let tail = '', last = r.place;
+  // The last stop is a station: no "-SEC" (via Secaucus) or ✈ (via Newark
+  // Airport), which describe the way there, not the stop (owner, Nov 24).
+  let tail = '', last = String(r.place).replace(/\s*✈\s*/g, ' ').replace(/\s*-\s*SEC\b/gi, '').trim();
   if (view === 'arrivals') {
     last = r.continuesTo || 'Penn Station';
     if (r.continuesTo) tail = ', Penn Station';
@@ -2845,7 +2893,8 @@ const normName2 = (s) => String(s || '').toLowerCase().replace(/-sec\b|✈|&#999
 // "Scheduled" to "Live" by itself (owner, Nov 24).
 let lirrTT;               // undefined: not loaded; null: couldn't load
 let lirrTTLoading = null;
-const loadLirrTT = () => lirrTTLoading || (lirrTTLoading = fetch('lirr-timetable.json').then((x) => (x.ok ? x.json() : null)).catch(() => null).then((d) => { lirrTT = d; }));
+const loadLirrTT = () => lirrTTLoading || (lirrTTLoading = fetch('lirr-timetable.json').then((x) => (x.ok ? x.json() : null)).catch(() => null).then((d) => { lirrTT = d; lastLirrCache.clear(); }));
+setTimeout(loadLirrTT, 3000); // for last trains of the night (final call)
 const LIRR_CHANGE_S = 180;  // at least 3 minutes to change trains
 // Today's and tomorrow's trains as { route, head, train, calls: [[stop id, epoch s], ...] }.
 function lirrTripsNear() {
