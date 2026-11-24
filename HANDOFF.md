@@ -646,3 +646,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Partner companies (owner uploaded the portal's "GTFS Data Downloads", Nov 24; not committed — the repo is public): Coach USA `gtfs.zip` (ShortLine Hudson, Rockland Coaches, Suburban Transit, Community Coach, Newark Airport Express), Academy, Lakeland, Trans-Bridge, Seastreak `google_transit.zip`. Pass them as `Label=path` after the two NJT files. Trips count when they leave within 350 m of Port Authority (Seastreak: Manhattan piers). Result: 101 of 155 stations have a bus within a walk, 48 more within 8 km; none for Morristown, Hackettstown, Hamilton, Trenton, Otisville, White House.
 - Not useful: Broadway Bus (expired 2022), Tuckerton (2024 only), county shuttles.
 - Not shown on the board yet.
+
+## Airport helper: Newark via PATH, Amtrak reservation note (Nov 24, 2026)
+- EWR adds two PATH options from the live 33 St departures to Journal Square: change for Newark, then NJ Transit one stop to Newark Airport ($3.00 + $12.30 = $15.30, per njtransit.com/ewr) or the 62 bus from Newark Penn (Raymond Blvd, gate 3A; 2A after 10 PM, per newarkairport.com) ($3.00 + $1.90 one-zone bus fare from NJT's Northern Intrastate chart).
+- Amtrak option carries a note: reservation required, NJ Transit tickets not valid.
+- Not added: NJT 107 (Port Authority to the terminals, evenings only, fare zone not published per stop) and Newark Airport Express ($23.50, ~50 min, newarkairport.com; scheduled times are in the Coach USA file).

@@ -536,3 +536,5 @@ button.late-pill { border: 0; font: inherit; font-size: .72rem; font-weight: 700
 .pl { display: inline-block; padding: 0 .35rem; border-radius: 3px; font-size: .72rem; font-weight: 800; color: #fff; }
 .p-lirr { background: #1f56c8; } .p-air { background: #555; } .p-njt { background: #8a3db5; } .p-amtrak { background: #1c7a8c; } .p-sbs { background: #0b5fa5; }
 .opt-card .air-fare { color: var(--dim); font-size: .8rem; margin-top: .25rem; }
+.opt-card .air-note { margin-top: .3rem; padding: .3rem .5rem; border-left: 3px solid var(--gold); background: #2a2614; font-size: .8rem; }
+.p-path { background: #d93a30; }

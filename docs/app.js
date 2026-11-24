@@ -3274,14 +3274,21 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 // local bus $3.00 (MTA, from Jan 4, 2026); LIRR CityTicket $5.25 off-peak,
 // $7.25 peak, Penn to Jamaica or Woodside (laguardiaairport.com); AirTrain
 // JFK $8.75 (jfkairport.com); Q70 LaGuardia Link free (laguardiaairport.com);
-// NJ Transit New York Penn to Newark Airport $17.25 with the AirTrain
-// (njtransit.com/ewr). Update here when fares change.
-const FARES = { subway: 3.00, cityOff: 5.25, cityPeak: 7.25, airtrainJfk: 8.75, njtEwr: 17.25 };
+// NJ Transit New York Penn to Newark Airport $17.25 with the AirTrain, and
+// Newark Penn to Newark Airport $12.30 with the AirTrain, "+ $3.00 for PATH"
+// (njtransit.com/ewr); PATH $3.00; NJ Transit local bus one zone $1.90
+// (NJ Transit Northern Intrastate fare chart). Update here when fares change.
+const FARES = { subway: 3.00, cityOff: 5.25, cityPeak: 7.25, airtrainJfk: 8.75, njtEwr: 17.25, njtNewarkEwr: 12.30, path: 3.00, njtBus1: 1.90 };
 // Usual minutes for the parts that aren't live (connections, rail rides).
 const AIR_MIN = {
   lirrJamaica: 20, lirrWoodside: 11, njtEwr: 24, amtrakEwr: 18,
   airtrainJfkWait: 4, airtrainJfkRide: 8, airtrainEwrWait: 3, airtrainEwrRide: 10,
   q70Wait: 5, q70FromJacksonHts: 12, q70FromWoodside: 16, change: 3,
+  // PATH: Penn to the 33 St station, 33 St to Journal Square (direct / via
+  // Hoboken at night and weekends), Journal Square to Newark; then a NJ
+  // Transit train (one stop) or the 62 bus from Newark Penn.
+  walkToPath: 5, pathJsq: 17, pathJsqViaHob: 26, pathNewark: 11, pathNewarkWait: 5, pathNewarkWaitNight: 15,
+  njtNewarkWait: 8, njtNewarkWaitNight: 20, njtNewarkEwr: 6, bus62Wait: 8, bus62Ride: 20,
 };
 let airportPick = 'JFK';
 try { airportPick = localStorage.getItem('airport') || 'JFK'; } catch {}
@@ -3327,7 +3334,21 @@ function airportOptions(code, nowS) {
       o.push({ at, fare: FARES.njtEwr, legs: [[dep, `${airPl('NJ Transit', 'p-njt')} to Newark Airport${n.track ? `, track ${esc(n.track)}` : ''}`], [dep + (AIR_MIN.njtEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] }); }
     const m = railTo(['amtrak'], 'Newark Airport', nowS)[0];
     if (m) { const dep = m.leaves ?? m.time, at = dep + (AIR_MIN.amtrakEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60;
-      o.push({ at, fare: null, legs: [[dep, `${airPl('Amtrak', 'p-amtrak')} ${esc(m.line || '')} to Newark Airport${m.track ? `, track ${esc(m.track)}` : ''}`], [dep + (AIR_MIN.amtrakEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] }); }
+      o.push({ at, fare: null, fareText: 'Amtrak fare varies by train', note: 'Reservation required: buy an Amtrak ticket for this train before you board. NJ Transit tickets aren’t valid on Amtrak.', legs: [[dep, `${airPl('Amtrak', 'p-amtrak')} ${esc(m.line || '')} to Newark Airport${m.track ? `, track ${esc(m.track)}` : ''}`], [dep + (AIR_MIN.amtrakEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] }); }
+    // PATH to Newark Penn, then one stop on NJ Transit or the 62 bus.
+    const p = ((board && board.path) || []).find((x) => /journal square/i.test(x.dest || '') && x.time >= nowS + AIR_MIN.walkToPath * 60);
+    if (p) {
+      const night = nyNow().mins < 6 * 60 || nyNow().mins >= 23 * 60;
+      const atNewark = p.time + ((/hoboken/i.test(p.dest) ? AIR_MIN.pathJsqViaHob : AIR_MIN.pathJsq) + AIR_MIN.change + (night ? AIR_MIN.pathNewarkWaitNight : AIR_MIN.pathNewarkWait) + AIR_MIN.pathNewark) * 60;
+      const pathLegs = [[p.time - AIR_MIN.walkToPath * 60, 'Walk to the 33 St PATH station (6 Av & 32 St)'],
+        [p.time, `${airPl('PATH', 'p-path')} to ${esc(p.dest)}, then change for Newark`]];
+      const tr = atNewark + (AIR_MIN.change + (night ? AIR_MIN.njtNewarkWaitNight : AIR_MIN.njtNewarkWait)) * 60;
+      o.push({ at: tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: FARES.path + FARES.njtNewarkEwr,
+        legs: [...pathLegs, [tr, `${airPl('NJ Transit', 'p-njt')} at Newark Penn, one stop to Newark Airport`], [tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
+      const bus = atNewark + (AIR_MIN.change + AIR_MIN.bus62Wait) * 60;
+      o.push({ at: bus + AIR_MIN.bus62Ride * 60, fare: FARES.path + FARES.njtBus1, fareText: `${money(FARES.path + FARES.njtBus1)} one way (PATH + one-zone bus fare)`,
+        legs: [...pathLegs, [bus, `${airPl('62 bus', 'p-njt')} at Newark Penn (Raymond Blvd, gate ${night ? '2A' : '3A'}) to your terminal`]] });
+    }
   }
   return o;
 }
@@ -3340,9 +3361,9 @@ function renderAirport() {
   $('chg-top').innerHTML = `<div class="sheet-air">${[['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark']].map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>`;
   $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}<span class="tagx tag-live">Live</span></span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
     <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>At the airport, about</span></li></ul>
-    <div class="air-fare">${x.fare != null ? `${money(x.fare)} one way` : 'Amtrak fare varies by train'}</div></div>`).join('')
+    <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
     : '<p class="cm-live">No trains to there are listed from Penn right now.</p>')
-    + '<p class="cm-live">First train: live times from the board. Connections use usual times. Fares from the MTA, the Port Authority and NJ Transit; check before you travel.</p>';
+    + '<p class="cm-live">First train: live times from the board. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; check before you travel.</p>';
 }
 function openAirport() {
   changeOpen = { id: 'airport', view: 1 };
