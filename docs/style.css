@@ -299,7 +299,9 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
   .place { font-size: 1.25rem; }
   .track b { font-size: 1.8rem; }
   .status small { display: inline; margin-left: .4em; }
-  .seg { width: 100%; } .seg button { flex: 1; padding-inline: .5rem; }
+  .seg { width: 100%; flex-wrap: wrap; } .seg button { flex: 1; padding-inline: .5rem; }
+  /* The test Buses tab gets its own row on phones. */
+  .seg button[data-view="buses"] { flex-basis: 100%; border-left: 0; border-top: 1px solid var(--line); padding-block: .4rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .track.flip b, .track.ring b { animation: none; }
@@ -538,3 +540,23 @@ button.late-pill { border: 0; font: inherit; font-size: .72rem; font-weight: 700
 .opt-card .air-fare { color: var(--dim); font-size: .8rem; margin-top: .25rem; }
 .opt-card .air-note { margin-top: .3rem; padding: .3rem .5rem; border-left: 3px solid var(--gold); background: #2a2614; font-size: .8rem; }
 .p-path { background: #d93a30; }
+
+/* ---------- Buses tab (testing): buses from Port Authority to NJ Transit stations ---------- */
+.buses-tab { display: none; max-width: 40rem; }
+body[data-view="buses"] .buses-tab { display: block; }
+body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view="buses"] .style-bar { display: none; }
+.tab-test { font-size: .62em; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--gold); margin-left: .2em; }
+.bf-intro { color: var(--dim); font-size: .9rem; margin: .2rem 0 .7rem; }
+.bf-select { width: 100%; font: inherit; font-weight: 800; font-size: 1.05rem; color: var(--ink, #f3ecd9); background: #19271f; border: 1px solid var(--gold); border-radius: 10px; padding: .6rem .7rem; }
+.bf-h { margin: 1rem 0 .3rem; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--gold); font-weight: 800; }
+.bf-get { border: 1px solid var(--line); border-radius: 10px; padding: .45rem .7rem; background: #19271f; font-size: .92rem; }
+.bf-get > div { padding: .35rem 0; }
+.bf-get > div + div { border-top: 1px solid var(--line); }
+.bf-get .dim, .bf-bus .sub { color: var(--dim); font-size: .82rem; display: block; margin-top: .1rem; }
+.bf-get b { display: block; margin-top: .2rem; color: var(--go); }
+.bf-bus .rt { font-weight: 800; font-size: 1.05rem; }
+.bf-bus .deps { margin: .3rem 0 .1rem; display: flex; flex-wrap: wrap; gap: .35rem .8rem; font-weight: 800; color: var(--go); }
+.bf-bus .deps.sched { color: var(--ink, #f3ecd9); font-weight: 700; }
+.bf-bus .gate { display: inline-block; border: 1px solid var(--gold); color: var(--gold); border-radius: 4px; padding: 0 .3rem; font-size: .72rem; font-weight: 800; margin-left: .25rem; vertical-align: .1em; }
+.bf-bus .kind { font-size: .7rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); margin-left: .3rem; }
+.p-partner { background: #5b5b5b; }

@@ -651,3 +651,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - EWR adds two PATH options from the live 33 St departures to Journal Square: change for Newark, then NJ Transit one stop to Newark Airport ($3.00 + $12.30 = $15.30, per njtransit.com/ewr) or the 62 bus from Newark Penn (Raymond Blvd, gate 3A; 2A after 10 PM, per newarkairport.com) ($3.00 + $1.90 one-zone bus fare from NJT's Northern Intrastate chart).
 - Amtrak option carries a note: reservation required, NJ Transit tickets not valid.
 - Not added: NJT 107 (Port Authority to the terminals, evenings only, fare zone not published per stop) and Newark Airport Express ($23.50, ~50 min, newarkairport.com; scheduled times are in the Coach USA file).
+
+## Buses tab (testing, Nov 24, 2026)
+- New "Buses · test" tab (`data-view="buses"`, `#buses`, `renderBuses()` at the end of app.js). On phones it sits on its own row under the other tabs.
+- Pick a station (remembered in localStorage `busStation`). Step 1, get to Port Authority: next live uptown A/C/E from 34 St-Penn Station that stop at 42 St-Port Authority (A27); if none, the 1/2/3 to Times Sq-42 St (127) and the underground passage; and the 10-minute walk up 8 Av.
+- Step 2, buses: NJ Transit routes show live departures from `/njt-bus-pabt` (refreshed every 30 s), kept only when the bus's sign is one of the signs whose trips reach the station (`heads` in njt-bus-finder.json; live headers match NJT's GTFS trip_headsign exactly). If none are listed live, or for partner companies, the next scheduled times (`times.wk/sa/su`, minutes after midnight at Port Authority). Ordered by which gets there first. No bus: link to NJT's alternate service plans (njtransit.com/abc).
+- Later: show it from the NJ Transit banner only during big delays, cancellations or a strike, and remove the tab.

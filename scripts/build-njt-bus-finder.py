@@ -81,13 +81,13 @@ def active_on(z, day):
     return on
 
 
-def sample_wednesday(z):
-    """A Wednesday the file covers: a week or more out when it can (skips
-    holiday-eve timetables), else the next one it has."""
+def sample_day(z, weekday=2):
+    """A date the file covers on that weekday (Wednesday by default): a week or
+    more out when it can (skips holiday-eve timetables), else the next one."""
     for lead in (7, 0):
         d = datetime.date.today() + datetime.timedelta(days=lead)
         for _ in range(400):
-            if d.weekday() == 2:
+            if d.weekday() == weekday:
                 day = d.strftime('%Y%m%d')
                 if active_on(z, day):
                     return day
@@ -130,9 +130,10 @@ def feed_options(z, label, stations, origin_test):
         if not short:
             short = re.sub(r'\s*-?\s*(east|west|north|south)bound$', '', long.split(' - ')[0], flags=re.I).strip()
         routes[r['route_id']] = (ag, short, title(long) if long.isupper() else long)
-    wed = sample_wednesday(z)
-    weekday = active_on(z, wed) if wed else set()
-    trips = {t['trip_id']: (t['route_id'], t.get('trip_headsign', ''), t['service_id'] in weekday) for t in rows(z, 'trips.txt')}
+    days = {k: sample_day(z, wd) for k, wd in (('wk', 2), ('sa', 5), ('su', 6))}
+    wed = days['wk']
+    on = {k: (active_on(z, d) if d else set()) for k, d in days.items()}
+    trips = {t['trip_id']: (t['route_id'], t.get('trip_headsign', ''), {k for k in on if t['service_id'] in on[k]}) for t in rows(z, 'trips.txt')}
 
     start, hits = {}, defaultdict(list)
     for st in rows(z, 'stop_times.txt'):
@@ -143,69 +144,68 @@ def feed_options(z, label, stations, origin_test):
         elif sid in near and st['arrival_time']:
             hits[tid].append((sid, mins(st['arrival_time'])))
 
-    per = defaultdict(lambda: defaultdict(lambda: {'rides': defaultdict(list), 'gates': set(), 'heads': defaultdict(int), 'from': defaultdict(int), 'deps': []}))
+    # per station, per route: stop -> {trip: (ride, sign, day types, time at origin, gate, origin)}
+    per = defaultdict(lambda: defaultdict(lambda: defaultdict(dict)))
     for tid, (t0, gate, oname) in start.items():
         if tid not in hits or tid not in trips:
             continue
         rid, head, wk = trips[tid]
-        seen = set()
         for sid, t in hits[tid]:
             if t <= t0:
                 continue
             for code in near[sid]:
-                e = per[code][rid]
-                e['rides'][sid].append(t - t0)
-                if code not in seen:
-                    seen.add(code)
-                    if gate:
-                        e['gates'].add(gate)
-                    e['heads'][head] += 1
-                    e['from'][oname] += 1
-                    if wk:
-                        e['deps'].append(t0 % 1440)
+                per[code][rid][sid][tid] = (t - t0, head, wk, round(t0) % 1440, gate, oname)
 
     out = defaultdict(list)
     for code, rs in per.items():
         merged = {}
-        for rid, e in rs.items():
+        for rid, bystop in rs.items():
             ag, short, long = routes.get(rid, (label, rid, ''))
             # Files that split one route by direction or variant: merge by name.
-            k = (ag, short or long)
-            m = merged.setdefault(k, {'ag': ag, 'short': short, 'long': long, 'rides': defaultdict(list), 'gates': set(), 'heads': defaultdict(int), 'from': defaultdict(int), 'deps': []})
-            for sid, v in e['rides'].items():
-                m['rides'][sid] += v
-            m['gates'] |= e['gates']
-            for h, n in e['heads'].items():
-                m['heads'][h] += n
-            for h, n in e['from'].items():
-                m['from'][h] += n
-            m['deps'] += e['deps']
+            m = merged.setdefault((ag, short or long), {'ag': ag, 'short': short, 'long': long, 'stops': defaultdict(dict)})
+            for sid, tr in bystop.items():
+                m['stops'][sid].update(tr)
         for e in merged.values():
+            walkable = any(near[sid][code] <= WALK_MAX for sid in e['stops'])
+            use = {sid: tr for sid, tr in e['stops'].items() if not walkable or near[sid][code] <= WALK_MAX}
             best = None
-            walkable = any(near[sid][code] <= WALK_MAX for sid in e['rides'])
-            for sid, v in e['rides'].items():
-                if walkable and near[sid][code] > WALK_MAX:
-                    continue
-                ride = statistics.median(v)
+            for sid, tr in use.items():
+                ride = statistics.median(x[0] for x in tr.values())
                 walk = near[sid][code] / (WALK_M_PER_MIN if walkable else 400)  # else a taxi or local ride, ~24 km/h
                 if best is None or ride + walk < best[0]:
                     best = (ride + walk, sid, ride, near[sid][code])
             total, sid, ride, dist = best
-            deps = sorted(set(e['deps']))
+            # Each trip once, at whichever used stop it reaches.
+            tr = {}
+            for v in use.values():
+                tr.update(v)
+            times = defaultdict(set)
+            heads, ofrom, gates = defaultdict(int), defaultdict(int), set()
+            for _, head, wk, t0, gate, oname in tr.values():
+                for k in wk:
+                    times[k].add(t0)
+                heads[head.strip()] += 1
+                ofrom[oname] += 1
+                if gate:
+                    gates.add(gate)
+            times = {k: sorted(v) for k, v in times.items()}
+            deps = times.get('wk', [])
             day = [d for d in deps if 6 * 60 <= d < 21 * 60]
             gap = statistics.median([b - a for a, b in zip(day, day[1:])]) if len(day) > 1 else None
-            origin = max(e['from'], key=e['from'].get)
+            origin = max(ofrom, key=ofrom.get)
             out[code].append({
                 'agency': e['ag'], 'route': e['short'], 'name': e['long'],
-                'head': (max(e['heads'], key=e['heads'].get) or '').strip(),
+                'head': max(heads, key=heads.get),
+                # Every sign on trips that reach the station: live departures are matched by it.
+                'heads': sorted(h for h in heads if h),
+                # Scheduled minutes after midnight leaving Port Authority (weekday, Saturday, Sunday).
+                'times': times,
                 'from': None if re.search(r'port auth|pabt', origin, re.I) else origin,
                 'stop': title(stops[sid][0]['stop_name']) if stops[sid][0]['stop_name'].isupper() else stops[sid][0]['stop_name'], 'stopId': sid,
                 'ride': round(ride), 'walkM': round(dist), 'walk': max(1, round(dist / WALK_M_PER_MIN)),
                 'total': round(total), 'far': dist > WALK_MAX,
-                'gates': sorted(e['gates'], key=lambda g: (len(g), g)),
+                'gates': sorted(gates, key=lambda g: (len(g), g)),
                 'weekdayTrips': len(deps), 'gap': round(gap) if gap else None,
-                'first': f'{int(deps[0] // 60) % 24:02d}:{int(deps[0] % 60):02d}' if deps else None,
-                'last': f'{int(deps[-1] // 60) % 24:02d}:{int(deps[-1] % 60):02d}' if deps else None,
             })
     print(f'  {label}: {len(origins)} origin stops, sample weekday {wed}, {sum(len(v) for v in out.values())} station-route pairs')
     return out

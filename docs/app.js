@@ -505,7 +505,7 @@ function emptyMessage() {
 }
 
 function renderRail() {
-  if (!board || view === 'subway' || view === 'alerts') return;
+  if (!board || view === 'subway' || view === 'alerts' || view === 'buses') return;
   const rows = visibleRows(board[view], view).filter((r) => carrier === 'all' || r.carrier === carrier);
   $('col-place').textContent = view === 'arrivals' ? 'From' : 'To';
   if (flipMode && rows.length) patchRows(rows);
@@ -3027,7 +3027,7 @@ function renderStamp() {
     : `Updated ${age < 5 ? 'just now' : age + ' seconds ago'}.`;
 }
 
-function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderServiceNotices(); renderStamp(); }
+function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderServiceNotices(); renderStamp(); if (view === 'buses') renderBuses(); }
 
 // With server.js running, the server gathers everything. On static hosting
 // (GitHub Pages) there is no server, so the page reads the feeds itself.
@@ -3203,7 +3203,7 @@ document.querySelector('.seg').addEventListener('click', (e) => {
 });
 
 // The masthead names the view: Penn Station departures, arrivals, or subway and PATH.
-const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: 'subway and PATH', alerts: 'service alerts' };
+const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: 'subway and PATH', alerts: 'service alerts', buses: 'buses to New Jersey' };
 function setHeading() {
   $('h1-sub').textContent = HEADINGS[view];
   document.title = `Penn Station ${HEADINGS[view]}`;
@@ -3384,3 +3384,130 @@ document.addEventListener('click', (e) => {
 });
 // Keep it current while open.
 setInterval(() => { if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }, 30000);
+
+
+// ---------- Buses tab (testing) ----------
+// For NJ Transit rail outages and strikes: pick your station, see how to get
+// to Port Authority (subway or walk) and the buses from there that stop near
+// it. docs/njt-bus-finder.json comes from NJ Transit's and partner companies'
+// timetables (scripts/build-njt-bus-finder.py). NJ Transit buses are live
+// (getBusDV at Port Authority through the relay), matched to the station by
+// their sign; partner companies show their published schedule.
+const NJT_LINE_NAMES = { BNTN: 'Montclair-Boonton', BNTNM: 'Montclair-Boonton', MNBN: 'Main/Bergen County', MNBNP: 'Port Jervis', MNE: 'Morris & Essex', MNEG: 'Gladstone Branch', MRL: 'Meadowlands', NEC: 'Northeast Corridor', NJCL: 'North Jersey Coast', NJCLL: 'North Jersey Coast', PASC: 'Pascack Valley', PRIN: 'Princeton Shuttle', RARV: 'Raritan Valley' };
+let busFinder;            // undefined: not loaded; null: couldn't load
+let busFinderLoading = null;
+let busLive = null, busLiveAt = 0, busLiveLoading = null;
+let busStation = '';
+try { busStation = localStorage.getItem('busStation') || ''; } catch {}
+function loadBusFinder() {
+  if (busFinder !== undefined || busFinderLoading) return;
+  busFinderLoading = fetch('njt-bus-finder.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
+    .then((d) => { busFinder = d; busFinderLoading = null; if (view === 'buses') renderBuses(); });
+}
+function loadBusLive() {
+  if (busLiveLoading || Date.now() - busLiveAt < 30000 || !window.PENN_RELAY) return;
+  busLiveLoading = fetch(window.PENN_RELAY + '/njt-bus-pabt', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((d) => { busLive = { trips: (d && d.DVTrip) || [], at: Date.now() }; })
+    .catch(() => { busLive = busLive && busLive.trips ? busLive : { error: true, trips: [] }; })
+    .finally(() => { busLiveAt = Date.now(); busLiveLoading = null; if (view === 'buses') renderBuses(); });
+}
+const normSign = (x) => String(x || '').replace(/\s+/g, ' ').trim().toUpperCase();
+const busPill = (o) => (o.agency === 'NJ Transit' ? `<span class="pl p-njt">${esc(o.route)}</span>` : `<span class="pl p-partner">${esc(o.agency)}${o.route ? ` ${esc(o.route)}` : ''}</span>`);
+// Next scheduled departures from the timetable, as minutes from now (today, then tomorrow).
+function busScheduled(o) {
+  const key = { weekday: 'wk', saturday: 'sa', sunday: 'su' };
+  const today = nyNow(), tomorrow = nyNow(1);
+  return [...((o.times || {})[key[today.day]] || []).filter((t) => t >= today.mins).map((t) => ({ in: t - today.mins, tomorrow: false, t })),
+    ...((o.times || {})[key[tomorrow.day]] || []).map((t) => ({ in: t + 1440 - today.mins, tomorrow: true, t }))];
+}
+// Live NJ Transit departures from Port Authority whose sign reaches the station, as minutes from now.
+function busLiveFor(o) {
+  if (o.agency !== 'NJ Transit' || !busLive || busLive.error) return null;
+  const signs = new Set((o.heads || []).map(normSign));
+  const now = nyNow().mins;
+  return busLive.trips.filter((x) => x.public_route === o.route && signs.has(normSign(x.header))).map((x) => {
+    const m = /in (\d+) min/i.exec(x.departurestatus || '');
+    const c = /(\d+):(\d+)\s*(AM|PM)/i.exec(x.departuretime || '');
+    const t = c ? (+c[1] % 12) * 60 + +c[2] + (/pm/i.test(c[3]) ? 720 : 0) : null;
+    const inMin = m ? +m[1] : t != null ? ((t - now + 1440) % 1440) : null;
+    return { in: inMin > 1200 ? inMin - 1440 : inMin, soon: !!m, t, gate: String(x.lanegate || '').split('_')[0] };
+  }).filter((x) => x.in != null && x.in >= 0).sort((a, b) => a.in - b.in);
+}
+const clockOf = (t) => `${fmtMins(t)} ${(t % 1440) < 720 ? 'AM' : 'PM'}`;
+// "300 - NYC - Middletown" under route 300: drop the repeated number and "Westbound".
+function busName(o) {
+  const n = String(o.name || '').replace(/\b(east|west|north|south)bound\b/ig, '').replace(/\s*-\s*$/, '').trim();
+  const r = String(o.route || '').trim();
+  const rest = r && n.toLowerCase().startsWith(r.toLowerCase()) ? n.slice(r.length).replace(/^\s*-\s*/, '').trim() : n;
+  return rest || o.head || '';
+}
+function portAuthorityHtml(nowS) {
+  const trainsTo = (routes, from, to) => ((board && board.subway) || []).filter((g) => routes.includes(g.route) && g.trains[0] && g.trains[0].stops && g.trains[0].stops[0] === from)
+    .flatMap((g) => g.trains.map((t) => ({ ...t, route: g.route }))).filter((t) => (t.stops || []).includes(to) && t.time >= nowS + 60).sort((a, b) => a.time - b.time).slice(0, 3);
+  const next = (ts) => ts.map((t) => `${bulletHtml(t.route, 'inl')} ${Math.round((t.time - nowS) / 60)} min`).join(' &nbsp; ');
+  const ace = trainsTo(['A', 'C', 'E'], 'A28', 'A27');
+  const sub = ace.length
+    ? `<div><span>Subway: ${['A', 'C', 'E'].map((r) => bulletHtml(r, 'inl')).join(' ')} uptown, one stop to 42 St-Port Authority Bus Terminal</span><span class="dim">From 34 St-Penn Station (8 Av) · about 5 min with the wait</span><b>Next: ${next(ace)}</b></div>`
+    : (() => {
+      const t = trainsTo(['1', '2', '3'], '128', '127');
+      return t.length
+        ? `<div><span>Subway: ${['1', '2', '3'].map((r) => bulletHtml(r, 'inl')).join(' ')} uptown, one stop to Times Sq-42 St, then the underground passage to Port Authority</span><span class="dim">From 34 St-Penn Station (7 Av). No uptown ${['A', 'C', 'E'].map((r) => bulletHtml(r, 'inl')).join(' ')} listed right now.</span><b>Next: ${next(t)}</b></div>`
+        : `<div><span>Subway: no uptown trains to 42 St listed right now.</span></div>`;
+    })();
+  return `<div class="bf-get">${sub}<div><span>Walk up 8 Av to 41 St</span><span class="dim">About 10 min. Port Authority's entrance is at 8 Av and 41 St.</span></div></div>`;
+}
+function renderBuses() {
+  const box = $('buses');
+  loadBusFinder();
+  loadBusLive();
+  if (busFinder === undefined) { box.innerHTML = '<p class="empty">Loading buses…</p>'; return; }
+  if (!busFinder) { box.innerHTML = '<p class="empty">The bus list didn’t load. Try again in a moment.</p>'; return; }
+  const nowS = Date.now() / 1000;
+  const stations = Object.entries(busFinder.stations);
+  const st = busFinder.stations[busStation];
+  const open = document.activeElement && document.activeElement.id === 'bf-station';
+  if (open) return;  // don't redraw under an open picker
+  let html = `<p class="bf-intro">Testing. When NJ Transit trains aren’t running, pick your station to see buses from Port Authority Bus Terminal that stop near it.</p>
+    <select id="bf-station" class="bf-select" aria-label="Your station"><option value="">Choose your station</option>${stations.map(([c, x]) => `<option value="${esc(c)}"${c === busStation ? ' selected' : ''}>${esc(x.name)}${x.lines.length ? ` (${esc([...new Set(x.lines.map((l) => NJT_LINE_NAMES[l] || l))].join(', '))})` : ''}</option>`).join('')}</select>`;
+  if (st) {
+    html += `<p class="bf-h">1 · Get to Port Authority</p>${portAuthorityHtml(nowS)}<p class="bf-h">2 · Bus to ${esc(st.name)}</p>`;
+    if (!st.buses.length) {
+      html += `<div class="opt-card">No bus from Port Authority goes near ${esc(st.name)}. See NJ Transit’s <a href="https://www.njtransit.com/abc" target="_blank" rel="noopener">alternate service plans&nbsp;↗&#xFE0E;</a>.</div>`;
+    }
+    // The bus that gets you there first comes first.
+    const opts = st.buses.map((o) => {
+      const live = busLiveFor(o);
+      const sched = live && live.length ? null : busScheduled(o);
+      const first = live && live.length ? live[0].in : sched.length ? sched[0].in : Infinity;
+      return { o, live, sched, arrive: first + o.total };
+    }).sort((a, b) => a.arrive - b.arrive);
+    for (const { o, live, sched } of opts) {
+      let deps;
+      if (live && live.length) {
+        deps = `<div class="deps">${live.slice(0, 3).map((x) => `<span>${x.soon || x.t == null ? `in ${x.in} min` : clockOf(x.t)}${x.gate && x.gate !== 'EMPTY' ? `<span class="gate">Gate ${esc(x.gate)}</span>` : ''}</span>`).join('')}</div>`;
+      } else {
+        const why = o.agency !== 'NJ Transit' ? 'Scheduled' : busLive && !busLive.error ? 'None listed live now · scheduled' : 'Scheduled';
+        deps = sched.length ? `<div class="deps sched">${sched.slice(0, 3).map((x) => `<span>${clockOf(x.t)}${x.tomorrow ? ' tomorrow' : ''}</span>`).join('')}<span class="kind">${why}</span></div>`
+          : '<div class="deps sched"><span>No trips in the timetable</span></div>';
+      }
+      const gates = !(live && live.length) && o.gates.length ? ` <span class="gate">Gate ${esc(o.gates.slice(0, 2).join(' or '))}</span>` : '';
+      const where = o.far
+        ? `Gets within ${(o.walkM / 1000).toFixed(1)} km of the station at ${esc(o.stop)}; you’ll need a taxi or local ride from there.`
+        : `Get off at ${esc(o.stop)}, ${o.walk} min walk to the station.`;
+      const from = o.from ? ` Leaves from ${esc(o.from)}, not inside Port Authority.` : '';
+      const often = o.gap && o.gap <= 60 ? `; by day about every ${o.gap} min` : o.weekdayTrips ? `; ${o.weekdayTrips} trip${o.weekdayTrips === 1 ? '' : 's'} on weekdays` : '';
+      html += `<div class="opt-card bf-bus"><div class="rt">${busPill(o)} ${esc(busName(o))}${gates}</div>${deps}
+        <span class="sub">${where}${from} About ${o.total} min from Port Authority${often}.</span></div>`;
+    }
+  }
+  html += `<p class="cm-live">NJ Transit bus times are live from NJ Transit and may not be real-time data. Other companies show their published schedules. Buy tickets from each bus company.${busLive && busLive.error ? ' Live NJ Transit bus times didn’t load; showing schedules.' : ''}</p>`;
+  box.innerHTML = html;
+}
+document.addEventListener('change', (e) => {
+  if (e.target.id !== 'bf-station') return;
+  busStation = e.target.value;
+  try { localStorage.setItem('busStation', busStation); } catch {}
+  e.target.blur();
+  renderBuses();
+});
+setInterval(() => { if (view === 'buses') renderBuses(); }, 30000);
