@@ -663,3 +663,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Skipped stops and local-to-express notices now have a map (`changeModel` with `skip: true`): zoomed to the skipped stations and their neighbours, grayed out, "N trains skip". "See map" in the pill's dropdown; `#subway` now opens `[data-change]`. `changeFor` ignores skip models; `skipFor` stops those trains also showing as rerouted.
 - Airport helper: "Arrive at the airport (estimated)".
 - Bus finder: rail stops within 150 m are one station (Secaucus Junction); NAME_FIX for names riders know (Montclair State University, Ho-Ho-Kus, Wayne/Route 23...); title() capitalizes after - and /.
+
+## Subway entrances data (Nov 24, 2026; not used by the page yet)
+- `scripts/build-subway-entrances.py` → `docs/subway-entrances.json` from the MTA's "Subway Entrances and Exits" on data.ny.gov (i9wp-a4ja; host added to the environment). {GTFS stop id: [[lat, lon, type S/E/X/R/D, way B/X/N]]}, 2,120 entrances at 485 stations.
+- For the map redesign (owner wants entrances shown like Google Maps). Mock-up proposed: show only at stations you'd use (transfers, destination, Penn), smaller markers, zoomed in; awaiting approval.
