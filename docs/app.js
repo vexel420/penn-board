@@ -2927,7 +2927,7 @@ function subwayOptionsHtml(route, dir, stnId, mode, bare) {
   const helps = (o) => {
     const ids = [...new Set((o.t.stops || []).filter((id) => mine.has(id) && id !== stnId))];
     if (!ids.length) return `Shares ${o.shared} stations with the ${lineName(route)}`;
-    return `<details class="shared"><summary>Shares ${ids.length} station${ids.length === 1 ? '' : 's'} with the ${lineName(route)}</summary><span>${ids.map((id) => esc(stationName(id))).join(' · ')}</span></details>`;
+    return `<details class="shared"><summary>Shares ${ids.length} station${ids.length === 1 ? '' : 's'} with the ${lineName(route)}</summary><ul>${ids.map((id) => `<li>${esc(stationName(id))}</li>`).join('')}</ul></details>`;
   };
   const items = [...best.values()].sort((a, b) => b.shared - a.shared).map((o) => `<li class="cm-stn"><div class="opt-h">${bulletHtml(o.route, 'tiny')}<span>${o.svc === 'express' ? 'Express' : 'Local'}, next in ${Math.max(0, Math.round((o.t.time - nowS) / 60))} min${subwayDelays(o.route, dir).length ? ' (also delayed)' : ''}</span></div><span class="cm-dir">${helps(o)}</span></li>`).join('');
   if (!items) return '<p class="cm-live">No other line from this station shares its stops.</p>';

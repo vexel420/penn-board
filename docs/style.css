@@ -584,4 +584,6 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .n-more { display: block; margin-top: .3rem; }
 .n-more b { display: inline-block; margin-top: .25rem; }
 .cm-dir details.shared summary { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
-.cm-dir details.shared span { display: block; margin-top: .3rem; color: var(--ivory); font-size: .85rem; line-height: 1.5; }
+.cm-dir details.shared ul { list-style: none; margin: .35rem 0 0; padding: 0; color: var(--ivory); font-size: 1rem; line-height: 1.6; }
+.cm-dir details.shared li { padding-left: .9rem; position: relative; }
+.cm-dir details.shared li::before { content: ''; position: absolute; left: 0; top: .65em; width: .4rem; height: .4rem; border-radius: 50%; background: var(--dim); }
