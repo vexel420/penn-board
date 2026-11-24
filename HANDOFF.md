@@ -705,3 +705,6 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Relay `/njt-rail-gtfs`: NJ Transit's rail GTFS zip (GTFSRT getToken + getGTFS, token in KV `gtfs-token-rail`). Locked: a GitHub Actions OIDC token (audience `penn-board-relay`, repository vexel420/penn-board, checked against GitHub's JWKS in `githubActionsCaller`), or the Worker secret REBUILD_KEY (for manual rebuilds from a session; its value is not stored anywhere else). GitHub's secrets API is blocked from cloud sessions, hence OIDC.
 - `scripts/build-njt-timetable.py rail.zip` → `docs/njt-timetable.json` (same format as lirr-timetable.json plus `names`; stops are NJ Transit 2-letter codes; Secaucus TS→SE; no light rail). Weekly rebuild step uses the OIDC token (`id-token: write`).
 - feeds.js keeps each NJ Transit train's `viaCodes` (STATION_2CHAR). The planner (`ttPlans`/`ttPlansHtml`) is shared by LIRR and NJ Transit: direct or one change (NJ Transit ≥4 min), never the delayed train, never a connection heading back to Penn; Live once the first train is on the board (train numbers without leading zeros). PATH buttons stay on NJ Transit cards.
+
+## Masthead (owner's pick T3, Nov 24, 2026)
+- "NEW YORK" kicker (`.mast-kicker`) over "Penn Station"; the view name (#h1-sub) is hidden on the page and kept only in the browser tab title.

@@ -169,10 +169,10 @@ async function flipTile(f, from, ch, delay) {
 function renderMastFlip() {
   const h = document.querySelector('.mast h1');
   if (flipMode) {
-    h.innerHTML = `<span class="mast-flip">${flipText('mast', 'Penn Station')}</span> <span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">New York</span><span class="mast-flip">${flipText('mast', 'Penn Station')}</span><span class="h1-sub" id="h1-sub"></span>`;
     runFlips(h);
   } else {
-    h.innerHTML = 'Penn Station <span class="h1-sub" id="h1-sub"></span>';
+    h.innerHTML = '<span class="mast-kicker">New York</span>Penn Station<span class="h1-sub" id="h1-sub"></span>';
     flipShown.delete('mast');
   }
   setHeading();

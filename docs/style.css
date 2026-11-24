@@ -623,3 +623,8 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .fare { font-size: .82rem; }
 .nowrap-b { white-space: nowrap; }
 .tag-sched { background: #2c3530; color: var(--ivory); }
+
+/* Masthead (owner's pick, T3): a small "NEW YORK" over "Penn Station"; the
+   page's name stays in the tab title only, not under the heading. */
+.mast-kicker { display: block; font-size: .42em; letter-spacing: .18em; margin-bottom: .15em; text-transform: uppercase; }
+.mast .h1-sub { display: none; }
