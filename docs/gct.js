@@ -241,6 +241,19 @@ function bullet(route, cls = '', express = false) {
   return `<span class="bullet ${cls}${diamond ? ' diamond' : ''}" style="background:${esc(info ? info.color : '#808183')};color:${esc(info ? info.text : '#fff')}" aria-label="${esc(label)} ${diamond ? 'express ' : ''}train">${esc(label)}</span>`;
 }
 const stationName = (id) => (subwayData && subwayData.stops[id] ? subwayData.stops[id][0] : id);
+// Stations only local trains stop at, on the stretch the diamond runs express:
+// the 7 in Queens (Queensboro Plaza to Flushing), the 6 in the Bronx
+// (3 Av-138 St to Parkchester). An express train calls at none of them, and
+// must reach that stretch for us to tell.
+// (7 express stops: Queensboro Plaza 718, 61 St-Woodside 712, 74 St 710, Junction Blvd 707,
+// Mets-Willets Point 702. 6 express: 3 Av-138 St 619, Hunts Point Av 613, Parkchester 608.)
+const LOCAL_ONLY = { 7: ['716', '715', '714', '713', '711', '709', '708', '706', '705'], 6: ['618', '617', '616', '615', '614', '612', '611', '610', '609'] };
+const STRETCH_END = { 7: '702', 6: '608' };
+function skipsLocal(route, ahead) {
+  const loc = LOCAL_ONLY[route];
+  if (!loc || !ahead.includes(STRETCH_END[route])) return false;
+  return !ahead.some((id) => loc.includes(id));
+}
 async function loadSubway() {
   try {
     const trips = PennFeeds.parseTripUpdates(new Uint8Array(await (await fetch(SUBWAY_FEED, { cache: 'no-store' })).arrayBuffer()));
@@ -254,8 +267,11 @@ async function loadSubway() {
         if (!stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
         const route = trip.route.replace(/X$/, '');
         if (!stn.lines.includes(route)) continue;
-        const x = /X$/.test(trip.route);
         const dir = stn.oneWay ? 'S' : stop.id.slice(-1);
+        // Express (the diamond) only if the train really skips local stops
+        // ahead (owner, Nov 25: the MTA's feed was marking every Flushing-bound
+        // 7 as "7X" while they made all stops). Penn judges express the same way.
+        const x = /X$/.test(trip.route) && dir === 'N' && skipsLocal(route, trip.stops.slice(at + 1).map((s2) => s2.id.slice(0, -1)));
         const svc = stn.svc(route, x);
         const key = `${stn.id}|${route}|${dir}|${svc}|${x ? 'x' : ''}`;
         if (!groups.has(key)) groups.set(key, { stn: stn.id, route, dir, svc, express: x, trains: [] });
