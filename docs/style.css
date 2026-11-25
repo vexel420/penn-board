@@ -727,3 +727,15 @@ body.hub-gct {
 /* Flip board on Grand Central: teal tiles, gold letters. */
 .hub-gct .mast-flip .f, .hub-gct.flipboard .clock .f { --tile: #123f48; --tile-top: #174a54; --seam: #08262c; color: #f3d88f; }
 .hub-gct .mast-flip { font-family: "Archivo", sans-serif; }
+
+/* Side by side (split.html, desktop size): larger text inside each board so it
+   reads well at half the screen (owner, Nov 25). Only set by the split view. */
+html.split-big { font-size: 118%; }
+html.split-big .wrap, html.split-big .mast-in { padding-inline: .9rem; }
+/* Narrower fixed columns and side panel, so the destination keeps its room. */
+html.split-big .layout { grid-template-columns: minmax(0, 1fr) 19.5rem; gap: 1rem; }
+html.split-big .subway { padding-inline: .7rem; }
+html.split-big .sline { gap: .5rem; }
+html.split-big .smins { font-size: .9em; }
+html.split-big .cols, html.split-big .row { grid-template-columns: 5.4rem 4.6rem minmax(0, 1fr) 7rem 3.9rem; column-gap: .6rem; }
+html.split-big .plate { font-size: .72rem; padding: .15rem .35rem; }

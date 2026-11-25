@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800&display=swap" rel="stylesheet">
 <!-- Side by side (owner, Nov 25): both boards live at once on a computer, to
      watch for bugs. Each board runs in its own frame, exactly as on its own
-     page. "Desktop size" shows each at a full computer width, scaled to fit;
+     page. "Desktop size" shows each at a computer width, scaled to fit, with larger text;
      "Phone size" shows each as a phone would. -->
 <style>
 :root { --bg: #0b0f0d; --bar: #121815; --line: #2c4034; --ivory: #f2ead8; --gold: #e6b751; --teal: #8fd3c7; }
@@ -59,7 +59,9 @@ body.too-small .small { display: block; }
 </div>
 <script>
 const PAGES = [['index.html', 'Penn Station'], ['gct.html', 'Grand Central']];
-const DESKTOP_W = 1280, PHONE = [390, 844];
+// Each board is drawn at this computer width (the boards' desktop layout starts at
+// 961 px), so it shrinks less to fit half the screen (owner, Nov 25: easier to read).
+const DESKTOP_W = 1150, PHONE = [390, 844];
 const store = { get: (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
 let size = store.get('splitSize', 'desktop');
 let order = store.get('splitOrder', '01');
@@ -72,7 +74,16 @@ function load() {
     frames[i].title = `${name} board`;
   });
 }
+// Bigger text inside the boards, only here and only at desktop size (the
+// class goes on each board's own page; both are this site's pages).
+function bigText() {
+  for (const f of frames) {
+    try { f.contentDocument.documentElement.classList.toggle('split-big', size === 'desktop'); } catch {}
+  }
+}
+frames.forEach((f) => f.addEventListener('load', bigText));
 function fit() {
+  bigText();
   document.body.classList.toggle('phone', size === 'phone');
   document.querySelectorAll('[data-size]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === size)));
   for (const f of frames) {
