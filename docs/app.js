@@ -3679,8 +3679,8 @@ async function openBusMap() {
   changeOpen = { id: 'busmap', view: 1 };
   $('chg-kind').textContent = `Buses at ${HUB.short}`;
   $('chg-h').textContent = 'Where the bus stops are';
-  $('chg-top').innerHTML = '<p class="cm-sum">Tap a route below for the MTA’s route map and schedule (opens in a new tab).</p>';
-  $('chg-below').innerHTML = `<ul class="cm-stns">${HUB_BUS_STOPS.map((b, i) => `<li class="cm-stn"><div class="opt-h"><span class="bus-num">${i + 1}</span>${b.lines.map(busBadge).join(' ')}</div><span class="cm-dir">${esc(b.label)}, ${esc(b.where)}</span></li>`).join('')}</ul>`;
+  $('chg-top').innerHTML = '<p class="cm-sum">Tap a stop below to zoom in to it on the map. Tap a route for the MTA’s route map and schedule (opens in a new tab).</p>';
+  $('chg-below').innerHTML = `<ul class="cm-stns">${HUB_BUS_STOPS.map((b, i) => `<li class="cm-stn bus-stop-li" data-busstop="${i}" tabindex="0" role="button" aria-label="Show stop ${i + 1} on the map"><div class="opt-h"><span class="bus-num">${i + 1}</span>${b.lines.map(busBadge).join(' ')}</div><span class="cm-dir">${esc(b.label)}, ${esc(b.where)}</span></li>`).join('')}</ul>`;
   openSheet();
   const box = $('chg-map');
   box.hidden = false;
@@ -3694,17 +3694,45 @@ async function openBusMap() {
     // Numbered dots (the routes are in the list below); stops on the same
     // corner are nudged apart so every number shows.
     const placed = [];
+    busMarkers = [];
     HUB_BUS_STOPS.forEach((b, i) => {
       let [la, lo] = b.ll;
       while (placed.some(([a, c]) => Math.abs(a - la) < 0.00012 && Math.abs(c - lo) < 0.00016)) lo += 0.00018;
       placed.push([la, lo]);
-      Lf.marker([la, lo], { title: `${i + 1}: ${b.lines.join(', ')}, ${b.label}`, icon: Lf.divIcon({ className: '', iconSize: [0, 0], html: `<div class="bus-dot">${i + 1}</div>` }) })
+      busMarkers[i] = Lf.marker([la, lo], { title: `${i + 1}: ${b.lines.join(', ')}, ${b.label}`, icon: Lf.divIcon({ className: '', iconSize: [0, 0], html: `<div class="bus-dot">${i + 1}</div>` }) })
         .bindPopup(`<b>${i + 1}. ${b.lines.map(esc).join(', ')}</b><br>${esc(b.label)}<br>${esc(b.where)}`).addTo(changeMap);
+      busMarkers[i].on('click', () => markBusStop(i));
     });
-    changeMap.fitBounds(Lf.latLngBounds([HUB.ll, ...HUB_BUS_STOPS.map((b) => b.ll)]).pad(0.2));
+    const ctl = Lf.control({ position: 'topright' });
+    ctl.onAdd = () => { const d = Lf.DomUtil.create('div'); d.innerHTML = '<button type="button" class="bus-all" data-busall hidden>Show all stops</button>'; Lf.DomEvent.disableClickPropagation(d); return d; };
+    ctl.addTo(changeMap);
+    busAllBounds = Lf.latLngBounds([HUB.ll, ...HUB_BUS_STOPS.map((b) => b.ll)]).pad(0.2);
+    changeMap.fitBounds(busAllBounds);
   } catch { box.hidden = true; }
 }
-document.addEventListener('click', (e) => { if (e.target.closest('[data-busmap]')) openBusMap(); });
+// Tapping a stop in the list (owner, Nov 25) zooms the map in to it.
+let busMarkers = [], busAllBounds = null;
+function markBusStop(i) {
+  document.querySelectorAll('#chg-below [data-busstop]').forEach((li) => li.classList.toggle('on', +li.dataset.busstop === i));
+  document.querySelectorAll('#chg-map .bus-dot').forEach((d) => d.classList.toggle('on', d.textContent === String(i + 1)));
+  busMarkers.forEach((m, j) => m && m.setZIndexOffset(j === i ? 1000 : 0));
+  const all = document.querySelector('[data-busall]'); if (all) all.hidden = i < 0;
+}
+function zoomBusStop(i) {
+  const m = busMarkers[i];
+  if (!changeMap || !m) return;
+  markBusStop(i);
+  $('chg-map').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  changeMap.flyTo(m.getLatLng(), 18.5, { duration: 0.6 });
+  changeMap.once('moveend', () => m.openPopup());
+}
+document.addEventListener('click', (e) => {
+  if (e.target.closest('[data-busmap]')) openBusMap();
+  if (e.target.closest('[data-busall]')) { changeMap && changeMap.closePopup(); markBusStop(-1); if (changeMap && busAllBounds) changeMap.flyToBounds(busAllBounds, { duration: 0.6 }); }
+  const li = e.target.closest('[data-busstop]');
+  if (li && !e.target.closest('a')) zoomBusStop(+li.dataset.busstop);
+});
+document.addEventListener('keydown', (e) => { const li = e.target.closest && e.target.closest('[data-busstop]'); if (li && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); zoomBusStop(+li.dataset.busstop); } });
 loadHubBuses();
 setInterval(loadHubBuses, 60000);
 setInterval(renderHubBuses, 10000);

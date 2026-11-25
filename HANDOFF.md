@@ -851,3 +851,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Owner: buses should stay in a fixed order, not reorder by which comes next. `renderHubBuses` lists rows in `HUB.busStops` order (one row per line per stop) and shows "none due soon" / "no live times" instead of dropping a row. Times more than 90 minutes out are hidden.
 - Each route badge links to the MTA route page, `https://www.mta.info/schedules/bus/<route lowercase>` (e.g. m34-sbs), in a new tab.
 - "Map of the stops" opens a Leaflet sheet: hub star plus numbered stop dots (nudged apart when two stops share a corner) and a numbered list. Stop coordinates (`ll`) in hub.js come from the MTA Manhattan bus GTFS.
+- Tapping a stop in the list under the map flies the map to it (zoom 18.5), highlights its dot and list row, and opens its popup; a "Show all stops" button on the map zooms back out. Tapping a route badge still opens the MTA page.
