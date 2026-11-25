@@ -49,6 +49,9 @@ jobs:
       - name: Buses between nearby subway stations (for skipped stops)
         run: python3 scripts/build-subway-bus-links.py "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_bx.zip "$RUNNER_TEMP"/gtfs_m.zip "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_si.zip "$RUNNER_TEMP"/gtfs_busco.zip
 
+      - name: Buses to JFK and LaGuardia (airport helper)
+        run: python3 scripts/build-airport-buses.py "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_busco.zip "$RUNNER_TEMP"/gtfs_m.zip
+
       - name: Subway entrances (MTA open data)
         continue-on-error: true
         run: python3 scripts/build-subway-entrances.py

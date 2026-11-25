@@ -1122,7 +1122,7 @@ function loadMtaBusStop(stop) {
   fetch(`${window.PENN_RELAY}/mta-bus-stop?stop=${encodeURIComponent(stop)}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
     .then((d) => mtaBusLive.set(stop, { at: Date.now(), buses: d.buses || [] }))
     .catch(() => mtaBusLive.set(stop, { at: Date.now(), error: true }))
-    .finally(refreshSkipBuses);
+    .finally(() => { refreshSkipBuses(); if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); });
 }
 // Each skipped station's best bus: from the open station just before or just after the skipped stretch.
 function skipBusPlan(model) {
@@ -3693,13 +3693,10 @@ function airportOptions(code, nowS) {
     if (a) { const ride = subRide('A|A28|H03', 46); const at = a.time + (ride + AIR_MIN.change + AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60;
       o.push({ at, fare: FARES.subway + FARES.airtrainJfk, legs: [[a.time, `${lineName('A')} to Howard Beach-JFK`], [a.time + (ride + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal`]] }); }
   } else if (code === 'LGA') {
-    const e = subwayTo('E', 'G14', nowS)[0];
-    if (e) { const ride = subRide('E|A28|G14', 19); const at = e.time + (ride + AIR_MIN.change + AIR_MIN.q70Wait + AIR_MIN.q70FromJacksonHts) * 60;
-      o.push({ at, fare: FARES.subway, legs: [[e.time, `${lineName('E')} to Jackson Hts-Roosevelt Av`], [e.time + (ride + AIR_MIN.change) * 60, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free), about every 10 min`]] }); }
     const l = railTo(['lirr'], 'Woodside', nowS)[0];
     if (l) { const dep = l.leaves ?? l.time, at = dep + (AIR_MIN.lirrWoodside + AIR_MIN.change + AIR_MIN.q70Wait + AIR_MIN.q70FromWoodside) * 60;
       o.push({ at, fare: lirrFare(l), legs: [[dep, `${airPl('LIRR', 'p-lirr')} to Woodside${l.track ? `, track ${esc(l.track)}` : ''}`], [dep + (AIR_MIN.lirrWoodside + AIR_MIN.change) * 60, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free), about every 10 min`]] }); }
-  } else {
+  } else if (code === 'EWR') {
     const n = railTo(['njt'], 'Newark Airport', nowS)[0];
     if (n) { const dep = n.leaves ?? n.time, at = dep + (AIR_MIN.njtEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60;
       o.push({ at, fare: FARES.njtEwr, legs: [[dep, `${airPl('NJ Transit', 'p-njt')} to Newark Airport${n.track ? `, track ${esc(n.track)}` : ''}`], [dep + (AIR_MIN.njtEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] }); }
@@ -3721,7 +3718,116 @@ function airportOptions(code, nowS) {
         legs: [...pathLegs, [bus, `${airPl('62 bus', 'p-njt')} at Newark Penn (Raymond Blvd, gate ${night ? '2A' : '3A'}) to your terminal`]] });
     }
   }
+  if (code === 'ISP') o.push(...ispOptions(nowS));
+  o.push(...airportBusOptions(code, nowS));
   return o;
+}
+
+// ---------- buses to JFK and LaGuardia (owner, Nov 25) ----------
+// docs/airport-buses.json (scripts/build-airport-buses.py): for each MTA bus
+// route to the airport, the subway ride from Penn to a stop of that bus, and
+// the bus to the airport (JFK: Lefferts Blvd AirTrain, free from there to every
+// terminal, or Terminal 8; LaGuardia: Terminals B and C). Subway and bus are a
+// free transfer: $3.00 in all (the Q70 LaGuardia Link is free anyway). The
+// first train is live when the board lists it; the bus is live (MTA Bus Time).
+let airportBuses;          // undefined: not loaded; null: couldn't load
+let airportBusesLoading = null;
+const loadAirportBuses = () => airportBusesLoading || (airportBusesLoading = fetch('airport-buses.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => { airportBuses = d; if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }));
+const titleCase = (x) => String(x).toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\bAv\b/g, 'Av').replace(/\bRd\b/g, 'Rd');
+// The next train on a subway route from one Penn station that reaches a station.
+function subwayFromTo(route, from, to, nowS) {
+  return ((board && board.subway) || []).filter((g) => g.route === route && g.trains[0] && g.trains[0].stops && g.trains[0].stops[0] === from)
+    .flatMap((g) => g.trains).filter((t) => t.time >= nowS + 60 && (t.stops || []).includes(to)).sort((a, b) => a.time - b.time)[0];
+}
+function airportBusOptions(code, nowS) {
+  if (code !== 'JFK' && code !== 'LGA') return [];
+  loadAirportBuses();
+  if (!airportBuses) return [];
+  const names = airportBuses.names || {};
+  const term = code === 'LGA' && lgaTerminal !== 'any' ? `Terminal ${lgaTerminal}` : null;
+  const out = [];
+  for (const p of airportBuses.plans.filter((x) => x.airport === code)) {
+    // Where it drops you, and the ride there (LaGuardia: your terminal, if picked).
+    const stops = Object.entries(p.to);
+    const pick = term ? stops.find(([k]) => k === term) : stops.sort((a, b) => a[1] - b[1])[0];
+    if (!pick) continue;
+    const [alight, ride] = pick;
+    const legs = [];
+    let t = nowS;
+    let live = false;
+    p.subway.forEach((l, i) => {
+      const tr = i === 0 ? subwayFromTo(l.route, l.from, l.to, nowS) : null;
+      if (i === 0 && tr) { t = tr.time; live = true; } else t += (i === 0 ? 4 : 3 + 4) * 60;
+      legs.push([t, `${lineName(l.route)} to ${esc(names[l.to] || l.to)}`]);
+      t += l.mins * 60;
+    });
+    t += p.walk * 60;
+    // The bus: live from MTA Bus Time when it's in, else the usual wait.
+    loadMtaBusStop(p.board);
+    const lb = mtaBusLive.get(p.board);
+    const want = String(p.route).toUpperCase();
+    const next = lb && lb.buses ? lb.buses.filter((b) => String(b.line).toUpperCase() === want && b.at && Date.parse(b.at) / 1000 >= t)
+      .sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0] : null;
+    const busAt = next ? Date.parse(next.at) / 1000 : t + (p.gap / 2) * 60;
+    const late = next && next.aimed ? Math.round((Date.parse(next.at) - Date.parse(next.aimed)) / 60000) : 0;
+    // LaGuardia with no terminal picked: the bus serves both B and C.
+    const both = code === 'LGA' && !term && stops.length > 1 ? `LaGuardia, Terminals ${stops.map(([k]) => k.replace('Terminal ', '')).sort().join(' and ')}` : '';
+    const where = both || (alight === 'Lefferts Blvd AirTrain' ? 'Lefferts Blvd AirTrain station' : `${code === 'JFK' ? 'JFK ' : ''}${alight}`);
+    legs.push([busAt, `${airPl(esc(p.route), 'p-mtabus')} from ${esc(titleCase(p.boardName))} to ${esc(where)}${next ? ` · <span class="sb-live">live</span>${late >= 2 ? ` <span class="bus-late">${late} min late</span>` : ''}` : `, about every ${p.gap} min`}`]);
+    let at = busAt + ride * 60;
+    if (p.airtrain) { legs.push([at, `${airPl('AirTrain', 'p-air')} to your terminal (free from here)`]); at += p.airtrain * 60; }
+    out.push({ at, fare: FARES.subway, fareText: `${money(FARES.subway)} one way (subway, free transfer to the bus)`, legs, live, term: both ? null : alight.startsWith('Terminal') ? alight : null,
+      only: code === 'JFK' && alight === 'Terminal 8' ? 'Terminal 8 only' : '' });
+  }
+  // The quickest two (a third if it's a different kind of trip).
+  return out.sort((a, b) => a.at - b.at).slice(0, 2);
+}
+
+// ---------- LaGuardia terminals and airlines ----------
+// From LaGuardia Airport's own website (Nov 25, 2026): Terminal B serves Air
+// Canada, American, Frontier, JetBlue, Porter, Southwest and United; Terminal C
+// is Delta's. Terminal A has no passenger flights (private aviation only; Spirit
+// has ceased operations). Every LaGuardia bus serves Terminals B and C.
+const LGA_AIRLINES = [['Air Canada', 'B'], ['American Airlines', 'B'], ['Delta', 'C'], ['Frontier Airlines', 'B'], ['JetBlue', 'B'], ['Porter Airlines', 'B'], ['Southwest Airlines', 'B'], ['United Airlines', 'B']];
+let lgaTerminal = 'any', lgaAirline = '';
+try { lgaTerminal = localStorage.getItem('lgaTerminal') || 'any'; lgaAirline = localStorage.getItem('lgaAirline') || ''; } catch {}
+let lgaPicking = false;
+function lgaPickerHtml() {
+  if (lgaPicking) {
+    return `<p class="am-label">Which airline?</p><ul class="am-list">${LGA_AIRLINES.map(([a, t]) => `<li><button type="button" data-lga-airline="${esc(a)}" data-lga-term="${t}">${esc(a)}<b>Terminal ${t}</b></button></li>`).join('')}</ul>
+      <p class="am-note">From LaGuardia Airport's website. Not listed? Check your boarding pass. Terminal A has no passenger flights.</p>`;
+  }
+  const saved = lgaAirline && lgaTerminal !== 'any' ? `<div class="am-saved"><span>Flying <b>${esc(lgaAirline)}</b> · Terminal ${esc(lgaTerminal)}</span><button type="button" data-lga-change>Change</button></div>` : '';
+  return saved || `<p class="am-label">Terminal</p><div class="am-row">${['any', 'B', 'C'].map((t) => `<button type="button" class="am-chip" data-lga-term="${t}" aria-pressed="${lgaTerminal === t}">${t === 'any' ? 'Any' : t}</button>`).join('')}<button type="button" class="am-link" data-lga-change>Not sure?</button></div>`;
+}
+document.addEventListener('click', (e) => {
+  const a = e.target.closest('[data-lga-airline]');
+  const t = e.target.closest('[data-lga-term]');
+  const c = e.target.closest('[data-lga-change]');
+  if (!a && !t && !c) return;
+  if (c) lgaPicking = true; // "Not sure?" or "Change": the airline list
+  else { lgaTerminal = t.dataset.lgaTerm; lgaAirline = a ? a.dataset.lgaAirline : ''; lgaPicking = false; }
+  try { localStorage.setItem('lgaTerminal', lgaTerminal); localStorage.setItem('lgaAirline', lgaAirline); } catch {}
+  renderAirport();
+});
+
+// ---------- Islip (Long Island MacArthur) ----------
+// LIRR to Ronkonkoma (live), then a taxi or ride-hail, about 5 minutes, per
+// MacArthur Airport's and the MTA's own pages; no scheduled shuttle to
+// Ronkonkoma is confirmed (Nov 25), so none is shown.
+function ispOptions(nowS) {
+  const l = railTo(['lirr'], 'Ronkonkoma', nowS)[0];
+  if (!l) return [];
+  const dep = l.leaves ?? l.time;
+  let arr = dep + 80 * 60;
+  if (typeof lirrTT !== 'undefined' && lirrTT && lirrData) {
+    const ronk = Object.keys(lirrData.stops).find((id) => /^ronkonkoma$/i.test(lirrData.stops[id][0]));
+    const trip = lirrTripsNear().find((x) => x.train === String(l.train));
+    const c = trip && trip.calls.find(([sid]) => sid === ronk);
+    if (c) arr = c[1] + (dep - (trip.calls.find(([sid]) => sid === lirrTT.penn) || [0, dep])[1]);
+  }
+  return [{ at: arr + 8 * 60, fare: null, fareText: 'LIRR fare to Ronkonkoma, plus the taxi', live: true,
+    legs: [[dep, `${airPl('LIRR', 'p-lirr')} to Ronkonkoma${l.track ? `, track ${esc(l.track)}` : ''}`], [arr + 3 * 60, 'Taxi or ride-hail to the terminal, about 5 min']] }];
 }
 function renderAirport() {
   const nowS = Date.now() / 1000;
@@ -3729,15 +3835,17 @@ function renderAirport() {
   const fastest = opts[0];
   const priced = opts.filter((x) => x.fare != null);
   const cheapest = priced.length ? priced.reduce((a, b) => (b.fare < a.fare || (b.fare === a.fare && b.at < a.at) ? b : a)) : null;
-  $('chg-top').innerHTML = `<div class="sheet-air">${[['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark']].map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>`;
-  $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}<span class="tagx tag-live">Live</span></span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
-    <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at the airport (estimated)</span></li></ul>
+  $('chg-top').innerHTML = `<div class="sheet-air four">${[['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark'], ['ISP', 'Islip']].map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}`;
+  const lgaT = airportPick === 'LGA' && lgaTerminal !== 'any' ? `Terminal ${lgaTerminal}` : '';
+  $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}${x.live === false ? '<span class="tagx tag-sched">Estimated</span>' : '<span class="tagx tag-live">Live</span>'}${x.only ? `<span class="am-tag">${esc(x.only)}</span>` : ''}</span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
+    <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at ${lgaT || x.term || 'the airport'} (estimated)</span></li></ul>
     <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
     : '<p class="cm-live">No trains to there are listed from Penn right now.</p>')
-    + '<p class="cm-live">First train: live times from the board. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; check before you travel.</p>';
+    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; check before you travel.</p>';
 }
 function openAirport() {
   changeOpen = { id: 'airport', view: 1 };
+  loadAirportBuses(); loadLirrTT();
   $('chg-map').hidden = true;
   $('chg-kind').textContent = 'From Penn Station';
   $('chg-h').textContent = 'To the airport';

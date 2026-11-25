@@ -644,3 +644,20 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 
 /* A bus running behind its schedule. */
 .bus-late { color: var(--late); font-weight: 700; white-space: nowrap; }
+
+/* Airport helper: four airports, LaGuardia terminal and airline picker. */
+.sheet-air.four { grid-template-columns: repeat(4, 1fr); }
+.am-label { font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); font-weight: 800; margin: .55rem 0 .15rem; }
+.am-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.am-chip { border: 1px solid var(--line); border-radius: 99px; padding: .4rem .85rem; font: inherit; font-weight: 700; font-size: .95rem; color: var(--ivory); background: #19271f; cursor: pointer; }
+.am-chip[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); background: #2a2614; }
+.am-link { background: none; border: 0; font: inherit; color: var(--gold); font-weight: 700; font-size: .95rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.am-list { list-style: none; margin: .35rem 0 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.am-list li + li { border-top: 1px solid var(--line); }
+.am-list button { display: flex; justify-content: space-between; width: 100%; padding: .6rem .75rem; background: none; border: 0; font: inherit; font-size: 1rem; color: var(--ivory); cursor: pointer; text-align: left; }
+.am-list button b { color: var(--gold); }
+.am-note { color: var(--ivory); font-size: .9rem; margin: .35rem 0 0; }
+.am-saved { display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--gold); border-radius: 10px; padding: .55rem .75rem; background: #2a2614; margin-top: .45rem; }
+.am-saved b { color: var(--gold); }
+.am-saved button { background: none; border: 0; font: inherit; color: var(--gold); text-decoration: underline; cursor: pointer; }
+.am-tag { display: inline-block; padding: .05rem .45rem; border-radius: 4px; font-size: .78rem; font-weight: 800; background: #3a2a14; color: var(--late); margin-left: .3rem; }
