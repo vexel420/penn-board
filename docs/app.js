@@ -3649,7 +3649,8 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) refr
 // Newark Penn to Newark Airport $12.30 with the AirTrain, "+ $3.00 for PATH"
 // (njtransit.com/ewr); PATH $3.00; NJ Transit local bus one zone $1.90
 // (NJ Transit Northern Intrastate fare chart). Update here when fares change.
-const FARES = { subway: 3.00, cityOff: 5.25, cityPeak: 7.25, airtrainJfk: 8.75, njtEwr: 17.25, njtNewarkEwr: 12.30, path: 3.00, njtBus1: 1.90 };
+// Newark Airport Express $23.50 one way (newarkairport.com, Nov 2026).
+const FARES = { subway: 3.00, cityOff: 5.25, cityPeak: 7.25, airtrainJfk: 8.75, njtEwr: 17.25, njtNewarkEwr: 12.30, path: 3.00, njtBus1: 1.90, ewrExpress: 23.50 };
 // Usual minutes for the parts that aren't live (connections, rail rides).
 const AIR_MIN = {
   lirrJamaica: 20, lirrWoodside: 11, njtEwr: 24, amtrakEwr: 18,
@@ -3718,6 +3719,7 @@ function airportOptions(code, nowS) {
         legs: [...pathLegs, [bus, `${airPl('62 bus', 'p-njt')} at Newark Penn (Raymond Blvd, gate ${night ? '2A' : '3A'}) to your terminal`]] });
     }
   }
+  if (code === 'EWR') o.push(...ewrExpressOptions(nowS));
   if (code === 'ISP') o.push(...ispOptions(nowS));
   o.push(...airportBusOptions(code, nowS));
   return o;
@@ -3811,6 +3813,37 @@ document.addEventListener('click', (e) => {
   renderAirport();
 });
 
+// ---------- Newark Airport Express (Coach USA) ----------
+// docs/ewr-express.json (scripts/build-ewr-express.py, from Coach USA's
+// timetable): departures from Port Authority Bus Terminal to Terminals B, C, A.
+// Scheduled times (Coach USA publishes no live data).
+let ewrExpress;
+let ewrExpressLoading = null;
+const loadEwrExpress = () => ewrExpressLoading || (ewrExpressLoading = fetch('ewr-express.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => { ewrExpress = d; if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }));
+const TO_PABT_MIN = 10; // walk up 8 Av, or the A, C or E one stop
+function ewrExpressOptions(nowS) {
+  loadEwrExpress();
+  if (!ewrExpress) return [];
+  const key = { weekday: 'wk', saturday: 'sa', sunday: 'su' };
+  const today = nyNow(), yest = nyNow(-1), tom = nyNow(1);
+  const midnight = nowS - today.mins * 60 - (nowS % 60);
+  // (Times past midnight belong to the day before's schedule.)
+  const list = [
+    ...(ewrExpress.days[key[yest.day]] || []).filter(([m]) => m >= 1440).map(([m, t]) => [m - 1440, t]),
+    ...(ewrExpress.days[key[today.day]] || []),
+    ...(ewrExpress.days[key[tom.day]] || []).map(([m, t]) => [m + 1440, Object.fromEntries(Object.entries(t).map(([k, v]) => [k, v + 1440]))]),
+  ];
+  const ready = (nowS - midnight) / 60 + TO_PABT_MIN;
+  const next = list.filter(([m]) => m >= ready).sort((a, b) => a[0] - b[0])[0];
+  if (!next) return [];
+  const [m, term] = next;
+  const first = Math.min(...Object.values(term));
+  const order = Object.entries(term).sort((a, b) => a[1] - b[1]).map(([k]) => k).join(', ');
+  return [{ at: midnight + first * 60, fare: FARES.ewrExpress, live: false, tag: 'Scheduled', legs: [
+    [midnight + (m - TO_PABT_MIN) * 60, 'Walk up 8 Av to Port Authority (41 St), or the A, C or E one stop'],
+    [midnight + m * 60, `${airPl('Newark Airport Express', 'p-partner')} from Port Authority Bus Terminal to Terminals ${esc(order)}`]] }];
+}
+
 // ---------- Islip (Long Island MacArthur) ----------
 // LIRR to Ronkonkoma (live), then a taxi or ride-hail, about 5 minutes, per
 // MacArthur Airport's and the MTA's own pages; no scheduled shuttle to
@@ -3837,15 +3870,15 @@ function renderAirport() {
   const cheapest = priced.length ? priced.reduce((a, b) => (b.fare < a.fare || (b.fare === a.fare && b.at < a.at) ? b : a)) : null;
   $('chg-top').innerHTML = `<div class="sheet-air four">${[['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark'], ['ISP', 'Islip']].map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}`;
   const lgaT = airportPick === 'LGA' && lgaTerminal !== 'any' ? `Terminal ${lgaTerminal}` : '';
-  $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}${x.live === false ? '<span class="tagx tag-sched">Estimated</span>' : '<span class="tagx tag-live">Live</span>'}${x.only ? `<span class="am-tag">${esc(x.only)}</span>` : ''}</span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
+  $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}${x.live === false ? `<span class="tagx tag-sched">${x.tag || 'Estimated'}</span>` : '<span class="tagx tag-live">Live</span>'}${x.only ? `<span class="am-tag">${esc(x.only)}</span>` : ''}</span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
     <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at ${lgaT || x.term || 'the airport'} (estimated)</span></li></ul>
     <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
     : '<p class="cm-live">No trains to there are listed from Penn right now.</p>')
-    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; check before you travel.</p>';
+    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; Newark Airport Express times are Coach USA’s schedule. Check before you travel.</p>';
 }
 function openAirport() {
   changeOpen = { id: 'airport', view: 1 };
-  loadAirportBuses(); loadLirrTT();
+  loadAirportBuses(); loadLirrTT(); loadEwrExpress();
   $('chg-map').hidden = true;
   $('chg-kind').textContent = 'From Penn Station';
   $('chg-h').textContent = 'To the airport';
