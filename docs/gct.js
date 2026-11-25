@@ -37,8 +37,14 @@ const lineGroup = (b) => (b === 'NC' || b === 'DN' || b === 'WB' ? 'NH' : b);
 const BOARD_AHEAD_S = 15 * 60; // Grand Central posts tracks early: "Boarding" only this close to departure
 const FINAL_S = 60;            // final call, as at Penn
 const DEPARTED_SHOWN_S = 3 * 60;
+// Station names are needed before the trains are shown (owner, Nov 25: the
+// board showed codes like "2SM" when the trains loaded first). The trains wait
+// for this file, up to 5 s; if it never loads, codes are better than nothing.
 let mnrNames = {};
-fetch('mnr-stations.json').then((r) => (r.ok ? r.json() : {})).then((d) => { mnrNames = d || {}; render(); }).catch(() => {});
+const mnrNamesReady = Promise.race([
+  fetch('mnr-stations.json').then((r) => (r.ok ? r.json() : {})).then((d) => { mnrNames = d || {}; }).catch(() => {}),
+  new Promise((r) => setTimeout(r, 5000)),
+]);
 const mnrName = (c) => mnrNames[c] || c;
 
 let rail = { departures: [], arrivals: [], alerts: [], at: 0, error: '' };
@@ -51,7 +57,10 @@ function parseArrivals(list, railroad) {
   for (const a of list || []) {
     const leaving = a.direction === 'E';
     const here = lirr ? 'GCT' : '0NY';
-    const stops = (a.stops || []).filter((c) => c !== here);
+    // Metro-North codes missing from the MTA's own station list (like 0HB,
+    // between Yankees-E 153 St and Morris Heights) aren't passenger stops: left out.
+    const known = (c) => lirr || !Object.keys(mnrNames).length || c in mnrNames;
+    const stops = (a.stops || []).filter((c) => c !== here && known(c));
     // TrainTime gives the scheduled time and the delay apart (otp, seconds;
     // negative = late, as for the LIRR at Penn). Trains don't leave early.
     const otp = a.status && typeof a.status.otp === 'number' ? a.status.otp : 0;
@@ -85,7 +94,7 @@ async function loadRail() {
   const get = (code) => fetch(`https://backend-unified.mylirr.org/arrivals/${code}`, { headers: { 'accept-version': '3.0' }, cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`TrainTime answered ${r.status}`))));
   try {
-    const [m, l] = await Promise.all([get('0NY'), get('GCT')]);
+    const [m, l] = await Promise.all([get('0NY'), get('GCT'), mnrNamesReady]);
     const a = parseArrivals(m.arrivals, 'mnr'), b = parseArrivals(l.arrivals, 'lirr');
     const deps = [...a.departures, ...b.departures];
     // A departure that drops off the list near its time has left.
