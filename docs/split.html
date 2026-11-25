@@ -24,9 +24,16 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ivory)
 .pane { position: relative; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background: #000; }
 .pane .lab { position: absolute; z-index: 2; left: 10px; bottom: 10px; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: .2rem .5rem; border-radius: 4px; background: rgba(0,0,0,.7); }
 .pane iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #fff; }
-.phone .pane { display: grid; place-items: center; background: #070908; }
-.phone .pane iframe { position: relative; border-radius: 22px; box-shadow: 0 0 0 8px #1b1f1d; }
-@media (max-width: 1099px) { .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+.phone .pane { background: #070908; }
+.phone .pane iframe { border-radius: 22px; box-shadow: 0 0 0 8px #1b1f1d; }
+/* Side by side needs a computer-sized screen (1100 px or wider). */
+.small { display: none; padding: 2rem 1.25rem; max-width: 32rem; margin: 0 auto; line-height: 1.5; }
+.small h2 { font-size: 1.5rem; margin: 0 0 .6rem; }
+.small p { font-size: 1.05rem; color: #c4ccc2; }
+.small a { display: block; margin-top: .8rem; padding: .85rem 1rem; border-radius: 10px; font-weight: 800; color: var(--ivory); text-decoration: none; }
+.small a.p { background: #7d2f26; } .small a.g { background: #1d5c66; }
+body.too-small .bar, body.too-small .panes { display: none; }
+body.too-small .small { display: block; }
 </style>
 </head>
 <body>
@@ -39,6 +46,12 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ivory)
   <span class="sp"></span>
   <span class="note">Each side is the real, live page.</span>
   <a href="index.html">Back to Penn</a>
+</div>
+<div class="small">
+  <h2>Side by side needs a bigger screen</h2>
+  <p>It shows both boards at once, which only fits on a computer or a large tablet. On a phone, use the pill at the top of either board to switch.</p>
+  <a class="p" href="index.html">Penn Station</a>
+  <a class="g" href="gct.html">Grand Central</a>
 </div>
 <div class="panes" id="panes">
   <div class="pane"><iframe id="f1" title="Penn Station board"></iframe><span class="lab" id="l1"></span></div>
@@ -74,16 +87,24 @@ function fit() {
       f.style.width = `${PHONE[0]}px`;
       f.style.height = `${PHONE[1]}px`;
       f.style.transform = `scale(${s})`;
-      f.style.transformOrigin = '50% 50%';
+      f.style.left = `${(box.width - PHONE[0] * s) / 2}px`;
+      f.style.top = `${(box.height - PHONE[1] * s) / 2}px`;
     }
-    if (size === 'desktop') f.style.transformOrigin = '0 0';
+    if (size === 'desktop') { f.style.left = '0px'; f.style.top = '0px'; }
   }
 }
 document.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { size = b.dataset.size; store.set('splitSize', size); fit(); }));
 document.getElementById('swap').addEventListener('click', () => { order = order === '01' ? '10' : '01'; store.set('splitOrder', order); frames.forEach((f) => { f.removeAttribute('src'); }); load(); });
 document.getElementById('reload').addEventListener('click', () => frames.forEach((f) => f.contentWindow && f.contentWindow.location.reload()));
-addEventListener('resize', fit);
-load(); fit();
+const BIG = matchMedia('(min-width: 1100px)');
+function start() {
+  document.body.classList.toggle('too-small', !BIG.matches);
+  if (!BIG.matches) { frames.forEach((f) => f.removeAttribute('src')); return; }
+  load(); fit();
+}
+addEventListener('resize', () => { if (BIG.matches) fit(); });
+BIG.addEventListener('change', start);
+start();
 </script>
 </body>
 </html>
