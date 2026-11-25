@@ -845,4 +845,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - Both subway toggles, delay and skipped-stop pills, and subway maps with "Getting to the skipped stops" and entrances.
   - "Other options", the airport helper, nearby buses and elevators.
   - Penn unchanged: its PATH panel, maps and airport options.
-- **Late-night subway banners** come from subway-data.json `switches`/`nightGaps`/`night` by station. The build adds Grand Central's stations (631, 723) to `night` (the late-night pills); `switches`/`nightGaps` are computed for Penn's lines (`NIGHT_GAP_LINES`), so extend those there for Grand Central's lines if wanted.
+- **Late-night subway banners** come from subway-data.json `switches`/`nightGaps`/`night` by station, which now cover Grand Central too. `build-subway-data.py` knows its local-only next stops (630, 632), so the 4 switches from express to local late nights. The 5 is in `NIGHT_GAP_LINES` (no Manhattan service late nights: "No 5 trains until…, use the 4"). Penn's entries are unchanged.

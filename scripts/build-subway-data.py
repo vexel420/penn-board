@@ -36,9 +36,9 @@ PENN = {'128', 'A28'}
 # Grand Central-42 St's three stations (owner, Nov 25): their timetables too,
 # so the Grand Central board can tell on-time trains from late ones.
 GCT = {'631', '723', '901'}
-LOCAL_NEXT = {'129', '126', 'A30', 'A25'}
+LOCAL_NEXT = {'129', '126', 'A30', 'A25', '630', '632'}  # Grand Central (Lexington Av): 51 St uptown, 33 St downtown
 # Lines checked for a break in service from Penn late at night.
-NIGHT_GAP_LINES = {'C', '3'}
+NIGHT_GAP_LINES = {'C', '3', '5'}  # the 5 doesn't run in Manhattan late at night (Grand Central)
 NIGHT_GAP_MIN = 90  # a longer break than this in a line's trains is its night off
 # Extra last stops that share the line's main row (owner's choice, Nov 2026):
 # the weekday rush-hour A to Rockaway Park. (Euclid Av A trips stay separate.)
