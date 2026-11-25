@@ -712,7 +712,7 @@ body.hub-gct {
 }
 .hub-gct .mast { background: radial-gradient(90% 180% at 25% 0%, #2f7f86 0%, #1d5c66 45%, #123f48 100%); border-bottom-color: var(--gold); overflow: hidden; }
 .hub-gct .mast::after { background: linear-gradient(var(--gold) 0 2px, transparent 2px 5px, var(--gold) 5px 6px, transparent 6px); }
-.hub-gct .mast h1 { font-family: "Cinzel", Georgia, serif; font-weight: 700; color: #f3d88f; letter-spacing: .02em; cursor: default; font-size: clamp(1.6rem, 6.2vw, 4rem); }
+.hub-gct .mast h1 { font-family: "Cinzel", Georgia, serif; font-weight: 700; color: #f3d88f; letter-spacing: .02em; cursor: pointer; font-size: clamp(1.6rem, 6.2vw, 4rem); -webkit-tap-highlight-color: transparent; }
 .hub-gct .mast-kicker { font-size: max(.42em, .78rem); }
 .hub-gct .mast-kicker { font-family: "Archivo", sans-serif; font-weight: 700; }
 .mast-stars { position: absolute; inset: 0; width: 100%; height: 100%; color: #f3d88f; opacity: .55; pointer-events: none; }

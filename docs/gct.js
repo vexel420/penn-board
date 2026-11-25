@@ -357,6 +357,14 @@ function setLine(v) {
 }
 document.querySelectorAll('.chips [data-line]').forEach((b) => b.addEventListener('click', () => setLine(b.dataset.line)));
 setLine(line);
+// Tapping "Grand Central" reloads the page (fresh data and the newest version),
+// as tapping "Penn Station" does on the Penn board. The pill switches boards instead.
+const mastTitle = document.querySelector('.mast h1');
+mastTitle.setAttribute('role', 'button');
+mastTitle.tabIndex = 0;
+mastTitle.title = 'Reload the board';
+mastTitle.addEventListener('click', (e) => { if (!e.target.closest('.hub-pill')) location.reload(); });
+mastTitle.addEventListener('keydown', (e) => { if (e.target.closest('.hub-pill')) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.reload(); } });
 // Inside the side-by-side view, the page knows it's framed (the split button hides).
 if (window.self !== window.top) document.body.classList.add('in-split');
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadRail(); loadSubway(); } });
