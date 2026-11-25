@@ -6,6 +6,11 @@
   else root.PennFeeds = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
 
+// The hub this board is for (docs/hub.js); Penn Station when none is set.
+const HUBX = (typeof window !== 'undefined' && window.HUB) || { id: 'nyp', stations: [{ id: '128', lines: ['1', '2', '3'] }, { id: 'A28', lines: ['A', 'C', 'E'] }],
+  subwayFeeds: ['gtfs', 'gtfs-ace', 'gtfs-bdfm'], subwayAlerts: 'subway', rails: ['lirr', 'njt', 'amtrak'], lirrCode: 'NYK' };
+const IS_PENN = HUBX.id === 'nyp';
+
 async function get(url, opts = {}) {
   const res = await fetch(url, { ...opts, signal: AbortSignal.timeout(15000) });
   if (!res.ok) throw new Error(`${new URL(url).host} answered ${res.status}`);
@@ -101,20 +106,26 @@ function parseTripUpdates(buf) {
 
 // The B/D/F/M feed is read too: those lines are the ones usually sent along
 // the 8 Av line through Penn when there's a service change.
-const SUBWAY_FEEDS = [
-  'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs',
-  'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-ace',
-  'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs-bdfm',
-];
-const PENN_STOPS = new Set(['128', 'A28']); // 34 St-Penn Station: 7 Av line and 8 Av line
+const SUBWAY_FEEDS = HUBX.subwayFeeds.map((f) => `https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F${f}`);
+// The hub's subway stations (Penn: 34 St-Penn Station, 7 Av line and 8 Av line).
+const PENN_STOPS = new Set(HUBX.stations.map((x) => x.id));
 
 // Express or local from Penn, by the stops the train actually makes next:
 // a local calls at 28 St or 50 St (7 Av line) or 23 St or 50 St (8 Av line),
 // an express runs past them. Works for night service (the 2 and 3 go local)
 // and for rerouted trains. Too few stops to tell: the line's usual service.
-const LOCAL_NEXT = new Set(['129', '126', 'A30', 'A25']);
-const USUALLY_EXPRESS = new Set(['2', '3', 'A']);
+// Grand Central (Lexington Av): only locals call at 51 St (630) uptown and 33 St (632) downtown.
+const LOCAL_NEXT = new Set(['129', '126', 'A30', 'A25', '630', '632']);
+const USUALLY_EXPRESS = new Set(['2', '3', 'A', '4', '5']);
+// The diamond 6 and 7 run express only in the Bronx and Queens: express if
+// the stops ahead skip every local-only station there (owner, Nov 25: the
+// MTA's feed was labeling local 7s as "7X").
+const DIAMOND_LOCAL_ONLY = { 7: ['716', '715', '714', '713', '711', '709', '708', '706', '705'], 6: ['618', '617', '616', '615', '614', '612', '611', '610', '609'] };
+const DIAMOND_END = { 7: '702', 6: '608' };
+const diamondExpress = (route, stops) => !!DIAMOND_LOCAL_ONLY[route] && stops.includes(DIAMOND_END[route]) && !stops.some((id) => DIAMOND_LOCAL_ONLY[route].includes(id));
 function serviceFromPenn(route, stops) {
+  if (route === '6' || route === '7') return diamondExpress(route, stops) ? 'express' : 'local';
+  if (route === 'GS') return 'local';
   const next = stops.slice(1, 4);
   if (next.some((s) => LOCAL_NEXT.has(s))) return 'local';
   if (next.length >= 2) return 'express';
@@ -124,6 +135,7 @@ function serviceFromPenn(route, stops) {
 // Each train keeps the stations it will call at from Penn onwards (station
 // ids). The page names them, colours each line and spots reroutes using
 // docs/subway-data.json.
+const route0 = (r) => String(r || '').replace(/X$/, '');
 const subway = source('subway', 20, async () => {
   const feeds = await Promise.all(SUBWAY_FEEDS.map(async (u) =>
     parseTripUpdates(new Uint8Array(await (await get(u)).arrayBuffer()))));
@@ -136,7 +148,7 @@ const subway = source('subway', 20, async () => {
     if (at < 0 || at === trip.stops.length - 1) continue;
     const stop = trip.stops[at];
     if (!stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
-    const dir = stop.id.slice(-1); // N = uptown, S = downtown
+    const dir = route0(trip.route) === 'GS' ? 'S' : stop.id.slice(-1); // N = uptown, S = downtown (the shuttle: one way, to Times Sq)
     const route = trip.route.replace(/X$/, '');
     const stops = trip.stops.slice(at).map((s) => s.id.slice(0, -1));
     const svc = serviceFromPenn(route, stops);
@@ -205,52 +217,85 @@ const LIRR_BRANCHES = {
 };
 const stationName = (c) => LIRR_STATIONS[c] || c;
 
-const lirr = source('lirr', 20, async () => {
-  const res = await get('https://backend-unified.mylirr.org/arrivals/NYK', { headers: { 'accept-version': '3.0' } });
-  const { arrivals = [] } = await res.json();
-  const rows = { departures: [], arrivals: [] };
+// TrainTime's departures and arrivals at one station, for the LIRR (Penn:
+// NYK; Grand Central Madison: GCT) and Metro-North (Grand Central: 0NY).
+// Metro-North's station names come from docs/mnr-stations.json (MTA timetable).
+const MNR_LINES = { HU: ['Hudson', 'hu'], HA: ['Harlem', 'ha'], NH: ['New Haven', 'nh'], NC: ['New Canaan', 'nh'], DN: ['Danbury', 'nh'], WB: ['Waterbury', 'nh'] };
+const MNR_GROUP = { NC: 'NH', DN: 'NH', WB: 'NH' };
+let mnrNames = null;
+const loadMnrNames = () => (mnrNames ? Promise.resolve() : get('mnr-stations.json').then((r) => r.json()).then((d) => { mnrNames = d; }).catch(() => { mnrNames = {}; }));
+// At Grand Central tracks are posted well before boarding: "Boarding" only
+// once a train with a track leaves within this many seconds (Penn: any posted track).
+const BOARD_AHEAD = IS_PENN ? Infinity : 15 * 60;
+function trainTimeRows(json, railroad, here) {
+  const { arrivals = [] } = json;
+  const rows = { departures: [], arrivals: [], alerts: [] };
+  const mnr = railroad === 'mnr';
+  const name = (c) => (mnr ? (mnrNames && mnrNames[c]) || c : stationName(c));
   for (const a of arrivals) {
     const leaving = a.direction === 'E';
-    const stops = (a.stops || []).filter((c) => c !== 'NYK');
-    const delaySec = a.status && a.status.otp < 0 ? -a.status.otp : 0;
+    // Metro-North lists points that aren't passenger stops (0HB): left out once the names are in.
+    const stops = (a.stops || []).filter((c) => c !== here && (!mnr || !mnrNames || !Object.keys(mnrNames).length || c in mnrNames));
+    // otp: seconds, negative = late. A Metro-North arrival can also run early.
+    const otp = a.status && typeof a.status.otp === 'number' ? a.status.otp : 0;
+    const delaySec = otp < 0 ? -otp : 0;
     const lateMin = Math.round(delaySec / 60);
+    const expected = leaving ? a.time + delaySec : a.time - otp;
     let status = 'On time', tone = 'ok';
     const departed = a.stop_status === 'DEPARTED';
     if (a.status && a.status.canceled) { status = 'Cancelled'; tone = 'stop'; }
     else if (leaving && departed) { status = 'Departed'; tone = 'quiet'; }
     else if (a.status && a.status.held) { status = 'Held'; tone = 'late'; }
-    else if (leaving && a.track) { status = 'Boarding'; tone = 'go'; } // even if late
+    else if (leaving && a.track && expected - now() <= BOARD_AHEAD) { status = 'Boarding'; tone = 'go'; } // even if late
     else if (lateMin >= 2) { status = `${lateMin} min late`; tone = 'late'; }
     else if (a.stop_status === 'DEPARTED') { status = 'Departed'; tone = 'quiet'; }
     else if (a.stop_status === 'ARRIVED') { status = 'Arrived'; tone = 'go'; }
+    else if (!leaving && mnr && otp >= 120) { status = `${Math.round(otp / 60)} min early`; tone = 'ok'; }
+    const mline = mnr ? MNR_LINES[a.branch] || ['Metro-North', 'mnr'] : null;
     rows[leaving ? 'departures' : 'arrivals'].push({
       id: a.train_id,
-      carrier: 'lirr',
-      // LIRR lists the scheduled time and reports the delay separately (otp,
+      carrier: railroad,
+      // TrainTime lists the scheduled time and reports the delay separately (otp,
       // seconds, negative = late): show and sort by the real expected time.
-      time: a.time + delaySec,
+      time: expected,
       sched: a.time,
       lateMin,
-      fare: a.peak_code === 'P' ? 'peak' : a.peak_code === 'O' ? 'offpeak' : '', // LIRR peak or off-peak fare
-      place: stationName(leaving ? stops[stops.length - 1] : stops[0]),
-      line: a.branch ? `${LIRR_BRANCHES[a.branch] || a.branch} Branch` : 'LIRR', // (LIRR sometimes sends no branch)
+      fare: mnr ? '' : a.peak_code === 'P' ? 'peak' : a.peak_code === 'O' ? 'offpeak' : '', // LIRR peak or off-peak fare
+      place: name(leaving ? stops[stops.length - 1] : stops[0]),
+      line: mnr ? `${mline[0]} Line` : a.branch ? `${LIRR_BRANCHES[a.branch] || a.branch} Branch` : 'LIRR', // (LIRR sometimes sends no branch)
+      // Metro-North's plate is its line, in the line's color; the chips filter by line (New Haven with its branches).
+      plate: mnr ? mline[0] : undefined, plateClass: mnr ? mline[1] : undefined, group: mnr ? MNR_GROUP[a.branch] || a.branch : railroad,
+      where: !IS_PENN && railroad === 'lirr' ? 'Grand Central Madison' : '',
       train: a.train_num,
       track: a.track || '',
-      trackLikely: a.track ? '' : (a.sched_track || ''),
+      trackLikely: a.track ? '' : (railroad === 'lirr' && IS_PENN ? a.sched_track || '' : ''),
       status, tone,
-      // Departures: LIRR says when a train has left; `leaves` is the clock
+      // Departures: TrainTime says when a train has left; `leaves` is the clock
       // fallback (its listed time may not include a delay, so add it).
       departed: leaving && departed,
-      leaves: a.time + delaySec,
-      // (LIRR's feed drops a train from Penn's list about half a minute after
+      leaves: expected,
+      // (The feed drops a train from the list about half a minute after
       // it really leaves; it never says "departed" here. The page shows the
       // drop as Departed: see noteVanished in app.js.)
-      via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(stationName),
+      via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(name),
       viaCodes: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined), // to match LIRR's per-train progress
     });
   }
+  // TrainTime's own notices for this station (special schedules and the like).
+  const plain = (h) => String(h || '').replace(/<\/?(p|br|div|li|ul)\b[^>]*>/gi, ' ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
+  for (const x of json.alerts || []) {
+    const text = plain(x.header);
+    if (text) rows.alerts.push({ id: `tt-${railroad}-${text.slice(0, 60)}`, carrier: x.railroad === 'LIRR' ? 'lirr' : 'mnr', type: x.status || 'Service notice', text, more: plain(x.text), urgent: URGENT.test(text), lines: [] });
+  }
   return rows;
-});
+}
+const trainTime = (code, railroad) => async () => {
+  if (railroad === 'mnr' && typeof window !== 'undefined') await loadMnrNames();
+  const res = await get(`https://backend-unified.mylirr.org/arrivals/${code}`, { headers: { 'accept-version': '3.0' } });
+  return trainTimeRows(await res.json(), railroad, code);
+};
+const lirr = source('lirr', 20, trainTime(HUBX.lirrCode || 'NYK', 'lirr'));
+const mnr = source('mnr', 20, trainTime(HUBX.mnrCode || '0NY', 'mnr'));
 
 // ---------- Amtrak (via the community Amtraker feed; Amtrak has no public API) ----------
 
@@ -337,8 +382,11 @@ const amtrak = source('amtrak', 60, async () => {
 const ALERT_FEEDS = {
   subway: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json',
   lirr: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Flirr-alerts.json',
+  mnr: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fmnr-alerts.json',
 };
-const PENN_LINES = new Set(['1', '2', '3', 'A', 'C', 'E']);
+// The hub's subway lines (Penn: 1 2 3 A C E), with express-run ids (6X, 7X) and the shuttle (GS/S).
+const PENN_LINES = new Set(HUBX.stations.flatMap((x) => x.lines).flatMap((l) => [l, `${l}X`, ...(l === 'GS' ? ['S'] : [])]));
+const HUB_STOP = new RegExp(`^(${HUBX.stations.map((x) => x.id).join('|')})[NS]?$`);
 // Notices people need before they travel: shown first, and the strip opens.
 const URGENT = /delay|suspend|no service|cancel|severe|weather|reduced service|shuttle bus|substitute bus/i;
 
@@ -427,10 +475,10 @@ function reachableFromPenn(n, groups) {
 const IN_BROWSER = typeof window !== 'undefined';
 const relayBase = () => (IN_BROWSER && window.PENN_RELAY ? window.PENN_RELAY.replace(/\/$/, '') : '');
 const FAST_ALERTS = !IN_BROWSER || !!relayBase();
-const alertUrl = (feed) => (relayBase() ? `${relayBase()}/alerts/${feed}` : ALERT_FEEDS[feed]);
+const alertUrl = (feed) => (relayBase() ? `${relayBase()}/alerts/${feed}` : ALERT_FEEDS[feed === 'subway-gct' ? 'subway' : feed]);
 const subwayAlerts = source('subway-alerts', FAST_ALERTS ? 20 : 180, async () =>
-  parseAlerts(await (await get(alertUrl('subway'))).json(), (lines, stops, text, type) => {
-    if (stops.some((s) => /^(128|A28)[NS]?$/.test(s))) return true; // about Penn itself
+  parseAlerts(await (await get(alertUrl(HUBX.subwayAlerts || 'subway'))).json(), (lines, stops, text, type) => {
+    if (stops.some((s) => HUB_STOP.test(s))) return true; // about the hub's own stations
     if (!lines.some((l) => PENN_LINES.has(l))) return false;
     // Station notices only matter at those stations; suspensions, reroutes,
     // delays and the like change the trip itself. (Skipped stops are checked
@@ -441,8 +489,12 @@ const subwayAlerts = source('subway-alerts', FAST_ALERTS ? 20 : 180, async () =>
 // leave out ones about Grand Central only, which LIRR trains from Penn
 // don't reach.
 const aboutGrandCentralOnly = (text) => /grand central/i.test(text) && !/penn/i.test(text);
+const aboutPennOnly = (text) => /penn/i.test(text) && !/grand central/i.test(text);
 const lirrAlerts = source('lirr-alerts', FAST_ALERTS ? 20 : 120, async () =>
-  parseAlerts(await (await get(alertUrl('lirr'))).json(), (lines, stops, text) => !aboutGrandCentralOnly(text)));
+  parseAlerts(await (await get(alertUrl('lirr'))).json(), (lines, stops, text) => (IS_PENN ? !aboutGrandCentralOnly(text) : !aboutPennOnly(text))));
+// Metro-North's notices (the Grand Central board).
+const mnrAlerts = source('mnr-alerts', FAST_ALERTS ? 20 : 120, async () =>
+  parseAlerts(await (await get(alertUrl('mnr'))).json(), () => true));
 
 // Amtrak publishes notices per train; list each train's once.
 function amtrakNotices(rows) {
@@ -580,7 +632,37 @@ const relayNjt = source('relay-njt', 20, async () => {
 
 // Combine the sources into the document the page renders. `njt` and `path`
 // are optional { data, error } results that only the server can supply.
+// A hub without NJ Transit, Amtrak or PATH (Grand Central): Metro-North and the LIRR.
+async function hubBoard(force) {
+  const fastAlerts = force && FAST_ALERTS;
+  const [l, m, s, sa, la, ma] = await Promise.all([lirr(force), mnr(force), subway(force), subwayAlerts(fastAlerts), lirrAlerts(fastAlerts), mnrAlerts(fastAlerts)]);
+  const t = now();
+  const live = (r) => r.time > t - 20 * 60;
+  const byTime = (x, y) => (x.leaves ?? x.time) - (y.leaves ?? y.time);
+  const pick = (k) => [...(m.data ? m.data[k] : []), ...(l.data ? l.data[k] : [])];
+  // TrainTime's own notices, then the MTA's, without repeats.
+  const seen = new Set();
+  const rail = [...pick('alerts'), ...(ma.data || []).map((x) => ({ ...x, carrier: 'mnr' })), ...(la.data || []).map((x) => ({ ...x, carrier: 'lirr' }))]
+    .filter((n) => { const k = n.text.toLowerCase().slice(0, 80); if (seen.has(k)) return false; seen.add(k); return true; });
+  const off = { ok: true, error: null, hidden: true };
+  return {
+    at: t,
+    departures: pick('departures').filter(live).sort(byTime),
+    arrivals: pick('arrivals').filter(live).sort(byTime),
+    subway: s.data || [],
+    path: [],
+    notices: { rail, subway: (sa.data || []).filter((x) => reachableFromPenn(x, s.data)).map((x) => ({ ...x, carrier: 'subway' })), path: [] },
+    sources: {
+      lirr: { ok: !!l.data && !l.error, error: l.error },
+      mnr: { ok: !!m.data && !m.error, error: m.error },
+      subway: { ok: !!s.data && !s.error, error: s.error },
+      njt: off, amtrak: off, path: off,
+    },
+  };
+}
+
 async function board(extra = {}) {
+  if (!IS_PENN) return hubBoard(!!extra.force);
   const force = !!extra.force;
   const fastAlerts = force && FAST_ALERTS;
   const [l, a, s, sa, la] = await Promise.all([lirr(force), amtrak(force), subway(force), subwayAlerts(fastAlerts), lirrAlerts(fastAlerts)]);

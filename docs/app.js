@@ -1,5 +1,7 @@
 const REFRESH_MS = 20000;
-const CARRIERS = { lirr: 'LIRR', njt: 'NJ Transit', amtrak: 'Amtrak', path: 'PATH' };
+const CARRIERS = { lirr: 'LIRR', njt: 'NJ Transit', amtrak: 'Amtrak', path: 'PATH', mnr: 'Metro-North' };
+// This board's hub (docs/hub.js): Penn Station unless the page set another.
+const IS_PENN = HUB.id === 'nyp';
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -28,14 +30,14 @@ function countdown(epoch) {
 
 // (The flip board engine is in flip.js, shared with the Grand Central board.)
 // Masthead and clock. The pill switches to the Grand Central board (owner, Nov 25).
-const HUB_PILL = '<a class="hub-pill" href="gct.html" title="Switch to Grand Central">⇄ Grand Central</a>';
+const HUB_PILL = `<a class="hub-pill" href="${HUB.pill.href}" title="Switch to ${HUB.pill.label}">⇄ ${HUB.pill.label}</a>`;
 function renderMastFlip() {
   const h = document.querySelector('.mast h1');
   if (flipMode) {
-    h.innerHTML = `<span class="mast-kicker">New York ${HUB_PILL}</span><span class="mast-flip">${flipText('mast', 'Penn Station')}</span><span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">${HUB.kicker} ${HUB_PILL}</span><span class="mast-flip">${flipText('mast', HUB.name)}</span><span class="h1-sub" id="h1-sub"></span>`;
     runFlips(h);
   } else {
-    h.innerHTML = `<span class="mast-kicker">New York ${HUB_PILL}</span>Penn Station<span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">${HUB.kicker} ${HUB_PILL}</span>${HUB.name}<span class="h1-sub" id="h1-sub"></span>`;
     flipShown.delete('mast');
   }
   setHeading();
@@ -233,7 +235,7 @@ function isLastTrain(r) {
   const mine = lirrTripsNear().find((t) => String(t.train) === String(r.train));
   let last = false;
   if (mine) {
-    last = !lirrTripsNear().some((t) => t.route === mine.route && t !== mine && t.calls.some(([sid, at]) => sid === lirrTT.penn && at > leave + 60 && at < leave + 90 * 60) && t.calls[t.calls.length - 1][0] !== lirrTT.penn);
+    last = !lirrTripsNear().some((t) => t.route === mine.route && t !== mine && t.calls.some(([sid, at]) => sid === ttFrom(lirrTT) && at > leave + 60 && at < leave + 90 * 60) && t.calls[t.calls.length - 1][0] !== lirrTT.penn);
   }
   lastLirrCache.set(r.id, last);
   return last;
@@ -346,7 +348,7 @@ function viaHtml(r) {
     last = r.continuesTo || 'Penn Station';
     if (r.continuesTo) tail = ', Penn Station';
   }
-  return `<details class="via" data-id="${esc(r.id)}"${open ? ' open' : ''}><summary>${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stop${r.via.length === 1 ? '' : 's'}</u>${where}${fareTag(r)}</summary><p>${names}${tail}</p><p class="last-stop">Last stop: <b>${esc(last)}</b></p>${checking}</details>`;
+  return `<details class="via" data-id="${esc(r.id)}"${open ? ' open' : ''}><summary>${r.where ? `${esc(r.where)}, ` : ''}${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stop${r.via.length === 1 ? '' : 's'}</u>${where}${fareTag(r)}</summary><p>${names}${tail}</p><p class="last-stop">Last stop: <b>${esc(last)}</b></p>${checking}</details>`;
 }
 
 function rowHtml(r) {
@@ -363,13 +365,13 @@ function rowHtml(r) {
   // Under the status: how late (when the status itself doesn't say) and the
   // scheduled time, so a delayed train that is boarding still reads as delayed.
   const notes = [];
-  if (heldBy) notes.push('service suspended at Penn');
+  if (heldBy) notes.push(`service suspended at ${HUB.short}`);
   if (r.changeStatus && r.changeStatus !== r.status) notes.push(esc(r.changeStatus));
   if (isDelayed(r) && !/late/i.test(r.status) && !gone && !heldBy) notes.push(`${r.lateMin} min late`);
   if (r.sched && Math.abs(r.sched - r.time) >= 120) notes.push(`scheduled ${clock(r.sched).hm}`);
   if (view === 'arrivals' && r.continuesTo) notes.push(`continues to ${esc(r.continuesTo)}, leaves ${clock(r.departsAt).hm}`);
   const sched = notes.length ? `<small>${notes.join(', ')}</small>` : '';
-  const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
+  const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${r.where ? `${esc(r.where)}, ` : ''}${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
   // Departures never fade by the clock: only a train its railroad reports
   // gone ("Departed") is dimmed. (Arrivals past their time still fade.)
   // A cancelled train keeps full colour until its last 30 s on the board.
@@ -378,7 +380,7 @@ function rowHtml(r) {
     : view === 'arrivals' && left === 'gone' && !gone && !due && !heldBy;
   return `<li class="row ${r.tone}${fading ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
-    <div class="carrier"><span class="plate ${r.carrier}">${CARRIERS[r.carrier]}</span></div>
+    <div class="carrier"><span class="plate ${r.plateClass || r.carrier}">${esc(r.plate || CARRIERS[r.carrier])}</span></div>
     <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${rowAlertHtml(r)}</div>
     <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${sched}</div>
     ${trackCell(r, r.tone === 'final' ? ' ring' : '')}
@@ -437,7 +439,8 @@ function scheduleFinalCall(rows) {
 }
 function renderRail() {
   if (!board || view === 'subway' || view === 'alerts' || view === 'buses') return;
-  const rows = visibleRows(board[view], view).filter((r) => carrier === 'all' || r.carrier === carrier);
+  // The chips filter by railroad, or (Grand Central) by Metro-North line.
+  const rows = visibleRows(board[view], view).filter((r) => carrier === 'all' || r.carrier === carrier || r.group === carrier);
   scheduleFinalCall(rows);
   $('col-place').textContent = view === 'arrivals' ? 'From' : 'To';
   if (flipMode && rows.length) patchRows(rows);
@@ -481,6 +484,11 @@ function unusualStops(route, train) {
 }
 // A line named in a sentence ("Use the 2."): its badge, at text size.
 const lineName = (route) => bulletHtml(route, 'inl');
+// Express runs of the 6 and the 7 (Grand Central) get the MTA's diamond; the
+// feed decides express by the stops a train makes (feeds.js serviceFromPenn).
+const DIAMOND_NOTE = { 6: 'express in the Bronx', 7: 'express in Queens' };
+const rowBullet = (g) => bulletHtml(g.route, g.svc === 'express' && DIAMOND_NOTE[g.route] ? 'diamond' : '');
+const diamondNote = (g, dir) => (g.svc === 'express' && DIAMOND_NOTE[g.route] && dir === 'N' ? `<small class="dnote">${DIAMOND_NOTE[g.route]}</small>` : '');
 function bulletHtml(route, extraClass = '') {
   const l = lineInfo(route);
   return `<span class="bullet ${extraClass}${l.label.length > 2 ? ' wide' : ''}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
@@ -1257,7 +1265,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const before = bShown.get(key);
   bShown.set(key, html);
   const body = `<span class="b-wrap">${html}</span>`;
-  return `<div class="sline optb">${bulletHtml(g.route)}${body}</div>`;
+  return `<div class="sline optb">${rowBullet(g)}${body}</div>`;
 }
 $('sub-toggles').addEventListener('click', (e) => {
   const lp = e.target.closest('[data-latepills]');
@@ -1279,7 +1287,7 @@ const subwayStyleHtml = () => `<div class="sub-style"><span>Rows with more than 
   <button type="button" data-latepills="advisory" aria-pressed="${!allLatePills}">With advisories</button><button type="button" data-latepills="all" aria-pressed="${allLatePills}">All late trains</button></div></div>`;
 
 let subwayShown = [];      // the groups drawn, so a tap can find its train
-const DIRS = { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } };
+const DIRS = HUB.dirs; // each hub's stations and how their directions are named (docs/hub.js)
 // The panel is redrawn often (new data, the 10 s tick, each turn). Redrawing
 // while a destination is sliding would cut the slide short and make it jump,
 // so a redraw that comes mid-slide waits until the slide has finished.
@@ -1308,7 +1316,7 @@ function renderSubway() {
   // Two separate stations: the 7 Av line (1 2 3) and the 8 Av line (A C E).
   // A train belongs to the station it calls at, so a rerouted train lands
   // in the right box.
-  const STATIONS = [{ id: '128', lines: ['1', '2', '3'] }, { id: 'A28', lines: ['A', 'C', 'E'] }];
+  const STATIONS = HUB.stations;
   const states = [];
   $('subway').innerHTML = STATIONS.map((stn) => {
   const here = mergeScheduled(board.subway.filter((g) => (g.trains[0] && g.trains[0].stops ? g.trains[0].stops[0] : '') === stn.id));
@@ -1441,11 +1449,11 @@ function renderSubway() {
       // other options are in the service notices).
       const linePills = subwayPills(g.route, dir, svc, stn.id, trains[0]);
       if (!rerouted || changeFor(g.route)) {
-        return `<div class="sline">${bulletHtml(g.route)}<span class="sdest">${destHtml}${pills(pill, linePills, rerouted ? reroutePill(stn.id, g.route, dir) : '')}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
+        return `<div class="sline">${rowBullet(g)}<span class="sdest">${destHtml}${diamondNote(g, dir)}${pills(pill, linePills, rerouted ? reroutePill(stn.id, g.route, dir) : '')}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
       }
       // Rerouted with no notice behind it: the row itself opens the map.
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${bulletHtml(g.route)}<span class="sdest">${destHtml}${staticPills(pills(pill && LATE_PILL, linePills))}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${rowBullet(g)}<span class="sdest">${destHtml}${staticPills(pills(pill && LATE_PILL, linePills))}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
@@ -1511,7 +1519,7 @@ async function openReroute({ route, svc, train }) {
       ? `running via the ${lineInfo(via.r).label} line at ${stationName(odd[0])}`
       : `running via the ${lineInfo(via.r).label} line from ${stationName(odd[0])} to ${stationName(odd[odd.length - 1])}`)
     : 'running on a different route from normal';
-  $('reroute-note').textContent = `This ${l.label} train is ${viaText}, ${svc === 'express' ? 'express' : 'local'} from 34 St-Penn Station. ` +
+  $('reroute-note').textContent = `This ${l.label} train is ${viaText}, ${svc === 'express' ? 'express' : 'local'} from ${stationName(stops[0])}. ` +
     `${unusual.size === 1 ? 'The station in gold is one' : `The ${unusual.size} stations in gold are ones`} the ${l.label} doesn’t usually stop at.`;
   $('reroute-stops').innerHTML = stops.map((id) => unusual.has(id)
     ? `<li class="unusual">${esc(stationName(id))} <small>not usual for the ${esc(l.label)}</small></li>`
@@ -1571,11 +1579,8 @@ $('reroute').addEventListener('click', (e) => { if (e.target === e.currentTarget
 // names, the alternatives from its text. What the board can't read from a
 // notice simply isn't drawn; the MTA's text is always shown.
 const CHANGE_TYPES = /suspend|reroute/i;
-const PENN_LL = [40.7506, -73.9935];
-const LIVE_DIRECTIONS = {
-  google: 'https://www.google.com/maps/dir/?api=1&origin=34+St-Penn+Station,+New+York,+NY&travelmode=transit',
-  apple: 'https://maps.apple.com/?saddr=Penn+Station,+New+York,+NY&dirflg=r',
-};
+const PENN_LL = HUB.ll; // the hub (Penn Station on the Penn board)
+const LIVE_DIRECTIONS = HUB.directions;
 const directionsTo = ([lat, lon], name) => ({
   // No starting point: the maps app starts from where the person is.
   google: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}&travelmode=transit`,
@@ -1863,7 +1868,7 @@ async function openChange(id, view = 1) {
     box.hidden = true; // the text still helps
   }
 }
-const liveDirectionsHtml = () => `<p class="cm-live">Live directions from Penn: <a href="${LIVE_DIRECTIONS.google}" target="_blank" rel="noopener">Google Maps</a> · <a href="${LIVE_DIRECTIONS.apple}" target="_blank" rel="noopener">Apple Maps</a></p>`;
+const liveDirectionsHtml = () => `<p class="cm-live">Live directions from ${HUB.short}: <a href="${LIVE_DIRECTIONS.google}" target="_blank" rel="noopener">Google Maps</a> · <a href="${LIVE_DIRECTIONS.apple}" target="_blank" rel="noopener">Apple Maps</a></p>`;
 // The MTA's text, line by line, with its symbols drawn; "Transfer stations:"
 // and the like become small headings.
 // The MTA numbers its sections ("1. Between Inwood-207 St and Canal St"),
@@ -1923,7 +1928,7 @@ function drawChange(map, model, view) {
   if (view === 2) {
     const pts = [...closed, ...alt.transfers.flatMap((t) => t.ids), ...alt.buses.flatMap((b) => b.ids), ...(model.via || []).flatMap((v) => [v.from, v.to])].map(LL);
     area = L.latLngBounds(pts).pad(0.25);
-    if (subwayData.routes[route].normal.some((id) => id === '128' || id === 'A28') && area.pad(0.4).contains(PENN_LL)) area.extend(PENN_LL);
+    if (subwayData.routes[route].normal.some((id) => HUB.stations.some((x) => x.id === id)) && area.pad(0.4).contains(PENN_LL)) area.extend(PENN_LL);
     // The suggested lines, only within that area, thinner and lighter.
     for (const l of alt.detours) {
       for (const path of subwayShapes[l] || []) {
@@ -2042,8 +2047,9 @@ function drawChange(map, model, view) {
   // Labels for the overall picture.
   const labels = [];
   const name = (id) => stationName(id).replace(/-/g, '–');
-  if (lineIds.includes('128') || lineIds.includes('A28')) {
-    const id = lineIds.includes('A28') ? 'A28' : '128';
+  const hereIds = HUB.stations.map((x) => x.id).filter((id) => lineIds.includes(id));
+  if (hereIds.length) {
+    const id = hereIds[hereIds.length - 1];
     labels.push({ at: LL(id), must: true, cls: 'here', html: `★ ${esc(name(id))}<small>You are here</small>`, w: textWidth(name(id)) + 10, h: 36 });
   }
   const closedList = [...closed].filter((id) => subwayData.stops[id]);
@@ -2075,7 +2081,7 @@ function drawChange(map, model, view) {
   const entIds = new Set([...live.lastStops,
     ...[...closed].flatMap((id) => { const i = lineIds.indexOf(id); return [lineIds[i - 1], lineIds[i + 1]]; }).filter((id) => id && openEdge(id)),
     ...(view === 2 ? alt.transfers.flatMap((t) => t.ids) : []),
-    ...['128', 'A28'].filter((id) => lineIds.includes(id))]);
+    ...HUB.stations.map((x) => x.id).filter((id) => lineIds.includes(id))]);
   const drawEntrances = () => {
     entLayer.clearLayers();
     const z = map.getZoom();
@@ -2610,6 +2616,7 @@ function lirrDisrupted() {
 // The banner carries the MTA's own advice (diversions, which subway lines
 // take LIRR fares) and its map, then the guides.
 const lirrAltHtml = () => {
+  if (!IS_PENN) return ''; // the guide is about LIRR service at Penn
   const d = lirrDisrupted();
   if (!d) return '';
   const n = lirrPennNotice(), advice = lirrAdvice(n);
@@ -2640,7 +2647,7 @@ function njtTrouble() {
   const c = rows.some((r) => r.tone === 'stop'), d = rows.some((r) => (r.lateMin || 0) >= 15);
   return c && d ? 'delayed or cancelled' : c ? 'cancelled' : 'delayed';
 }
-const njtAltHtml = () => (njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transit trains from Penn are ${njtTrouble()}.</b> Other ways to New Jersey:</p>
+const njtAltHtml = () => (IS_PENN && njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transit trains from Penn are ${njtTrouble()}.</b> Other ways to New Jersey:</p>
   <div><button type="button" data-guide="newark">To Newark Penn by PATH</button><button type="button" data-guide="hoboken">To Hoboken by PATH</button></div></div>` : '');
 
 // ---------- delays on the trains they affect, with other options ----------
@@ -2680,6 +2687,13 @@ function rowNotices(r) {
     // on trains actually running late whose status doesn't say so, like NJ Transit's.
     return id ? all.filter((n) => n.carrier === 'lirr' && isDelayNotice(n) && (n.lines || []).includes(id)
       && ((n.lines || []).length < 8 || hiddenDelayMin(r) !== null)) : [];
+  }
+  if (r.carrier === 'mnr') {
+    // Metro-North: notices naming the train's line (its route id); one about
+    // (nearly) every line only on trains actually running late.
+    const id = Object.keys(MNR_ROUTE_NAMES).find((k) => `${MNR_ROUTE_NAMES[k][0]} Line` === r.line);
+    return id ? all.filter((n) => n.carrier === 'mnr' && isDelayNotice(n) && (n.lines || []).includes(id)
+      && ((n.lines || []).length < 4 || hiddenDelayMin(r) !== null)) : [];
   }
   if (r.carrier === 'njt') {
     return all.filter((n) => {
@@ -2745,7 +2759,7 @@ async function loadNjtLast() {
     renderRail();
   } catch (e) { console.warn('NJ Transit day schedule:', e); }
 }
-loadNjtLast(); setInterval(loadNjtLast, 30 * 60 * 1000);
+if (IS_PENN) { loadNjtLast(); setInterval(loadNjtLast, 30 * 60 * 1000); }
 function njtLastHtml(r) {
   if (r.carrier !== 'njt' || view !== 'departures' || r.tone === 'departed' || r.tone === 'stop') return '';
   const x = njtLast.get(String(r.train));
@@ -2824,7 +2838,7 @@ const switchNoteHtml = (route, dir) => (subwayExpressSwitch(route, dir).length
 
 // The options sheet: other ways to where the delayed train goes.
 // Stations every train shares (Penn itself, the hubs on the way out): not a reason to switch.
-const SHARED_SKIP = /^(new york penn station|penn station|jamaica|woodside|forest hills|kew gardens|secaucus.*|newark penn station)$/i;
+const SHARED_SKIP = /^(new york penn station|penn station|jamaica|woodside|forest hills|kew gardens|secaucus.*|newark penn station|grand central|grand central madison|harlem 125 st)$/i;
 const normName2 = (s) => String(s || '').toLowerCase().replace(/-sec\b|✈|&#9992;?/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 // ---------- Railroad timetables: LIRR and NJ Transit ----------
 // For a delayed train: the quickest ways from Penn to the stations it serves,
@@ -2833,11 +2847,15 @@ const normName2 = (s) => String(s || '').toLowerCase().replace(/-sec\b|✈|&#999
 // A first train that's on the live board shows its live time and track
 // instead (matched by train number), so a card switches from "Scheduled" to
 // "Live" by itself (owner, Nov 24).
-const TT = { lirr: { file: 'lirr-timetable.json', change: 180 }, njt: { file: 'njt-timetable.json', change: 240 } };
-let lirrTT, njtTT;        // undefined: not loaded; null: couldn't load
+// Metro-North (Grand Central): docs/mnr-timetable.json, the same format, from Grand Central.
+const TT = { lirr: { file: 'lirr-timetable.json', change: 180 }, njt: { file: 'njt-timetable.json', change: 240 }, mnr: { file: 'mnr-timetable.json', change: 180 } };
+let lirrTT, njtTT, mnrTT;  // undefined: not loaded; null: couldn't load
 const ttLoading = {};
-const ttOf = (c) => (c === 'lirr' ? lirrTT : njtTT);
-const loadTT = (c) => ttLoading[c] || (ttLoading[c] = fetch(TT[c].file).then((x) => (x.ok ? x.json() : null)).catch(() => null).then((d) => { if (c === 'lirr') { lirrTT = d; lastLirrCache.clear(); } else njtTT = d; }));
+const ttOf = (c) => (c === 'lirr' ? lirrTT : c === 'mnr' ? mnrTT : njtTT);
+const loadTT = (c) => ttLoading[c] || (ttLoading[c] = fetch(TT[c].file).then((x) => (x.ok ? x.json() : null)).catch(() => null).then((d) => { if (c === 'lirr') { lirrTT = d; lastLirrCache.clear(); } else if (c === 'mnr') mnrTT = d; else njtTT = d; }));
+// Where trips start in a timetable: the hub's own station (the LIRR file's "penn" is Penn;
+// at Grand Central the LIRR leaves from Grand Central Madison, HUB.lirrStop).
+const ttFrom = (tt) => (tt && tt === lirrTT ? HUB.lirrStop || tt.penn : tt && tt.penn);
 const loadLirrTT = () => loadTT('lirr');
 setTimeout(loadLirrTT, 3000); // for last trains of the night (final call)
 const trainNo = (x) => String(x || '').replace(/^0+(?=\d)/, '');
@@ -2862,7 +2880,7 @@ const lirrTripsNear = () => ttTripsNear(lirrTT);
 // Best plan to each target station: { first, leave, change?: { at, time, second }, arrive }.
 function ttPlans(tt, changeS, targets, skipTrain, fromS) {
   const trips = ttTripsNear(tt);
-  const penn = tt.penn;
+  const penn = ttFrom(tt);
   const byStop = new Map();
   for (const t of trips) t.calls.forEach(([sid], i) => { if (!byStop.has(sid)) byStop.set(sid, []); byStop.get(sid).push([t, i]); });
   const firsts = trips.map((t) => [t, t.calls.findIndex(([sid]) => sid === penn)])
@@ -2889,9 +2907,12 @@ function ttPlans(tt, changeS, targets, skipTrain, fromS) {
   return best;
 }
 const hmap = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
-const ttStopName = (c, id) => (c === 'lirr' ? (lirrData && lirrData.stops[id] ? lirrData.stops[id][0] : id) : ((njtTT && njtTT.names[id]) || id));
+const ttStopName = (c, id) => (c === 'lirr' ? (lirrData && lirrData.stops[id] ? lirrData.stops[id][0] : id) : c === 'mnr' ? ((mnrTT && mnrTT.names[id]) || id) : ((njtTT && njtTT.names[id]) || id));
+// Metro-North's route ids in its timetable and notices: 1 Hudson, 2 Harlem, 3 New Haven, 4-6 its branches.
+const MNR_ROUTE_NAMES = { 1: ['Hudson', 'hu'], 2: ['Harlem', 'ha'], 3: ['New Haven', 'nh'], 4: ['New Canaan', 'nh'], 5: ['Danbury', 'nh'], 6: ['Waterbury', 'nh'] };
 const ttChip = (c, route) => (c === 'lirr'
   ? lirrChip((lirrData && lirrData.routes[route]) || { name: 'LIRR', color: '#555', text: '#fff' })
+  : c === 'mnr' ? `<span class="plate ${(MNR_ROUTE_NAMES[route] || ['', 'mnr'])[1]}">${esc((MNR_ROUTE_NAMES[route] || ['Metro-North'])[0])}</span>`
   : `<span class="pl p-njt">${esc((typeof NJT_LINE_NAMES !== 'undefined' && NJT_LINE_NAMES[route]) || route)}</span>`);
 // The options cards for a delayed train; null while its timetable loads.
 function ttPlansHtml(r, mineNames) {
@@ -2901,6 +2922,7 @@ function ttPlansHtml(r, mineNames) {
   if (!tt || (c === 'lirr' && !lirrData)) return '';
   const targets = c === 'njt'
     ? new Set((r.viaCodes || []).filter((x) => x !== 'SE' && x !== 'NP'))
+    : c === 'mnr' ? new Set(Object.keys(tt.names).filter((id) => mineNames.has(normName2(tt.names[id])) && !SHARED_SKIP.test(normName2(tt.names[id]))))
     : new Set(Object.keys(lirrData.stops).filter((id) => mineNames.has(normName2(lirrData.stops[id][0])) && !SHARED_SKIP.test(normName2(lirrData.stops[id][0]))));
   if (!targets.size) return '';
   const best = ttPlans(tt, TT[c].change, targets, trainNo(r.train), Date.now() / 1000 + 60);
@@ -2937,7 +2959,7 @@ function openOptions(r) {
   const byLine = new Map();
   for (const x of going) {
     const shared = [...(x.via || []), x.place].filter((s) => mine.has(normName2(s)) && !SHARED_SKIP.test(normName2(s)));
-    if (!shared.length || x.line === r.line && r.carrier === 'lirr') continue;
+    if (!shared.length || x.line === r.line && (r.carrier === 'lirr' || r.carrier === 'mnr')) continue;
     const k = x.line;
     if (!byLine.has(k)) byLine.set(k, { line: k, next: x, shared: new Set() });
     shared.forEach((s) => byLine.get(k).shared.add(s));
@@ -2956,10 +2978,10 @@ function openOptions(r) {
       <span class="cm-dir">Also stops at ${esc(s.slice(0, 6).join(', '))}${s.length > 6 ? ` and ${s.length - 6} more` : ''}</span></li>`;
   }).join('');
   const lirrDone = TT[r.carrier] && ttOf(r.carrier);
-  $('chg-below').innerHTML = `${lirrDone ? (timetable || '<p class="cm-live">No other train from Penn reaches these stations in the next few hours.</p>')
-    : `${items ? `<h3 class="cm-h">Other trains from Penn to the same stations</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other train on the board right now stops at the same stations.</p>'}${timetable}`}
+  $('chg-below').innerHTML = `${lirrDone ? (timetable || `<p class="cm-live">No other train from ${HUB.short} reaches these stations in the next few hours.</p>`)
+    : `${items ? `<h3 class="cm-h">Other trains from ${HUB.short} to the same stations</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other train on the board right now stops at the same stations.</p>'}${timetable}`}
     ${r.carrier === 'njt' ? '<h3 class="cm-h">Or by PATH</h3><p class="lchips"><button type="button" class="cm-back" data-guide="newark">To Newark Penn by PATH</button> <button type="button" class="cm-back" data-guide="hoboken">To Hoboken by PATH</button></p>' : ''}
-    <p class="cm-live">${TT[r.carrier] ? `Live: time and track from the live board. Scheduled: from the ${r.carrier === 'lirr' ? 'LIRR' : 'NJ Transit'} timetable until the train is on the board. ` : 'Times and tracks from the live board. '}Fares and tickets differ by line; check before you board.</p>`;
+    <p class="cm-live">${TT[r.carrier] ? `Live: time and track from the live board. Scheduled: from the ${CARRIERS[r.carrier]} timetable until the train is on the board. ` : 'Times and tracks from the live board. '}Fares and tickets differ by line; check before you board.</p>`;
   openSheet();
 }
 // Subway delay options: other lines at the same Penn station going the same
@@ -2974,7 +2996,8 @@ function openSubwayOptions(route, dir, stnId, mode) {
   openSheet();
 }
 // The Penn station each subway line stops at.
-const PENN_SUBWAY = { 1: '128', 2: '128', 3: '128', A: 'A28', C: 'A28', E: 'A28' };
+// The hub's station each subway line stops at (Penn: 1 2 3 at 128, A C E at A28).
+const PENN_SUBWAY = Object.fromEntries(HUB.stations.flatMap((x) => x.lines.map((l) => [l, x.id])));
 // "Other options" on a subway notice (delays, or local stops skipped).
 const noticeHasOptions = (n) => n.carrier === 'subway' && (n.lines || []).some((l) => PENN_SUBWAY[l])
   && ((/delay/i.test(n.type) && isDelayNotice(n)) || isSwitchNotice(n));
@@ -2987,7 +3010,7 @@ function openNoticeOptions(id) {
   $('chg-map').hidden = true;
   $('chg-kind').textContent = 'Other options';
   const lines = n.lines.filter((l) => PENN_SUBWAY[l] && subwayData.routes[l]);
-  $('chg-h').innerHTML = `${lines.map((l) => bulletHtml(l, 'tiny')).join('')} from 34 St-Penn Station`;
+  $('chg-h').innerHTML = `${lines.map((l) => bulletHtml(l, 'tiny')).join('')} from ${esc(stationName(PENN_SUBWAY[lines[0]] || HUB.stations[0].id))}`;
   $('chg-top').innerHTML = `<p class="cm-sum">⚠ ${noticeFull(n)}</p>`;
   const dirs = ['N', 'S'].filter((d) => dirMatch(n, d));
   $('chg-below').innerHTML = lines.flatMap((l) => dirs.map((d) => `<h3 class="cm-h">Instead of the ${dirs.length > 1 ? (d === 'N' ? 'uptown ' : 'downtown ') : ''}${lineName(l)}</h3>${subwayOptionsHtml(l, d, PENN_SUBWAY[l], mode, true)}`)).join('');
@@ -3064,7 +3087,7 @@ const changeFor = (route) => changeModels().find((m) => m.route === route && !m.
 const skipFor = (route) => changeModels().find((m) => m.route === route && m.skip && happeningNow(m.n));
 
 function renderPath() {
-  if (!board) return;
+  if (!board || !HUB.path) return; // PATH's 33 St station is Penn's neighbour
   const nowS = Date.now() / 1000;
   const byDest = new Map();
   for (const x of board.path || []) {
@@ -3188,7 +3211,7 @@ function noticeStrip(list, where) {
   let opened = false;
   try { opened = sessionStorage.getItem('opened-' + where) === sig; } catch {}
   const urgent = list.some((n) => n.urgent);
-  const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : 'Service notices for trains at Penn';
+  const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : `Service notices for trains at ${HUB.short}`;
   // Notices that close or reroute part of a line open a map.
   const mapBtn = (n) => (typeof changeModel === 'function' && (changeModel(n) || lirrModel(n) || pathModel(n)) ? ` <button type="button" class="al-map" data-change="${esc(n.id)}">See map</button>` : '');
   const items = list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}" data-nid="${esc(n.id)}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(friendlyType(n.type))}</span>${noticeFull(n)}${mapBtn(n)}${optionsBtn(n)}</p></div>`).join('');
@@ -3223,7 +3246,7 @@ function renderServiceNotices() {
 // (scripts/build-penn-elevators.py, weekly) adds the MTA's own advice for each.
 // Shown in the subway panel and on the Alerts tab.
 const ENE_FEED = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene.json';
-const ENE_STATIONS = new Set(['34 St-Penn Station']);
+const ENE_STATIONS = new Set(HUB.elevatorStations);
 let eneOut = [], eneInfo = {}, eneAt = 0;
 function loadElevators() {
   if (Date.now() - eneAt < 3 * 60000) return;
@@ -3279,7 +3302,8 @@ function loadEvents() {
   eventsAt = Date.now();
   const get = (u) => fetch(u, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
   Promise.all([get('events.json'), window.PENN_RELAY ? get(window.PENN_RELAY + '/events') : null]).then(([a, b]) => {
-    const all = [...((a && a.events) || []), ...((b && b.events) || [])];
+    // Only the venues reached from this hub (Penn: Madison Square Garden, UBS Arena).
+    const all = [...((a && a.events) || []), ...((b && b.events) || [])].filter((e) => HUB.eventVenues.test(e.venue || ''));
     const seen = new Set();
     stationEvents = all.filter((e) => {
       const k = `${e.venue}|${Math.round(Date.parse(e.start) / 600000)}`; // same venue, same start: one event
@@ -3299,6 +3323,13 @@ function eventsNow(nowS) {
 }
 function eventText(e, nowS) {
   const at = (t) => hm(t).replace(':00 ', ' ');
+  // Venues reached from another hub (Grand Central): Yankee Stadium by Metro-North, Citi Field by the 7.
+  if (!IS_PENN && !/UBS/i.test(e.venue)) {
+    const how = /Yankee/i.test(e.venue) ? 'Hudson and Harlem Line trains to Yankees-E 153 St' : 'the 7 to Mets-Willets Point';
+    if (nowS < e.startS) return `<b>${esc(e.title)}</b> at ${esc(e.venue)}, ${at(e.startS)}. Expect crowds on ${how}.`;
+    if (nowS < e.endS) return `<b>${esc(e.title)}</b> at ${esc(e.venue)} ends around ${at(e.endS)}. Expect crowded trains back after that.`;
+    return `<b>${esc(e.title)}</b> just ended at ${esc(e.venue)}. Trains back toward Manhattan will be crowded.`;
+  }
   const msg = /garden/i.test(e.venue);
   const where = msg ? 'Madison Square Garden' : e.venue;
   if (nowS < e.startS) return msg
@@ -3306,10 +3337,10 @@ function eventText(e, nowS) {
     : `<b>${esc(e.title)}</b> at ${esc(where)}, ${at(e.startS)}. LIRR trains to Elmont-UBS Arena will be crowded.`;
   if (nowS < e.endS) return msg
     ? `<b>${esc(e.title)}</b> at ${where} ends around ${at(e.endS)}. Expect crowds at Penn from then.`
-    : `<b>${esc(e.title)}</b> at ${esc(where)} ends around ${at(e.endS)}. Expect crowded LIRR trains back toward Penn after that.`;
+    : `<b>${esc(e.title)}</b> at ${esc(where)} ends around ${at(e.endS)}. Expect crowded LIRR trains back toward ${HUB.short} after that.`;
   return msg
     ? `<b>${esc(e.title)}</b> just ended at ${where}. Expect crowds at Penn for the next hour.`
-    : `<b>${esc(e.title)}</b> just ended at ${esc(where)}. LIRR trains back toward Penn will be crowded.`;
+    : `<b>${esc(e.title)}</b> just ended at ${esc(where)}. LIRR trains back toward ${HUB.short} will be crowded.`;
 }
 const EVENT_ICON = '<svg class="ic ev-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z" fill="currentColor"/></svg>';
 function eventsHtml() {
@@ -3336,10 +3367,11 @@ function renderAlertsTab() {
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
   const ev = eventsHtml();
   const lifts = elevatorsHtml();
-  $('alerts').innerHTML = (ev ? `<h2 class="al-h">Events</h2>${ev}` : '') + lirrAltHtml() + njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
-    + group('Subway', subway, 'No subway notices for the lines at Penn right now.')
-    + group('PATH', board.notices.path || [], 'No PATH alerts right now.')
-    + `<h2 class="al-h">Elevators and escalators</h2>${lifts || '<p class="al-none">All elevators and escalators in the 34 St-Penn Station subway are working, per the MTA.</p>'}`;
+  const railNames = HUB.rails.map((c) => CARRIERS[c]);
+  $('alerts').innerHTML = (ev ? `<h2 class="al-h">Events</h2>${ev}` : '') + lirrAltHtml() + njtAltHtml() + group(`Trains at ${HUB.short}`, rail, `No notices for ${railNames.slice(0, -1).join(', ')}${railNames.length > 2 ? ',' : ''} or ${railNames[railNames.length - 1]} right now.`)
+    + group('Subway', subway, `No subway notices for the lines at ${HUB.short} right now.`)
+    + (HUB.path ? group('PATH', board.notices.path || [], 'No PATH alerts right now.') : '')
+    + `<h2 class="al-h">Elevators and escalators</h2>${lifts || `<p class="al-none">All elevators and escalators at ${esc(HUB.elevatorStations.join(' and '))} are working, per the MTA.</p>`}`;
   const n = rail.length + subway.length + (board.notices.path || []).length + eventsNow(Date.now() / 1000).length + eneOut.length;
   $('alerts-count').textContent = n ? String(n) : '';
 }
@@ -3356,7 +3388,7 @@ function renderNotices() {
   $('njt-note').textContent = s.njt.needsServer || s.njt.needsLogin ? 'NJ Transit data not yet available.' : '';
   if (s.njt.error) out.push('NJ Transit data didn’t load. The NJ Transit trains shown may not be real time.');
   else if (s.njt.staleSince) out.push(`NJ Transit times are from ${Math.max(1, Math.round((Date.now() / 1000 - s.njt.staleSince) / 60))} min ago and may not be real time. Confirm on the station screens.`);
-  for (const k of ['lirr', 'amtrak']) if (s[k].error) out.push(`${CARRIERS[k]} data didn’t load${plainError(s[k].error)}. Showing the last trains received.`);
+  for (const k of ['lirr', 'amtrak', 'mnr']) if (s[k] && s[k].error) out.push(`${CARRIERS[k]} data didn’t load${plainError(s[k].error)}. Showing the last trains received.`);
   if (s.subway.error) out.push('Subway times didn’t load. Showing the last times received.');
   $('notices').innerHTML = out.map((m) => `<p>${m}</p>`).join('');
 }
@@ -3384,7 +3416,7 @@ async function loadBoard(force) {
     direct = true;
   }
   // No server: read PATH's live times through the relay, if one is set up.
-  const [path, pa] = window.PENN_RELAY ? await Promise.all([PennFeeds.relayPath(force), PennFeeds.relayPathAlerts(force)]) : [null, null];
+  const [path, pa] = window.PENN_RELAY && HUB.path ? await Promise.all([PennFeeds.relayPath(force), PennFeeds.relayPathAlerts(force)]) : [null, null];
   return PennFeeds.board({ force, path: path || undefined, pathAlerts: pa && pa.data ? pa.data : [] });
 }
 
@@ -3547,10 +3579,10 @@ document.querySelector('.seg').addEventListener('click', (e) => {
 });
 
 // The masthead names the view: Penn Station departures, arrivals, or subway and PATH.
-const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: 'subway and PATH', alerts: 'service alerts', buses: 'buses to New Jersey' };
+const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: HUB.subwayTab, alerts: 'service alerts', buses: 'buses to New Jersey' };
 function setHeading() {
   $('h1-sub').textContent = HEADINGS[view];
-  document.title = `Penn Station ${HEADINGS[view]}`;
+  document.title = `${HUB.title} ${HEADINGS[view]}`;
 }
 document.querySelector('.chips').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
@@ -3612,16 +3644,10 @@ setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
 
 
-// ---------- buses at Penn (owner, Nov 25: the same as the Grand Central board) ----------
+// ---------- buses at the hub (owner, Nov 25: every board lists its nearby buses) ----------
 // Live MTA Bus Time at the stops around the station (stop codes from the MTA's
 // Manhattan bus timetable), through the relay.
-const HUB_BUS_STOPS = [
-  { stop: '401819', lines: ['M34-SBS', 'M34A-SBS'], label: '34 St crosstown, eastbound', where: 'W 34 St at 8 Av' },
-  { stop: '401848', lines: ['M34-SBS'], label: '34 St crosstown, to Javits Center', where: 'W 34 St at 8 Av' },
-  { stop: '401231', lines: ['M34A-SBS'], label: 'To Port Authority on 8 Av', where: '8 Av at W 34 St' },
-  { stop: '404847', lines: ['M20'], label: 'Uptown on 8 Av', where: '8 Av at W 31 St' },
-  { stop: '401360', lines: ['M20', 'M7'], label: 'Downtown on 7 Av', where: '7 Av at W 34 St' },
-];
+const HUB_BUS_STOPS = HUB.busStops; // docs/hub.js
 const hubBuses = new Map();
 function loadHubBuses() {
   if (!window.PENN_RELAY) return;
@@ -3645,7 +3671,7 @@ function renderHubBuses() {
     return [...byLine.entries()].map(([ln, times]) => ({ ln, times: times.sort((a, c) => a - c).slice(0, 3), b }));
   }).sort((x, y) => x.times[0] - y.times[0]);
   el.innerHTML = rows.length ? `<section class="stn">${rows.map((x) => `<div class="sline"><span class="bus-pl">${esc(x.ln.replace('-SBS', ''))}${/SBS/.test(x.ln) ? '<small>SBS</small>' : ''}</span><span class="sdest"><span class="dname">${esc(x.b.label)}</span> <small>${esc(x.b.where)}</small></span><span class="smins">${mins(x.times)}</span></div>`).join('')}</section>`
-    : '<p class="empty">No buses reported at Penn right now.</p>';
+    : `<p class="empty">No buses reported at ${HUB.short} right now.</p>`;
 }
 loadHubBuses();
 setInterval(loadHubBuses, 60000);
@@ -3654,13 +3680,13 @@ setInterval(renderHubBuses, 10000);
 // ---------- airport helper: Penn's part (owner, Nov 24-25) ----------
 // The screen, fares, airport buses, the Newark Airport Express, Islip and
 // Stewart are shared with the other hubs in airport.js; Penn's own routes are here.
-const HUB_AIR = {
+const PENN_AIR = {
   id: 'nyp', from: 'Penn Station', buses: 'airport-buses.json',
   ewrFrom: 'days', ewrWalk: 10, ewrWalkText: 'Walk up 8 Av to Port Authority (41 St), or the A, C or E one stop', ewrStop: 'Port Authority Bus Terminal',
   toPabt: 10, toPabtText: 'Walk up 8 Av to Port Authority (41 St), or the A, C or E one stop',
   toGct: 15, toGctText: () => `${lineName('2')} or ${lineName('3')} to Times Sq, then the ${lineName('S')} or ${lineName('7')} to Grand Central`,
 };
-function hubAirportLoad() { loadLirrTT(); loadNjtStop(NEWARK_PENN_62_STOP); loadSubwayGuide(); loadPathFeed(); }
+function pennAirportLoad() { loadLirrTT(); loadNjtStop(NEWARK_PENN_62_STOP); loadSubwayGuide(); loadPathFeed(); }
 // The next live departures from Penn that call at a station (railroads).
 function railTo(carriers, stop, nowS) {
   return ((board && board.departures) || []).filter((r) => carriers.includes(r.carrier) && r.tone !== 'stop' && r.tone !== 'departed' && !r.departed
@@ -3684,11 +3710,11 @@ function lirrArrivalAt(r, station) {
   const id = Object.keys(lirrData.stops).find((k) => normName2(lirrData.stops[k][0]) === normName2(station));
   const trip = lirrTripsNear().find((x) => x.train === trainNo(r.train));
   const at = trip && trip.calls.find(([sid]) => sid === id);
-  const penn = trip && trip.calls.find(([sid]) => sid === lirrTT.penn);
+  const penn = trip && trip.calls.find(([sid]) => sid === ttFrom(lirrTT));
   return at && penn ? at[1] + ((r.leaves ?? r.time) - penn[1]) : null;
 }
 // Penn's own routes (JFK, LaGuardia, Newark); airport.js adds the shared ones.
-function hubAirportOptions(code, nowS) {
+function pennAirportOptions(code, nowS) {
   const o = [];
   const lirrFare = (r) => (r.fare === 'peak' ? FARES.cityPeak : FARES.cityOff);
   if (code === 'JFK') {
@@ -3748,6 +3774,147 @@ function pathFromStation(station, destRe, after) {
   return ((st && st.destinations) || []).flatMap((d) => d.messages || []).map((m) => ({ dest: m.headSign || '', time: t + (parseInt(m.secondsToArrival, 10) || 0) }))
     .filter((x) => destRe.test(x.dest) && x.time >= after).sort((a, b) => a.time - b.time)[0];
 }
+
+// ---------- airport helper: Grand Central's part (owner, Nov 25) ----------
+// Its own routes: LIRR from Grand Central Madison, the 6/E and 7/A to JFK, the 7
+// and LIRR to the Q70, and Newark by NJ Transit or Amtrak from Penn, PATH from
+// 33 St (a walk) or World Trade Center (the 4/5), with the shared Newark Penn
+// connections. airport.js adds buses, the Newark Airport Express (from 41 St),
+// Islip and Stewart.
+const GCT_AIR = {
+  id: 'gct', from: 'Grand Central', buses: 'airport-buses-gct.json',
+  ewrFrom: 'gct', ewrWalk: 4, ewrWalkText: 'Walk to the Newark Airport Express stop on 41 St, between Park and Lexington Avs', ewrStop: 'Grand Central (41 St)',
+  toPabt: 15, toPabtText: 'The S to Times Sq-42 St, then walk west on 42 St to Port Authority (8 Av)',
+  toGct: 0, lirrFrom: ' from Grand Central Madison',
+};
+const TO_PENN_MIN = 15; // the S to Times Sq, then the 1, 2 or 3 one stop, to the NJ Transit concourse
+// NJ Transit's live departures from Penn (for Newark Airport), through the relay.
+let njtPenn = [], njtPennAt = 0;
+function loadNjtPenn() {
+  if (!window.PENN_RELAY || Date.now() - njtPennAt < 30000) return;
+  njtPennAt = Date.now();
+  fetch(`${window.PENN_RELAY}/njt`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    njtPenn = d && d.ITEMS ? PennFeeds.parseNjt(d.ITEMS).filter((x) => x.carrier === 'njt') : [];
+    if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport();
+  }).catch(() => {});
+}
+// Amtrak trains from Penn that stop at Newark Airport (Amtraker, as on the Penn board).
+let amtrakEwr = [], amtrakEwrAt = 0;
+function loadAmtrakEwr() {
+  if (Date.now() - amtrakEwrAt < 60000) return;
+  amtrakEwrAt = Date.now();
+  const epoch = (iso) => (iso ? Date.parse(iso) / 1000 : 0);
+  fetch('https://api-v3.amtraker.com/v3/trains', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    const out = [];
+    for (const list of Object.values(d || {})) for (const tr of list) {
+      const st = tr.stations || [];
+      const a = st.findIndex((x) => x.code === 'NYP'), b = st.findIndex((x) => x.code === 'EWR');
+      if (a < 0 || b <= a || st[a].status === 'Departed') continue;
+      out.push({ dep: epoch(st[a].dep || st[a].schDep), arr: epoch(st[b].arr || st[b].schArr), line: tr.routeName, train: tr.trainNum });
+    }
+    amtrakEwr = out.filter((x) => x.dep).sort((x, y) => x.dep - y.dep);
+    if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport();
+  }).catch(() => {});
+}
+const WALK_33ST_MIN = 18; // Grand Central (42 St & Park Av) to the 33 St PATH station (6 Av & 32 St)
+const FULTON_TO_WTC_PATH_MIN = 6; // through the Fulton Center and the Oculus
+const PATH_WTC_NEWARK_MIN = 22;
+function gctAirportLoad() { loadLirrTT(); loadNjtPenn(); loadPathFeed(); loadAmtrakEwr(); loadNjtStop(NEWARK_PENN_62_STOP); }
+function gctAirportOptions(code, nowS) {
+  const o = [];
+  const lirrFare = (r) => (r.fare === 'peak' ? FARES.cityPeak : FARES.cityOff);
+  const lirrLeg = (r, to) => `${airPl('LIRR', 'p-lirr')} to ${to} from Grand Central Madison${r.track ? `, track ${esc(r.track)}` : ''}`;
+  if (code === 'JFK') {
+    // LIRR from Grand Central Madison to Jamaica, then the AirTrain.
+    const l = railTo(['lirr'], 'Jamaica', nowS)[0];
+    if (l) {
+      const arr = lirrArrivalAt(l, 'Jamaica') || (l.leaves ?? l.time) + 22 * 60;
+      const air = arr + AIR_MIN.change * 60;
+      o.push({ at: air + (AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60, fare: lirrFare(l) + FARES.airtrainJfk,
+        legs: [[l.leaves ?? l.time, lirrLeg(l, 'Jamaica')], [air, `${airPl('AirTrain', 'p-air')} to your terminal`]] });
+    }
+    // The 6 one stop to 51 St, walk through to the E at Lexington Av/53 St, the E to Sutphin Blvd, the AirTrain.
+    const six = subwayFromTo('6', '631', '630', nowS);
+    if (six) {
+      const e = six.time + (2 + 5) * 60;
+      const air = e + (23 + AIR_MIN.change) * 60;
+      o.push({ at: air + (AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60, fare: FARES.subway + FARES.airtrainJfk,
+        legs: [[six.time, `${lineName('6')} one stop to 51 St, then walk through to the ${lineName('E')} at Lexington Av/53 St`], [e, `${lineName('E')} to Sutphin Blvd-Archer Av-JFK`], [air, `${airPl('AirTrain', 'p-air')} to your terminal`]] });
+    }
+    // The 7 to Times Sq, through to the A at 42 St-Port Authority, the A to Howard Beach, the AirTrain.
+    const seven = subwayFromTo('7', '723', '725', nowS);
+    if (seven) {
+      const a = seven.time + (3 + 5) * 60;
+      const air = a + (48 + AIR_MIN.change) * 60;
+      o.push({ at: air + (AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60, fare: FARES.subway + FARES.airtrainJfk,
+        legs: [[seven.time, `${lineName('7')} to Times Sq-42 St, then walk through to the ${lineName('A')} at 42 St-Port Authority`], [a, `${lineName('A')} to Howard Beach-JFK`], [air, `${airPl('AirTrain', 'p-air')} to your terminal`]] });
+    }
+  } else if (code === 'LGA') {
+    // LIRR to Woodside, then the Q70 LaGuardia Link (free).
+    const l = railTo(['lirr'], 'Woodside', nowS)[0];
+    if (l) {
+      const arr = lirrArrivalAt(l, 'Woodside') || (l.leaves ?? l.time) + 12 * 60;
+      const bus = arr + (AIR_MIN.change + AIR_MIN.q70Wait) * 60;
+      o.push({ at: bus + AIR_MIN.q70FromWoodside * 60, fare: lirrFare(l),
+        legs: [[l.leaves ?? l.time, lirrLeg(l, 'Woodside')], [bus, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free), about every 10 min`]] });
+    }
+    // The 7 to 74 St-Broadway, then the Q70 LaGuardia Link (free).
+    const seven = subwayFromTo('7', '723', '710', nowS);
+    if (seven) {
+      const bus = seven.time + (19 + AIR_MIN.change + AIR_MIN.q70Wait) * 60;
+      o.push({ at: bus + AIR_MIN.q70FromJacksonHts * 60, fare: FARES.subway,
+        fareText: `${money(FARES.subway)} one way (the Q70 is free)`,
+        legs: [[seven.time, `${lineName('7')} to 74 St-Broadway`], [bus, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free) from Roosevelt Av, about every 10 min`]] });
+    }
+  } else if (code === 'EWR') {
+    // To Penn on the subway, then NJ Transit (live from NJ Transit).
+    const ready = nowS + (TO_PENN_MIN + 3) * 60;
+    const n = njtPenn.filter((r) => (r.leaves ?? r.time) >= ready && (r.via || []).concat(r.place).some((v) => /^Newark Airport\b/i.test(v))).sort((a, b) => (a.leaves ?? a.time) - (b.leaves ?? b.time))[0];
+    if (n) {
+      const dep = n.leaves ?? n.time;
+      o.push({ at: dep + (AIR_MIN.njtEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: FARES.njtEwr + FARES.subway,
+        fareText: `${money(FARES.njtEwr)} NJ Transit (AirTrain included), plus ${money(FARES.subway)} for the subway`,
+        legs: [[dep - (TO_PENN_MIN + 3) * 60, `${lineName('S')} to Times Sq, then the ${lineName('1')}, ${lineName('2')} or ${lineName('3')} one stop to 34 St-Penn Station`],
+          [dep, `${airPl('NJ Transit', 'p-njt')} from Penn Station to Newark Airport${n.track ? `, track ${esc(n.track)}` : ''}`],
+          [dep + (AIR_MIN.njtEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
+    }
+    // Amtrak from Penn (reservation required), after the subway to Penn.
+    const m = amtrakEwr.find((x) => x.dep >= ready);
+    if (m) {
+      o.push({ at: (m.arr || m.dep + AIR_MIN.amtrakEwr * 60) + (AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: null, fareText: `Amtrak fare varies by train, plus ${money(FARES.subway)} for the subway`,
+        note: 'Reservation required: buy an Amtrak ticket for this train before you board. NJ Transit tickets aren’t valid on Amtrak.',
+        legs: [[m.dep - (TO_PENN_MIN + 3) * 60, `${lineName('S')} to Times Sq, then the ${lineName('1')}, ${lineName('2')} or ${lineName('3')} one stop to 34 St-Penn Station`],
+          [m.dep, `${airPl('Amtrak', 'p-amtrak')} ${esc(m.line || '')} from Penn Station to Newark Airport`],
+          [(m.arr || m.dep + AIR_MIN.amtrakEwr * 60) + AIR_MIN.change * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
+    }
+    // PATH to Newark Penn, then NJ Transit one stop or the 62 bus (shared with Penn: newarkPennOptions).
+    const night = nyNow().mins < 6 * 60 || nyNow().mins >= 23 * 60;
+    // a) Walk to the 33 St station (cheapest: no subway fare), change at Journal Square.
+    // PATH's feed looks about 20 min ahead, so past the walk there may be no
+    // live train yet: then the usual gap (every 10 min by day, 20 at night), marked Estimated.
+    const live33 = pathFromStation('33S', /journal square/i, nowS + WALK_33ST_MIN * 60);
+    const p = live33 || { dest: 'Journal Square', time: nowS + (WALK_33ST_MIN + (night ? 10 : 5)) * 60, est: true };
+    if (p) {
+      const atNewark = p.time + ((/hoboken/i.test(p.dest) ? AIR_MIN.pathJsqViaHob : AIR_MIN.pathJsq) + AIR_MIN.change + (night ? AIR_MIN.pathNewarkWaitNight : AIR_MIN.pathNewarkWait) + AIR_MIN.pathNewark) * 60;
+      o.push(...newarkPennOptions([[p.time - WALK_33ST_MIN * 60, 'Walk to the 33 St PATH station (6 Av & 32 St), about 18 min'],
+        [p.time, `${airPl('PATH', 'p-path')} to ${esc(p.dest)}, then change for Newark${p.est ? `, about every ${night ? 20 : 10} min` : ''}`]], atNewark, night, FARES.path, 'PATH', p.est ? false : undefined));
+    }
+    // b) The 4 or 5 to Fulton St, then PATH from World Trade Center straight to Newark.
+    const lex = ['4', '5'].map((r) => { const t = subwayFromTo(r, '631', '418', nowS); return t && { ...t, route: r }; }).filter(Boolean).sort((x, y) => x.time - y.time)[0];
+    if (lex) {
+      const w = pathFromStation('WTC', /newark/i, lex.time + (10 + FULTON_TO_WTC_PATH_MIN) * 60);
+      if (w) {
+        o.push(...newarkPennOptions([[lex.time, `${lineName(lex.route)} to Fulton St, then walk through to the World Trade Center PATH station`],
+          [w.time, `${airPl('PATH', 'p-path')} to Newark`]], w.time + (PATH_WTC_NEWARK_MIN) * 60, night, FARES.subway + FARES.path, 'subway + PATH'));
+      }
+    }
+  }
+  return o;
+}
+// This hub's part of the airport helper (airport.js calls these).
+const HUB_AIR = IS_PENN ? PENN_AIR : GCT_AIR;
+const hubAirportOptions = (code, nowS) => (IS_PENN ? pennAirportOptions(code, nowS) : gctAirportOptions(code, nowS));
+const hubAirportLoad = () => (IS_PENN ? pennAirportLoad() : gctAirportLoad());
 
 // ---------- Buses tab (testing) ----------
 // For NJ Transit rail outages and strikes: pick your station, see how to get

@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#1d5c66">
+<!-- Installable as an app (home screen, full screen). -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -15,11 +16,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611251902">
+<link rel="stylesheet" href="style.css?v=202611251913">
 </head>
-<!-- Grand Central (owner, Nov 25): the Penn board's layout in the "Celestial"
-     theme, the concourse ceiling's teal and gold. Its own script (gct.js), so
-     nothing here can break the Penn page. -->
+<!-- Grand Central (owner, Nov 25): the same board engine as Penn (app.js),
+     with Grand Central's settings (hub.js) in the "Celestial" theme. -->
 <body class="hub-gct" data-view="departures">
 
 <header class="mast">
@@ -28,7 +28,7 @@
     <polyline points="380,24 455,46 530,18 610,40 690,16 760,54 850,30" fill="none" stroke="currentColor" stroke-width="1"/>
   </svg>
   <div class="mast-in">
-    <h1><span class="mast-kicker">New York <a class="hub-pill" href="index.html" title="Switch to Penn Station">⇄ Penn Station</a></span>Grand Central</h1>
+    <h1><span class="mast-kicker">New York <a class="hub-pill" href="index.html" title="Switch to Penn Station">⇄ Penn Station</a></span>Grand Central<span class="h1-sub" id="h1-sub">departures</span></h1>
     <p class="clock" aria-live="off"><span id="clock">--:--</span><span id="clock-s" class="secs"></span><span id="clock-ap" class="ap"></span></p>
   </div>
 </header>
@@ -42,11 +42,11 @@
       <button type="button" data-view="alerts" aria-pressed="false" class="only-narrow">Alerts<span class="tab-count" id="alerts-count"></span></button>
     </div>
     <div class="chips" role="group" aria-label="Line">
-      <button type="button" data-line="all" aria-pressed="true">All</button>
-      <button type="button" data-line="HU" aria-pressed="false">Hudson</button>
-      <button type="button" data-line="HA" aria-pressed="false">Harlem</button>
-      <button type="button" data-line="NH" aria-pressed="false">New Haven</button>
-      <button type="button" data-line="lirr" aria-pressed="false">LIRR</button>
+      <button type="button" data-carrier="all" aria-pressed="true">All</button>
+      <button type="button" data-carrier="HU" aria-pressed="false">Hudson</button>
+      <button type="button" data-carrier="HA" aria-pressed="false">Harlem</button>
+      <button type="button" data-carrier="NH" aria-pressed="false">New Haven</button>
+      <button type="button" data-carrier="lirr" aria-pressed="false">LIRR</button>
     </div>
     <div class="trip-bar"><button type="button" id="to-airport"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V18l-2 1.5V21l3.5-1 3.5 1v-1.5L13 18v-5z" fill="currentColor"/></svg>To the airport</button><a class="split-btn" href="split.html" title="Penn and Grand Central side by side">Side by side</a></div>
   </nav>
@@ -54,7 +54,9 @@
   <div class="layout">
     <section class="rail" aria-labelledby="rail-h">
       <h2 id="rail-h" class="sr">Trains</h2>
+      <!-- Notices sit in the train column, so the subway panel starts at the top beside them. -->
       <div id="notices" class="notices"></div>
+      <div id="njt-alt"></div>
       <div id="events-note"></div>
       <div id="rail-notices"></div>
       <div class="cols" aria-hidden="true">
@@ -68,15 +70,21 @@
       <div id="subway-notices"></div>
       <div id="elevators"></div>
       <div id="subway"><p class="empty">Loading subway times…</p></div>
+
+      <div hidden><h2 id="path-h" class="path-h">PATH</h2>
+            <div id="path-notices"></div>
+      <div id="path"></div></div>
       <h2 class="path-h">Buses <span>at Grand Central, live from MTA Bus Time</span></h2>
-      <div id="gct-buses"><p class="empty">Loading buses…</p></div>
+      <div id="hub-buses"><p class="empty">Loading buses…</p></div>
       <p class="walk">To Penn Station: the S to Times Sq, then the 1, 2 or 3 one stop down (about 15 min), or a 20-minute walk.</p>
-      <!-- Display choices for the subway list (shared with the Penn board). -->
+      <!-- Display choices for the subway and PATH lists. -->
       <div id="sub-toggles"></div>
     </aside>
   </div>
 
   <section id="alerts" class="alerts-tab" aria-label="Service alerts"></section>
+  <!-- Testing: buses from Port Authority to NJ Transit stations (later shown only during rail disruptions). -->
+  <section id="buses" class="buses-tab" aria-label="Buses to New Jersey"></section>
 
   <div class="style-bar">
     <span>Board style</span>
@@ -87,11 +95,24 @@
   </div>
 
   <footer class="foot">
+    <p id="njt-note" class="njt-note"></p>
     <p id="updated">Connecting…</p>
     <p>Metro-North, LIRR, subway and bus data was obtained from the MTA. It may not be real-time data, and may be late, incomplete or wrong. Confirm on the station screens.</p>
     <p>An independent project, not affiliated with or licensed by the MTA.</p>
   </footer>
 </main>
+
+<dialog id="reroute" aria-labelledby="reroute-h">
+  <div class="rr-head">
+    <h2 id="reroute-h">Temporary route</h2>
+    <button type="button" class="rr-close" id="reroute-close">Close</button>
+  </div>
+  <p id="reroute-note" class="rr-note"></p>
+  <div id="reroute-map" class="rr-map" role="img" aria-label="Map of the train’s temporary route"></div>
+  <p class="rr-small">The line joins the stations in order; it doesn’t trace the exact tracks. Check MTA service notices before you travel.</p>
+  <h3 class="rr-list-h">Stops from Grand Central</h3>
+  <ol id="reroute-stops" class="rr-stops"></ol>
+</dialog>
 
 <dialog id="change" aria-labelledby="chg-h">
   <div class="cm-body">
@@ -100,15 +121,17 @@
       <button type="button" class="rr-close" id="chg-close">Close</button>
     </div>
     <div id="chg-top" class="cm-top"></div>
-    <div id="chg-map" class="cm-map" role="img" aria-label="Map"></div>
+    <div id="chg-map" class="cm-map" role="img" aria-label="Map of the line and the service change"></div>
     <div id="chg-below" class="cm-below"></div>
   </div>
 </dialog>
 
-<script src="config.js?v=202611251902"></script>
-<script src="feeds.js?v=202611251902"></script>
-<script src="flip.js?v=202611251902"></script>
-<script src="gct.js?v=202611251902"></script>
-<script src="airport.js?v=202611251902"></script>
+<script src="config.js?v=202611251913"></script>
+<script>window.HUB_ID = 'gct';</script>
+<script src="hub.js?v=202611251913"></script>
+<script src="feeds.js?v=202611251913"></script>
+<script src="flip.js?v=202611251913"></script>
+<script src="app.js?v=202611251913"></script>
+<script src="airport.js?v=202611251913"></script>
 </body>
 </html>

@@ -740,3 +740,5 @@ html.split-big .sline { gap: .5rem; }
 html.split-big .smins { font-size: .9em; }
 html.split-big .cols, html.split-big .row { grid-template-columns: 5.4rem 4.6rem minmax(0, 1fr) 7rem 3.9rem; column-gap: .6rem; }
 html.split-big .plate { font-size: .72rem; padding: .15rem .35rem; }
+
+.sdest .dnote { display: block; color: var(--dim); font-size: .85em; font-weight: 500; }

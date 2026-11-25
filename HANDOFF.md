@@ -821,3 +821,28 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - The LIRR uses lirr-timetable.json from Grand Central Madison (stop 349).
   - Metro-North uses the new `docs/mnr-timetable.json` (`build-lirr-timetable.py --mnr`, weekly job). It's the same format, plus `names`, and keeps only the next 3 weeks because Metro-North's file has many date-specific services (about 0.9 MB, loaded only when the sheet opens).
   - Trains already on the live board show live time and track.
+
+## Nov 25: one board engine for every hub (owner: "the subway needs all of the same features for sure")
+- **Grand Central runs Penn's engine.** `gct.html` sets `window.HUB_ID = 'gct'` and loads hub.js, feeds.js, flip.js, app.js and airport.js. gct.js is retired.
+- **What differs per hub** lives in `docs/hub.js`:
+  - name, short name, kicker and the pill to the other hub;
+  - map center, live-directions links, and the subway stations with their lines and direction names;
+  - subway feeds and the alerts feed (`subway` or `subway-gct`);
+  - railroads and the LIRR stop (Penn NYK/237, Grand Central Madison GCT/349);
+  - whether PATH and the NJ Transit Buses tab apply, the elevator stations, event venues and nearby bus stops.
+- **feeds.js:**
+  - A TrainTime reader for any station (`trainTime(code, railroad)`): the LIRR at NYK or GCT, Metro-North at 0NY with names from mnr-stations.json. It drops 0HB and the like, and only says "Boarding" within 15 min at Grand Central, where tracks post early.
+  - Metro-North rows carry `plate`, `plateClass` and `group` (HU/HA/NH), which the chips filter on.
+  - `hubBoard()` assembles the board for a hub without NJ Transit, Amtrak or PATH; the stub sources are `hidden`.
+  - Express or local is judged by stops: Lexington locals call at 51 St (630) and 33 St (632); the diamond 6 and 7 count as express only if they skip every local-only stop on the express stretch.
+- **app.js:**
+  - Reads `HUB` for names, plates, line chips, subway stations, map center, the "you are here" label and entrances, notices, events, elevators and buses.
+  - The timetables start from the hub (`ttFrom`). Metro-North gets "Other options" (mnr-timetable.json, `MNR_ROUTE_NAMES`) and train-row notices by route id.
+  - The airport helper dispatches by hub (`pennAirportOptions` / `gctAirportOptions`).
+  - Penn-only parts are off elsewhere: PATH, NJ Transit's last trains, and the "other ways" guides.
+- **Checked on both boards:**
+  - Departures, arrivals and the flip board.
+  - Both subway toggles, delay and skipped-stop pills, and subway maps with "Getting to the skipped stops" and entrances.
+  - "Other options", the airport helper, nearby buses and elevators.
+  - Penn unchanged: its PATH panel, maps and airport options.
+- **Late-night subway banners** come from subway-data.json `switches`/`nightGaps`/`night` by station. The build adds Grand Central's stations (631, 723) to `night` (the late-night pills); `switches`/`nightGaps` are computed for Penn's lines (`NIGHT_GAP_LINES`), so extend those there for Grand Central's lines if wanted.
