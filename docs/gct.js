@@ -36,6 +36,7 @@ const MNR_LINES = {
 const lineGroup = (b) => (b === 'NC' || b === 'DN' || b === 'WB' ? 'NH' : b);
 const BOARD_AHEAD_S = 15 * 60; // Grand Central posts tracks early: "Boarding" only this close to departure
 const FINAL_S = 60;            // final call, as at Penn
+const FINAL_LATE_S = 120;      // a late train gets 2 minutes (as at Penn)
 const DEPARTED_SHOWN_S = 3 * 60;
 // Station names are needed before the trains are shown (owner, Nov 25: the
 // board showed codes like "2SM" when the trains loaded first). The trains wait
@@ -74,7 +75,7 @@ function parseArrivals(list, railroad) {
     if (a.status && a.status.canceled) { status = 'Cancelled'; tone = 'stop'; }
     else if (leaving && isGone) { status = 'Departed'; tone = 'departed'; }
     else if (a.status && a.status.held) { status = 'Held'; tone = 'late'; }
-    else if (leaving && a.track && time - nowS() <= FINAL_S && time - nowS() > -60) { status = 'All aboard'; tone = 'final'; }
+    else if (leaving && a.track && time - nowS() <= (lateMin >= 2 ? FINAL_LATE_S : FINAL_S) && time - nowS() > -60) { status = 'All aboard'; tone = 'final'; }
     else if (leaving && a.track && time - nowS() <= BOARD_AHEAD_S) { status = 'Boarding'; tone = 'go'; }
     else if (lateMin >= 2) { status = `${lateMin} min late`; tone = 'late'; }
     else if (!leaving && a.stop_status === 'ARRIVED') { status = 'Arrived'; tone = 'go'; }
@@ -105,6 +106,7 @@ async function loadRail() {
     }
     seen.clear();
     deps.forEach((r) => seen.set(r.id, r));
+    saveDeparted();
     // Alerts TrainTime shows with the trains (special schedules and the like).
     const alerts = [...(m.alerts || []), ...(l.alerts || [])].map((x) => ({ id: `tt-${plain(x.header).slice(0, 60)}`, carrier: x.railroad === 'LIRR' ? 'lirr' : 'mnr',
       type: x.status || 'Service notice', text: plain(x.header), more: plain(x.text), urgent: (PennFeeds.URGENT || /delay|suspend|cancel/i).test(plain(x.header)) }));
@@ -115,6 +117,9 @@ async function loadRail() {
   render();
 }
 
+// Trains that just left stay on the board through a reload (as at Penn).
+function saveDeparted() { store.set('gctDeparted', JSON.stringify([...departed.entries()].filter(([, d]) => nowS() - d.at < DEPARTED_SHOWN_S))); }
+try { for (const [id, d] of JSON.parse(store.get('gctDeparted', '[]'))) if (nowS() - d.at < DEPARTED_SHOWN_S) departed.set(id, d); } catch {}
 let view = 'departures';
 let line = store.get('gctLine', 'all');
 function visibleRows() {
@@ -140,10 +145,56 @@ function rowHtml(r) {
   return `<li class="row ${r.tone}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.plateClass}">${esc(r.plate)}</span></div>
-    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}</div>
+    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${rowAlertHtml(r)}</div>
     <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${notes.length ? `<small>${notes.join(', ')}</small>` : ''}</div>
     ${track}
   </li>`;
+}
+// ---------- notices on a train's row (as on the Penn board) ----------
+// The railroad's delay notices for the train's line, as a pill opening the
+// notice (LIRR: its own type; Metro-North: "Delays up to 20 min" and the like);
+// LIRR boarding changes at a station the train stops at; and "N min late" when
+// the train is running late with no notice and its status doesn't say so.
+const MNR_ROUTE = { HU: '1', HA: '2', NH: '3', NC: '4', DN: '5', WB: '6' };
+const branchOf = (r) => Object.keys(MNR_LINES).find((k) => MNR_LINES[k][0] === r.branch);
+const LIRR_ALIASES = { 'Huntington Branch': 'Port Jefferson Branch', 'Greenport Branch': 'Greenport Service', 'Belmont Park Branch': 'Belmont Park', 'City Terminal Branch': 'City Terminal Zone' };
+let lirrRoutes = null;
+fetch('lirr-data.json').then((x) => (x.ok ? x.json() : null)).then((d) => { lirrRoutes = d && d.routes; renderRail(); }).catch(() => {});
+const lirrRouteFor = (name) => lirrRoutes && Object.keys(lirrRoutes).find((k) => lirrRoutes[k].name === (LIRR_ALIASES[name] || name));
+const isDelayNotice = (n) => happeningNow(n) && (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text);
+function hiddenDelayMin(r) {
+  if (r.tone === 'stop' || r.tone === 'departed' || /late|delay|held/i.test(r.status)) return null;
+  if ((r.lateMin || 0) >= 2) return r.lateMin;
+  return r.time < nowS() - 120 ? 0 : null;
+}
+function rowNotices(r) {
+  const id = r.railroad === 'lirr' ? lirrRouteFor(r.branch) : MNR_ROUTE[branchOf(r)];
+  if (!id) return [];
+  // A notice about (nearly) the whole railroad: only on trains actually running late.
+  const wide = r.railroad === 'lirr' ? 8 : 4;
+  return notices.rail.filter((n) => n.carrier === r.railroad && isDelayNotice(n) && (n.lines || []).includes(id) && ((n.lines || []).length < wide || hiddenDelayMin(r) !== null));
+}
+function rowAlertSummary(ns) {
+  const all = ns.map((n) => n.text).join(' ');
+  const mins = [...all.matchAll(/(\d+)[- ]?(?:to[- ]\d+[- ]?)?min(?:ute)?s?\b/gi)].map((m) => +m[1]).filter((x) => x > 0 && x < 300);
+  const range = all.match(/(\d+)\s*(?:-|to)\s*(\d+)[- ]?min/i);
+  if (/suspend/i.test(all)) return 'Service suspended';
+  if (/cancel/i.test(all) && !/delay/i.test(all)) return 'Cancellations';
+  const maybe = /\b(subject to|may|might|could|possible|potential)\b/i.test(all) ? 'Possible delays' : 'Delays';
+  if (range) return `${maybe} of ${range[1]}–${range[2]} min`;
+  if (mins.length && /delay|late/i.test(all)) return `${maybe} up to ${Math.max(...mins)} min`;
+  return /delay|late/i.test(all) ? maybe : 'Service alert';
+}
+const normName = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function rowAlertHtml(r) {
+  if (view !== 'departures' || r.tone === 'departed') return '';
+  const ns = rowNotices(r);
+  const label = ns.length ? (r.railroad === 'lirr' ? mtaType(ns[0].type) : rowAlertSummary(ns)) : '';
+  const delay = ns.length ? dropPill(`${r.id}|alert`, `${label}${ns.length > 1 ? ` (${ns.length})` : ''}`, 'warn', ns, 'rail') : '';
+  const stops = [...(r.via || []), r.place].map(normName);
+  const boarding = r.railroad === 'lirr' ? notices.rail.filter((n) => n.carrier === 'lirr' && happeningNow(n) && /boarding change/i.test(n.type) && stops.some((st) => st && normName(n.text).includes(st))) : [];
+  const hid = ns.length ? null : hiddenDelayMin(r);
+  return pills(hid === null ? '' : warnPill(hid ? `${hid} min late` : 'Running late'), delay, boarding.length ? dropPill(`${r.id}|boarding`, 'Boarding change', 'info', boarding, 'rail') : '');
 }
 function renderRail() {
   const open = new Set([...document.querySelectorAll('#rows details[open]')].map((d) => d.dataset.id));
@@ -161,7 +212,7 @@ function scheduleFinal(rows) {
   clearTimeout(finalTimer);
   if (view !== 'departures') return;
   const t = nowS();
-  const next = Math.min(...rows.filter((r) => r.track && r.tone !== 'departed' && r.tone !== 'stop').map((r) => r.time - FINAL_S).filter((x) => x > t));
+  const next = Math.min(...rows.filter((r) => r.track && r.tone !== 'departed' && r.tone !== 'stop').map((r) => r.time - ((r.lateMin || 0) >= 2 ? FINAL_LATE_S : FINAL_S)).filter((x) => x > t));
   if (next - t < 600) finalTimer = setTimeout(() => { loadRail(); }, (next - t) * 1000 + 100);
 }
 
@@ -300,11 +351,11 @@ function untilText(n) {
   const sameDay = fmt(p[1], { day: 'numeric' }) === fmt(nowS(), { day: 'numeric' });
   return `until ${sameDay ? '' : `${fmt(p[1], { weekday: 'short' })} `}${fmt(p[1], { hour: 'numeric', minute: '2-digit' })}`;
 }
-function dropPill(key, label, kind, ns) {
+function dropPill(key, label, kind, ns, where = 'subway') {
   const open = openDrops.has(key);
   if (open) {
     const items = ns.map((n) => { const u = untilText(n); return `<span class="drop-n">${noticeBody(n)}${u ? `<small>${esc(u)}</small>` : ''}</span>`; }).join('');
-    dropBodies.set(key, `<span class="drop${kind === 'warn' ? '' : ' info'}">${items}<span class="drop-links"><button type="button" class="al-map" data-goto="subway">See full alert</button></span></span>`);
+    dropBodies.set(key, `<span class="drop${kind === 'warn' ? '' : ' info'}">${items}<span class="drop-links"><button type="button" class="al-map" data-goto="${where}">See full alert</button></span></span>`);
   }
   return `<button type="button" class="late-pill ${kind === 'warn' ? 'warn-pill' : 'info-pill'}" data-drop="${esc(key)}" aria-expanded="${open}">${kind === 'warn' ? WARN_IC : ''}${esc(label)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button>`;
 }
@@ -332,12 +383,12 @@ function subwayPills(stnId, route, dir, svc, train) {
 }
 document.addEventListener('click', (e) => {
   const d = e.target.closest('[data-drop]');
-  if (d) { const k = d.dataset.drop; openDrops.has(k) ? openDrops.delete(k) : openDrops.add(k); renderSubway(); return; }
-  const g = e.target.closest('[data-goto="subway"]');
+  if (d) { const k = d.dataset.drop; openDrops.has(k) ? openDrops.delete(k) : openDrops.add(k); renderSubway(); renderRail(); return; }
+  const g = e.target.closest('[data-goto]');
   if (g) {
-    // Phones: the Alerts tab; computers: open the subway notices above the panel.
+    // Phones: the Alerts tab; computers: open the notices strip it belongs to.
     if (matchMedia('(max-width: 960px)').matches) document.querySelector('.seg [data-view="alerts"]').click();
-    else { const st = document.querySelector('#subway-notices details'); if (st) { st.open = true; st.scrollIntoView({ block: 'start', behavior: 'smooth' }); } }
+    else { const st = document.querySelector(`#${g.dataset.goto === 'rail' ? 'rail' : 'subway'}-notices details`); if (st) { st.open = true; st.scrollIntoView({ block: 'start', behavior: 'smooth' }); } }
   }
 });
 
@@ -492,16 +543,55 @@ function liftsHtml() {
 }
 function renderLifts() { $('elevators').innerHTML = liftsHtml(); renderAlertsTab(); }
 
+// ---------- event warnings (as on the Penn board) ----------
+// The same event list (docs/events.json, plus Ticketmaster through the relay
+// once its key is set), showing the venues reached from Grand Central:
+// UBS Arena (LIRR toward Elmont-UBS Arena). Madison Square Garden is over Penn,
+// so it's on the Penn board. From 2 h before the start to 1 h after the usual end.
+const EVENT_VENUES = /UBS Arena|Yankee Stadium|Citi Field/i;
+const EVENT_MIN = { hockey: 160, basketball: 150, sports: 180, show: 180 };
+let stationEvents = [], eventsAt = 0;
+function loadEvents() {
+  if (Date.now() - eventsAt < 30 * 60000) return;
+  eventsAt = Date.now();
+  const get = (u) => fetch(u, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  Promise.all([get('events.json'), RELAY ? get(`${RELAY}/events`) : null]).then(([a, b]) => {
+    const seenE = new Set();
+    stationEvents = [...((a && a.events) || []), ...((b && b.events) || [])].filter((e) => EVENT_VENUES.test(e.venue || '')).filter((e) => {
+      const k = `${e.venue}|${Math.round(Date.parse(e.start) / 600000)}`;
+      if (seenE.has(k)) return false;
+      seenE.add(k);
+      return true;
+    });
+    renderEvents();
+  });
+}
+function eventsNow(t) {
+  return stationEvents.map((e) => { const start = Date.parse(e.start) / 1000; return { ...e, startS: start, endS: start + (EVENT_MIN[e.kind] || 180) * 60 }; })
+    .filter((e) => t >= e.startS - 2 * 3600 && t <= e.endS + 3600).sort((a, b) => a.startS - b.startS);
+}
+function eventText(e, t) {
+  const at = (x) => { const c = clock(x); return `${c.hm} ${c.ap}`.replace(':00 ', ' '); };
+  const how = /UBS/i.test(e.venue) ? 'LIRR trains toward Elmont-UBS Arena' : /Yankee/i.test(e.venue) ? 'Hudson and Harlem Line trains to Yankees-E 153 St' : 'the 7 to Mets-Willets Point';
+  if (t < e.startS) return `<b>${esc(e.title)}</b> at ${esc(e.venue)}, ${at(e.startS)}. Expect crowds on ${how}.`;
+  if (t < e.endS) return `<b>${esc(e.title)}</b> at ${esc(e.venue)} ends around ${at(e.endS)}. Expect crowded trains back after that.`;
+  return `<b>${esc(e.title)}</b> just ended at ${esc(e.venue)}. Trains back toward Manhattan will be crowded.`;
+}
+const EVENT_ICON = '<svg class="ic ev-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z" fill="currentColor"/></svg>';
+const eventsHtml = () => eventsNow(nowS()).map((e) => `<div class="ev-note">${EVENT_ICON}<p>${eventText(e, nowS())}</p></div>`).join('');
+function renderEvents() { $('events-note').innerHTML = eventsHtml(); renderAlertsTab(); }
+
 // ---------- Alerts tab (phones) ----------
 function renderAlertsTab() {
   const card = (n) => `<div class="al-card${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(n.type)}</span>${noticeBody(n)}</p></div>`;
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
   const r = railNotices();
   const l = liftsHtml();
-  $('alerts').innerHTML = group('Trains at Grand Central', r, 'No notices for Metro-North or the LIRR right now.')
+  const ev = eventsHtml();
+  $('alerts').innerHTML = (ev ? `<h2 class="al-h">Events</h2>${ev}` : '') + group('Trains at Grand Central', r, 'No notices for Metro-North or the LIRR right now.')
     + group('Subway', notices.subway, 'No subway notices for the lines at Grand Central right now.')
     + `<h2 class="al-h">Elevators and escalators</h2>${l || '<p class="al-none">All elevators and escalators at Grand Central-42 St are working, per the MTA.</p>'}`;
-  const n = r.length + notices.subway.length + lifts.length;
+  const n = r.length + notices.subway.length + lifts.length + eventsNow(nowS()).length;
   $('alerts-count').textContent = n ? String(n) : '';
 }
 
@@ -782,7 +872,8 @@ mastTitle.addEventListener('keydown', (e) => { if (e.target.closest('.hub-pill')
 if (window.self !== window.top) document.body.classList.add('in-split');
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { loadRail(); loadSubway(); } });
 
-loadRail(); loadSubway(); loadBuses(); loadNotices(); loadLifts();
+loadRail(); loadSubway(); loadBuses(); loadNotices(); loadLifts(); loadEvents();
+setInterval(() => { loadEvents(); renderEvents(); }, 60000);
 setInterval(loadRail, 20000);
 setInterval(loadSubway, 30000);
 setInterval(loadBuses, 60000);

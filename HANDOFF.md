@@ -809,3 +809,11 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - JFK from either hub: LIRR, the E and the A with the AirTrain, and buses. Grand Central reaches the A via the 7 to Times Sq.
   - Checked Nov 25 (options per airport, Penn / Grand Central): JFK 5/5, LGA 3/4 (Grand Central adds the 7 + Q70), EWR 7/7, ISP 2/2, SWF 2/2.
   - A hub's own functions must not be defined in airport.js: a function declared twice across scripts silently replaces the first.
+
+## Nov 25: features ported between the boards (owner: "port all of the same features to both")
+- **Penn gained** a live "Buses" list under PATH: Bus Time at `HUB_BUS_STOPS` (M34/M34A Select Bus on 34 St, M20 on 8 Av and 7 Av, M7 on 7 Av).
+- **Grand Central gained:**
+  - Train-row pills: the railroad's delay notices for the train's line (Metro-North route ids 1–6 by branch; LIRR route ids from lirr-data.json, with the same aliases as Penn), LIRR boarding changes at a stop, and "N min late" or "Running late" when the status doesn't show the delay.
+  - A 2-minute final call for late trains.
+  - Departed trains kept through a reload (`gctDeparted` in localStorage).
+  - Event banners for UBS Arena (and Yankee Stadium or Citi Field once a source lists them); MSG stays on Penn.

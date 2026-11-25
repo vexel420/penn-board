@@ -695,8 +695,9 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 .in-split .split-btn { display: none; }
 .bus-pl { display: inline-grid; place-items: center; min-width: 3.1rem; padding: .15rem .35rem; border-radius: 4px; background: #0b5fa5; color: #fff; font-weight: 800; font-size: .9rem; }
 .sline .sdest small { display: block; color: var(--dim); font-size: .85em; font-weight: 500; }
-#gct-buses .sline { grid-template-columns: 3.6rem minmax(0, 1fr) auto; gap: .6rem; }
-#gct-buses .bus-pl { flex: none; align-self: start; margin-top: .1rem; }
+#gct-buses .sline, #hub-buses .sline { grid-template-columns: 3.6rem minmax(0, 1fr) auto; gap: .6rem; }
+#gct-buses .bus-pl, #hub-buses .bus-pl { flex: none; align-self: start; margin-top: .1rem; }
+.bus-pl small { display: block; font-size: .6rem; letter-spacing: .06em; line-height: 1; }
 .plate.hu { background: #009b3a; }
 .plate.ha { background: #0039a6; }
 .plate.nh { background: #ee0034; }

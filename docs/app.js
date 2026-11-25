@@ -3612,6 +3612,45 @@ setInterval(() => { renderRail(); renderSubway(); renderPath(); }, 10000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(true); });
 
 
+// ---------- buses at Penn (owner, Nov 25: the same as the Grand Central board) ----------
+// Live MTA Bus Time at the stops around the station (stop codes from the MTA's
+// Manhattan bus timetable), through the relay.
+const HUB_BUS_STOPS = [
+  { stop: '401819', lines: ['M34-SBS', 'M34A-SBS'], label: '34 St crosstown, eastbound', where: 'W 34 St at 8 Av' },
+  { stop: '401848', lines: ['M34-SBS'], label: '34 St crosstown, to Javits Center', where: 'W 34 St at 8 Av' },
+  { stop: '401231', lines: ['M34A-SBS'], label: 'To Port Authority on 8 Av', where: '8 Av at W 34 St' },
+  { stop: '404847', lines: ['M20'], label: 'Uptown on 8 Av', where: '8 Av at W 31 St' },
+  { stop: '401360', lines: ['M20', 'M7'], label: 'Downtown on 7 Av', where: '7 Av at W 34 St' },
+];
+const hubBuses = new Map();
+function loadHubBuses() {
+  if (!window.PENN_RELAY) return;
+  Promise.all(HUB_BUS_STOPS.map((b) => fetch(`${window.PENN_RELAY}/mta-bus-stop?stop=${b.stop}`, { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) hubBuses.set(b.stop, d.buses || []); }).catch(() => {}))).then(renderHubBuses);
+}
+function renderHubBuses() {
+  const el = $('hub-buses');
+  if (!el) return;
+  if (!hubBuses.size) { el.innerHTML = `<p class="empty">${window.PENN_RELAY ? 'Loading buses…' : 'Bus times aren’t available here.'}</p>`; return; }
+  const t = Date.now();
+  const mins = (times) => times.map((x, i) => { const m = Math.max(0, Math.round((x - t / 1000) / 60)); return i === 0 ? (m < 1 ? '<b class="now">now</b>' : `<b>${m}</b> min`) : String(m); }).join(', ');
+  const rows = HUB_BUS_STOPS.flatMap((b) => {
+    const byLine = new Map();
+    for (const x of hubBuses.get(b.stop) || []) {
+      const ln = String(x.line).toUpperCase();
+      if (!b.lines.includes(ln) || !x.at || Date.parse(x.at) < t - 30000) continue;
+      if (!byLine.has(ln)) byLine.set(ln, []);
+      byLine.get(ln).push(Date.parse(x.at) / 1000);
+    }
+    return [...byLine.entries()].map(([ln, times]) => ({ ln, times: times.sort((a, c) => a - c).slice(0, 3), b }));
+  }).sort((x, y) => x.times[0] - y.times[0]);
+  el.innerHTML = rows.length ? `<section class="stn">${rows.map((x) => `<div class="sline"><span class="bus-pl">${esc(x.ln.replace('-SBS', ''))}${/SBS/.test(x.ln) ? '<small>SBS</small>' : ''}</span><span class="sdest"><span class="dname">${esc(x.b.label)}</span> <small>${esc(x.b.where)}</small></span><span class="smins">${mins(x.times)}</span></div>`).join('')}</section>`
+    : '<p class="empty">No buses reported at Penn right now.</p>';
+}
+loadHubBuses();
+setInterval(loadHubBuses, 60000);
+setInterval(renderHubBuses, 10000);
+
 // ---------- airport helper: Penn's part (owner, Nov 24-25) ----------
 // The screen, fares, airport buses, the Newark Airport Express, Islip and
 // Stewart are shared with the other hubs in airport.js; Penn's own routes are here.
