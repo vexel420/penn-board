@@ -768,6 +768,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - A train that drops off the list near its time shows as Departed for 3 min.
   - Metro-North station names: `docs/mnr-stations.json` (`scripts/build-mnr-stations.py`, rebuilt in the weekly job). LIRR names reuse feeds.js.
 - **Subway:** the MTA's 1–7/S feed, read in the page. Stations are 631 (4/5/6), 723 (7) and 901 (S).
+- **Diamonds:** express runs of the 6 and 7 (the MTA's "6X", "7X") use the MTA's diamond bullet (`.bullet.diamond`), in the subway panel and in notices. Uptown 6 diamonds say "express in the Bronx" and Flushing-bound 7 diamonds say "express in Queens"; trains already past that stretch get the diamond without the note.
 - **Buses:** MTA Bus Time through the relay, at 6 stops (codes in `BUS_STOPS`): M42 both ways at Park Av, M101–M103 downtown on Lexington and uptown on 3 Av, M1–M4 uptown on Madison.
 - **Notices:** three new relay routes. `/alerts/mnr` is Metro-North. `/alerts/subway-gct` covers the 4 5 6 7 S lines and the Grand Central stations. LIRR notices are kept unless they're about Penn only. TrainTime's own alerts (special schedules) are included too.
 - **Elevators:** `docs/penn-elevators.json` now also lists Grand Central-42 St equipment.

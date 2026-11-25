@@ -718,3 +718,8 @@ body.hub-gct {
 .mast-stars { position: absolute; inset: 0; width: 100%; height: 100%; color: #f3d88f; opacity: .55; pointer-events: none; }
 .hub-gct .mast-in { position: relative; }
 .hub-gct .clock .secs, .hub-gct .clock .ap { color: #cfe3df; }
+
+/* The MTA's diamond for express runs (the 6 in the Bronx, the 7 in Queens). */
+.bullet.diamond { border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); box-shadow: none; width: 2.35rem; height: 2.35rem; margin: -.18rem; }
+.bullet.small.diamond { width: 1.65rem; height: 1.65rem; margin: -.12rem; }
+.bullet.tiny.diamond { margin: 0; }

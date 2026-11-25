@@ -172,10 +172,14 @@ const STATIONS = [
 ];
 let subwayData = null, subway = [], subwayErr = '';
 fetch('subway-data.json').then((r) => (r.ok ? r.json() : null)).then((d) => { subwayData = d; renderSubway(); }).catch(() => {});
-function bullet(route, cls = '') {
+// Express runs of the 6 and the 7 (the MTA's "6X", "7X") get the MTA's diamond, not the circle.
+// The note says where it runs express, on trains heading that way (uptown 6, Flushing-bound 7).
+const DIAMOND_WHERE = { 6: 'express in the Bronx', 7: 'express in Queens' };
+function bullet(route, cls = '', express = false) {
   const info = subwayData && subwayData.routes[route];
   const label = route === 'GS' ? 'S' : route;
-  return `<span class="bullet ${cls}" style="background:${esc(info ? info.color : '#808183')};color:${esc(info ? info.text : '#fff')}" aria-label="${esc(label)} train">${esc(label)}</span>`;
+  const diamond = express && DIAMOND_WHERE[route];
+  return `<span class="bullet ${cls}${diamond ? ' diamond' : ''}" style="background:${esc(info ? info.color : '#808183')};color:${esc(info ? info.text : '#fff')}" aria-label="${esc(label)} ${diamond ? 'express ' : ''}train">${esc(label)}</span>`;
 }
 async function loadSubway() {
   try {
@@ -213,7 +217,7 @@ function renderSubway() {
       const list = here.filter((g) => stn.id === '901' || g.dir === dir).sort((a, b) => a.times[0] - b.times[0]);
       if (!list.length) return '';
       const bySvc = stn.svc ? ['Express', 'Local'].map((s) => [s, list.filter((g) => stn.svc(g.route) === s)]).filter(([, l]) => l.length) : [['', list]];
-      return `<div class="dir"><h3>${esc(stn.dirs[dir])}</h3>${bySvc.map(([s, l]) => `<div class="svc">${s ? `<h4>${s}</h4>` : ''}${l.map((g) => `<div class="sline">${bullet(g.route)}<span class="sdest"><span class="dname">${esc(stn.id === '901' ? 'Times Sq-42 St' : name(g.dest))}</span>${g.express && g.route !== '7' ? '' : g.express ? ' <small>express</small>' : ''}</span><span class="smins">${minsHtml(g.times)}</span></div>`).join('')}</div>`).join('')}</div>`;
+      return `<div class="dir"><h3>${esc(stn.dirs[dir])}</h3>${bySvc.map(([s, l]) => `<div class="svc">${s ? `<h4>${s}</h4>` : ''}${l.map((g) => `<div class="sline">${bullet(g.route, '', g.express)}<span class="sdest"><span class="dname">${esc(stn.id === '901' ? 'Times Sq-42 St' : name(g.dest))}</span>${g.express && DIAMOND_WHERE[g.route] && g.dir === 'N' ? `<small>${DIAMOND_WHERE[g.route]}</small>` : ''}</span><span class="smins">${minsHtml(g.times)}</span></div>`).join('')}</div>`).join('')}</div>`;
     }).join('');
     return `<section class="stn" aria-label="${stn.lines.map((l) => (l === 'GS' ? 'S' : l)).join(', ')} trains"><div class="stn-lines">${stn.lines.map((l) => bullet(l, 'small')).join('')}</div>${dirs}</section>`;
   }).join('');
@@ -265,7 +269,7 @@ async function loadNotices() {
   renderNotices();
 }
 function noticeWho(n) {
-  if (n.carrier === 'subway') return (n.lines || []).filter((l) => /^[0-9A-Z]{1,2}$/.test(l)).slice(0, 4).map((l) => bullet(l.replace(/X$/, ''), 'tiny')).join('') || bullet('GS', 'tiny');
+  if (n.carrier === 'subway') return (n.lines || []).filter((l) => /^[0-9A-Z]{1,2}$/.test(l)).slice(0, 4).map((l) => bullet(l.replace(/X$/, ''), 'tiny', /^[67]X$/.test(l))).join('') || bullet('GS', 'tiny');
   if (n.carrier === 'lirr') return '<span class="plate lirr">LIRR</span>';
   const ln = (n.lines || []).map((x) => LINE_NAMES[x]).filter(Boolean);
   const first = ln[0] ? Object.values(MNR_LINES).find(([nm]) => nm === ln[0]) : null;
