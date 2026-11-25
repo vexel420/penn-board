@@ -846,3 +846,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - "Other options", the airport helper, nearby buses and elevators.
   - Penn unchanged: its PATH panel, maps and airport options.
 - **Late-night subway banners** come from subway-data.json `switches`/`nightGaps`/`night` by station, which now cover Grand Central too. `build-subway-data.py` knows its local-only next stops (630, 632), so the 4 switches from express to local late nights. The 5 is in `NIGHT_GAP_LINES` (no Manhattan service late nights: "No 5 trains until…, use the 4"). Penn's entries are unchanged.
+
+## Buses panel: fixed order, route links, stop map (Nov 25)
+- Owner: buses should stay in a fixed order, not reorder by which comes next. `renderHubBuses` lists rows in `HUB.busStops` order (one row per line per stop) and shows "none due soon" / "no live times" instead of dropping a row. Times more than 90 minutes out are hidden.
+- Each route badge links to the MTA route page, `https://www.mta.info/schedules/bus/<route lowercase>` (e.g. m34-sbs), in a new tab.
+- "Map of the stops" opens a Leaflet sheet: hub star plus numbered stop dots (nudged apart when two stops share a corner) and a numbered list. Stop coordinates (`ll`) in hub.js come from the MTA Manhattan bus GTFS.

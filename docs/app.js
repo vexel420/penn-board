@@ -3654,25 +3654,57 @@ function loadHubBuses() {
   Promise.all(HUB_BUS_STOPS.map((b) => fetch(`${window.PENN_RELAY}/mta-bus-stop?stop=${b.stop}`, { cache: 'no-store' })
     .then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) hubBuses.set(b.stop, d.buses || []); }).catch(() => {}))).then(renderHubBuses);
 }
+// Fixed rows (owner, Nov 25: buses stay put rather than reorder by which comes
+// next): stop by stop as listed in hub.js, each route at it, with its next
+// times or "none due soon". The route badge opens the MTA's page for that route
+// (schedule and route map) in a new tab; "Map of the stops" shows where each stop is.
+const busRouteUrl = (ln) => `https://www.mta.info/schedules/bus/${encodeURIComponent(String(ln).toLowerCase())}`;
+const busBadge = (ln) => `<a class="bus-pl" href="${busRouteUrl(ln)}" target="_blank" rel="noopener" title="${esc(ln)} route map and schedule (MTA, opens in a new tab)">${esc(ln.replace('-SBS', ''))}${/SBS/.test(ln) ? '<small>SBS</small>' : ''}</a>`;
 function renderHubBuses() {
   const el = $('hub-buses');
   if (!el) return;
   if (!hubBuses.size) { el.innerHTML = `<p class="empty">${window.PENN_RELAY ? 'Loading buses…' : 'Bus times aren’t available here.'}</p>`; return; }
   const t = Date.now();
   const mins = (times) => times.map((x, i) => { const m = Math.max(0, Math.round((x - t / 1000) / 60)); return i === 0 ? (m < 1 ? '<b class="now">now</b>' : `<b>${m}</b> min`) : String(m); }).join(', ');
-  const rows = HUB_BUS_STOPS.flatMap((b) => {
-    const byLine = new Map();
-    for (const x of hubBuses.get(b.stop) || []) {
-      const ln = String(x.line).toUpperCase();
-      if (!b.lines.includes(ln) || !x.at || Date.parse(x.at) < t - 30000) continue;
-      if (!byLine.has(ln)) byLine.set(ln, []);
-      byLine.get(ln).push(Date.parse(x.at) / 1000);
-    }
-    return [...byLine.entries()].map(([ln, times]) => ({ ln, times: times.sort((a, c) => a - c).slice(0, 3), b }));
-  }).sort((x, y) => x.times[0] - y.times[0]);
-  el.innerHTML = rows.length ? `<section class="stn">${rows.map((x) => `<div class="sline"><span class="bus-pl">${esc(x.ln.replace('-SBS', ''))}${/SBS/.test(x.ln) ? '<small>SBS</small>' : ''}</span><span class="sdest"><span class="dname">${esc(x.b.label)}</span> <small>${esc(x.b.where)}</small></span><span class="smins">${mins(x.times)}</span></div>`).join('')}</section>`
-    : `<p class="empty">No buses reported at ${HUB.short} right now.</p>`;
+  const rows = HUB_BUS_STOPS.flatMap((b) => b.lines.map((ln) => {
+    const times = (hubBuses.get(b.stop) || []).filter((x) => String(x.line).toUpperCase() === ln && x.at && Date.parse(x.at) >= t - 30000 && Date.parse(x.at) <= t + 90 * 60000)
+      .map((x) => Date.parse(x.at) / 1000).sort((a, c) => a - c).slice(0, 3);
+    const when = times.length ? mins(times) : `<span class="sb-dim">${hubBuses.has(b.stop) ? 'none due soon' : 'no live times'}</span>`;
+    return `<div class="sline">${busBadge(ln)}<span class="sdest"><span class="dname">${esc(b.label)}</span> <small>${esc(b.where)}</small></span><span class="smins">${when}</span></div>`;
+  }));
+  el.innerHTML = `<section class="stn">${rows.join('')}</section><button type="button" class="al-map bus-map-btn" data-busmap>Map of the stops</button>`;
 }
+// The stops on a map, each labeled with its routes and direction.
+async function openBusMap() {
+  changeOpen = { id: 'busmap', view: 1 };
+  $('chg-kind').textContent = `Buses at ${HUB.short}`;
+  $('chg-h').textContent = 'Where the bus stops are';
+  $('chg-top').innerHTML = '<p class="cm-sum">Tap a route below for the MTA’s route map and schedule (opens in a new tab).</p>';
+  $('chg-below').innerHTML = `<ul class="cm-stns">${HUB_BUS_STOPS.map((b, i) => `<li class="cm-stn"><div class="opt-h"><span class="bus-num">${i + 1}</span>${b.lines.map(busBadge).join(' ')}</div><span class="cm-dir">${esc(b.label)}, ${esc(b.where)}</span></li>`).join('')}</ul>`;
+  openSheet();
+  const box = $('chg-map');
+  box.hidden = false;
+  try {
+    const Lf = await loadLeaflet();
+    if (!changeOpen || changeOpen.id !== 'busmap') return;
+    if (changeMap) changeMap.remove();
+    changeMap = Lf.map(box, { zoomSnap: 0.25, scrollWheelZoom: false });
+    Lf.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'cm-tiles', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors · Stops: MTA' }).addTo(changeMap);
+    Lf.marker(HUB.ll, { interactive: false, icon: Lf.divIcon({ className: '', iconSize: [0, 0], html: '<div class="hub-star" aria-label="This station">★</div>' }) }).addTo(changeMap);
+    // Numbered dots (the routes are in the list below); stops on the same
+    // corner are nudged apart so every number shows.
+    const placed = [];
+    HUB_BUS_STOPS.forEach((b, i) => {
+      let [la, lo] = b.ll;
+      while (placed.some(([a, c]) => Math.abs(a - la) < 0.00012 && Math.abs(c - lo) < 0.00016)) lo += 0.00018;
+      placed.push([la, lo]);
+      Lf.marker([la, lo], { title: `${i + 1}: ${b.lines.join(', ')}, ${b.label}`, icon: Lf.divIcon({ className: '', iconSize: [0, 0], html: `<div class="bus-dot">${i + 1}</div>` }) })
+        .bindPopup(`<b>${i + 1}. ${b.lines.map(esc).join(', ')}</b><br>${esc(b.label)}<br>${esc(b.where)}`).addTo(changeMap);
+    });
+    changeMap.fitBounds(Lf.latLngBounds([HUB.ll, ...HUB_BUS_STOPS.map((b) => b.ll)]).pad(0.2));
+  } catch { box.hidden = true; }
+}
+document.addEventListener('click', (e) => { if (e.target.closest('[data-busmap]')) openBusMap(); });
 loadHubBuses();
 setInterval(loadHubBuses, 60000);
 setInterval(renderHubBuses, 10000);
