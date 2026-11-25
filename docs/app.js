@@ -3846,21 +3846,55 @@ function ewrExpressOptions(nowS) {
 
 // ---------- Islip (Long Island MacArthur) ----------
 // LIRR to Ronkonkoma (live), then a taxi or ride-hail, about 5 minutes, per
-// MacArthur Airport's and the MTA's own pages; no scheduled shuttle to
-// Ronkonkoma is confirmed (Nov 25), so none is shown.
+// MacArthur Airport's and the MTA's own pages (no scheduled shuttle to
+// Ronkonkoma); or LIRR to Central Islip or Patchogue and Suffolk County
+// Transit's route 6 bus, the one bus that serves the terminal.
+// When a live LIRR train from Penn reaches a station, by the timetable (else null).
+function lirrArrivalAt(r, station) {
+  if (typeof lirrTT === 'undefined' || !lirrTT || !lirrData) return null;
+  const id = Object.keys(lirrData.stops).find((k) => normName2(lirrData.stops[k][0]) === normName2(station));
+  const trip = lirrTripsNear().find((x) => x.train === trainNo(r.train));
+  const at = trip && trip.calls.find(([sid]) => sid === id);
+  const penn = trip && trip.calls.find(([sid]) => sid === lirrTT.penn);
+  return at && penn ? at[1] + ((r.leaves ?? r.time) - penn[1]) : null;
+}
+// Suffolk County Transit route 6 to the terminal (docs/isp-bus.json,
+// scripts/build-isp-bus.py): from the LIRR's Central Islip or Patchogue station.
+let ispBus;
+let ispBusLoading = null;
+const loadIspBus = () => ispBusLoading || (ispBusLoading = fetch('isp-bus.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => { ispBus = d; if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }));
+function ispBusAfter(station, t) {
+  if (!ispBus || !ispBus.from[station]) return null;
+  const key = { weekday: 'wk', saturday: 'sa', sunday: 'su' };
+  const nowS = Date.now() / 1000;
+  const midnight = nowS - nyNow().mins * 60 - (nowS % 60);
+  const list = [...(ispBus.from[station][key[nyNow().day]] || []), ...(ispBus.from[station][key[nyNow(1).day]] || []).map(([a, b]) => [a + 1440, b + 1440])];
+  const x = list.find(([dep]) => midnight + dep * 60 >= t);
+  return x ? { leave: midnight + x[0] * 60, arrive: midnight + x[1] * 60 } : null;
+}
 function ispOptions(nowS) {
+  loadIspBus();
+  const out = [];
+  // LIRR to Ronkonkoma, then a taxi or ride-hail (about 5 min).
   const l = railTo(['lirr'], 'Ronkonkoma', nowS)[0];
-  if (!l) return [];
-  const dep = l.leaves ?? l.time;
-  let arr = dep + 80 * 60;
-  if (typeof lirrTT !== 'undefined' && lirrTT && lirrData) {
-    const ronk = Object.keys(lirrData.stops).find((id) => /^ronkonkoma$/i.test(lirrData.stops[id][0]));
-    const trip = lirrTripsNear().find((x) => x.train === String(l.train));
-    const c = trip && trip.calls.find(([sid]) => sid === ronk);
-    if (c) arr = c[1] + (dep - (trip.calls.find(([sid]) => sid === lirrTT.penn) || [0, dep])[1]);
+  if (l) {
+    const dep = l.leaves ?? l.time;
+    const arr = lirrArrivalAt(l, 'Ronkonkoma') || dep + 80 * 60;
+    out.push({ at: arr + 8 * 60, fare: null, fareText: 'LIRR fare to Ronkonkoma, plus the taxi', live: true,
+      legs: [[dep, `${airPl('LIRR', 'p-lirr')} to Ronkonkoma${l.track ? `, track ${esc(l.track)}` : ''}`], [arr + 3 * 60, 'Taxi or ride-hail to the terminal, about 5 min']] });
   }
-  return [{ at: arr + 8 * 60, fare: null, fareText: 'LIRR fare to Ronkonkoma, plus the taxi', live: true,
-    legs: [[dep, `${airPl('LIRR', 'p-lirr')} to Ronkonkoma${l.track ? `, track ${esc(l.track)}` : ''}`], [arr + 3 * 60, 'Taxi or ride-hail to the terminal, about 5 min']] }];
+  // LIRR to Central Islip or Patchogue, then Suffolk County Transit's route 6 to the terminal.
+  for (const station of ['Central Islip', 'Patchogue']) {
+    const t = railTo(['lirr'], station, nowS)[0];
+    if (!t) continue;
+    const dep = t.leaves ?? t.time;
+    const arr = lirrArrivalAt(t, station);
+    const bus = arr && ispBusAfter(station, arr + 3 * 60);
+    if (!bus || bus.leave - arr > 50 * 60) continue; // no bus soon enough after the train
+    out.push({ at: bus.arrive, fare: null, fareText: `LIRR fare to ${station}, plus ${money(ispBus.fare || 2.25)} for the bus`, live: true,
+      legs: [[dep, `${airPl('LIRR', 'p-lirr')} to ${station}${t.track ? `, track ${esc(t.track)}` : ''}`], [bus.leave, `${airPl('Suffolk 6', 'p-partner')} bus from ${station} station to the terminal (scheduled)`]] });
+  }
+  return out;
 }
 function renderAirport() {
   const nowS = Date.now() / 1000;
@@ -3878,7 +3912,7 @@ function renderAirport() {
 }
 function openAirport() {
   changeOpen = { id: 'airport', view: 1 };
-  loadAirportBuses(); loadLirrTT(); loadEwrExpress();
+  loadAirportBuses(); loadLirrTT(); loadEwrExpress(); loadIspBus();
   $('chg-map').hidden = true;
   $('chg-kind').textContent = 'From Penn Station';
   $('chg-h').textContent = 'To the airport';

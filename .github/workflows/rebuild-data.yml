@@ -52,6 +52,12 @@ jobs:
       - name: Buses to JFK and LaGuardia (airport helper)
         run: python3 scripts/build-airport-buses.py "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_busco.zip "$RUNNER_TEMP"/gtfs_m.zip
 
+      - name: Bus to Islip airport (Suffolk County Transit route 6)
+        continue-on-error: true
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/sct.zip" https://tracksctbus.org/gtfs
+          python3 scripts/build-isp-bus.py "$RUNNER_TEMP/sct.zip"
+
       - name: Subway entrances (MTA open data)
         continue-on-error: true
         run: python3 scripts/build-subway-entrances.py
