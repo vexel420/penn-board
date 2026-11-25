@@ -284,6 +284,9 @@ async function githubActionsCaller(request) {
   } catch { return false; }
 }
 
+// Venues for Ticketmaster's Discovery API (looked up by name and city).
+const TM_VENUES = [['Madison Square Garden', 'New York'], ['UBS Arena', 'Elmont']];
+
 export default {
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -358,6 +361,44 @@ export default {
         if (hit) return hit;
         const d = await busCall(env, 'getBusDV', { stop: 'PABT', direction: '', route: '', IP: '' });
         const res = json(JSON.stringify(d), 30);
+        ctx.waitUntil(cache.put(key, res.clone()));
+        return res;
+      }
+      if (pathname === '/events') {
+        // Big events that crowd the stations (owner, Nov 25): games and shows
+        // at Madison Square Garden (right above Penn) and UBS Arena (LIRR to
+        // Elmont-UBS Arena), from Ticketmaster once its key is set. Hockey is
+        // in docs/events.json (the NHL's schedule, rebuilt daily). Cached 3 hours.
+        const cache = caches.default, key = new Request('https://relay.local/events-v4', { method: 'GET' });
+        const hit = await cache.match(key);
+        if (hit) return hit;
+        const out = [], errors = [];
+        const now = Date.now();
+        // Knicks games and concerts: the NBA blocks automated access to its
+        // files, so these come from Ticketmaster's official Discovery API once
+        // the TICKETMASTER_KEY secret is set. Owner-listed events: docs/events-extra.json.
+        if (env.TICKETMASTER_KEY) {
+          const tm = (path) => fetch(`https://app.ticketmaster.com/discovery/v2/${path}&apikey=${env.TICKETMASTER_KEY}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))));
+          const iso = (t) => new Date(t).toISOString().slice(0, 19) + 'Z';
+          for (const [name, city] of TM_VENUES) {
+            try {
+              const v = await tm(`venues.json?keyword=${encodeURIComponent(name)}&stateCode=NY&size=20`);
+              const venue = ((v._embedded && v._embedded.venues) || []).find((x) => x.name === name && x.city && x.city.name === city);
+              if (!venue) { errors.push(`Ticketmaster: no venue ${name}`); continue; }
+              const d = await tm(`events.json?venueId=${venue.id}&size=50&sort=date,asc&startDateTime=${iso(now - 6 * 3600e3)}&endDateTime=${iso(now + 8 * 86400e3)}`);
+              for (const e of (d._embedded && d._embedded.events) || []) {
+                const start = e.dates && e.dates.start && e.dates.start.dateTime;
+                if (!start || /cancel|postpon/i.test((e.dates.status && e.dates.status.code) || '')) continue;
+                if (/parking|suite|premium|hospitality|tour package/i.test(e.name)) continue;
+                const cls = JSON.stringify(e.classifications || []);
+                if (/hockey/i.test(cls)) continue; // hockey comes from the NHL
+                out.push({ id: `tm-${e.id}`, kind: /basketball/i.test(cls) ? 'basketball' : /sports/i.test(cls) ? 'sports' : 'show', venue: name, start, title: e.name, source: 'Ticketmaster' });
+              }
+            } catch (err) { errors.push(`Ticketmaster ${name}`); }
+          }
+        }
+        out.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
+        const res = json(JSON.stringify({ events: out, errors, at: new Date().toISOString() }), errors.length ? 600 : 3 * 3600);
         ctx.waitUntil(cache.put(key, res.clone()));
         return res;
       }

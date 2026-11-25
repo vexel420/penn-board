@@ -3354,6 +3354,113 @@ function renderServiceNotices() {
   $('njt-alt').innerHTML = railAltHtml();
   renderAlertsTab();
 }
+// ---------- elevator and escalator outages at Penn (owner, Nov 25) ----------
+// The MTA's live outage feed (no key; the page reads it directly) for 34 St-Penn
+// Station: both subway stations and the LIRR entrance. docs/penn-elevators.json
+// (scripts/build-penn-elevators.py, weekly) adds the MTA's own advice for each.
+// Shown in the subway panel and on the Alerts tab.
+const ENE_FEED = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene.json';
+const ENE_STATIONS = new Set(['34 St-Penn Station']);
+let eneOut = [], eneInfo = {}, eneAt = 0;
+function loadElevators() {
+  if (Date.now() - eneAt < 3 * 60000) return;
+  eneAt = Date.now();
+  if (!Object.keys(eneInfo).length) fetch('penn-elevators.json').then((r) => (r.ok ? r.json() : {})).then((d) => { eneInfo = d || {}; renderElevators(); }).catch(() => {});
+  fetch(ENE_FEED, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((d) => { eneOut = (Array.isArray(d) ? d : []).filter((x) => ENE_STATIONS.has(x.station) && x.isupcomingoutage !== 'Y'); renderElevators(); })
+    .catch(() => {});
+}
+// "11/25/2026 02:00:00 PM" (New York time) -> "about 2 PM today" / "about 2 PM Fri, Nov 27".
+function eneWhen(x) {
+  const m = /(\d+)\/(\d+)\/(\d+) (\d+):(\d+):\d+ (AM|PM)/.exec(x || '');
+  if (!m) return '';
+  const time = `${+m[4]}${m[5] !== '00' ? ':' + m[5] : ''} ${m[6]}`;
+  const ymd = `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+  if (ymd === nyNow().date) return `about ${time} today`;
+  if (ymd === nyNow(1).date) return `about ${time} tomorrow`;
+  const d = new Date(`${ymd}T12:00:00`);
+  return `about ${time} ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
+}
+const ENE_ICON = '<svg class="ic ene-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4" r="2" fill="currentColor"/><path d="M19 13v-2c-1.5 0-3-.6-4-1.6l-1.3-1.4c-.4-.4-1-.7-1.6-.7-1.1 0-2 .9-2 2v5.7c0 1.1.9 2 2 2h5v5h2v-5.5c0-1.1-.9-2-2-2h-3v-3.5c1.3 1.1 3 1.9 4.9 2zM12.1 19a3 3 0 0 1-5.8-1 3 3 0 0 1 2.3-2.9v-2.1A5 5 0 1 0 14.1 19z" fill="currentColor"/></svg>';
+function elevatorsHtml() {
+  return eneOut.map((x) => {
+    const info = eneInfo[x.equipment] || {};
+    const kind = x.equipmenttype === 'ES' ? 'Escalator' : 'Elevator';
+    const what = info.short || x.serving || '';
+    const back = eneWhen(x.estimatedreturntoservice);
+    // The MTA's advice, without its own status line ("out of service for replacement"), which may be older than the outage.
+    const advice = String(info.alt || '').replace(/^[^.]*out of service[^.]*\.\s*/i, '');
+    const alt = advice ? `<details class="ene-alt"><summary>What to do instead</summary><p>${esc(advice)}</p></details>` : '';
+    return `<div class="ene-note">${ENE_ICON}<div><p><b>${kind} out</b>${x.trainno ? ` at the ${esc(x.trainno)} station` : ''}: ${esc(what)}.${back ? ` Back in service by ${esc(back)} (MTA estimate).` : ''}</p>${alt}</div></div>`;
+  }).join('');
+}
+function renderElevators() {
+  const el = $('elevators');
+  if (el) el.innerHTML = elevatorsHtml();
+  if (board && board.notices) renderAlertsTab();
+}
+loadElevators();
+setInterval(loadElevators, 60000);
+
+// ---------- event warnings (owner, Nov 25) ----------
+// Big events that crowd the stations: games and shows at Madison Square
+// Garden (right above Penn) and UBS Arena (LIRR to Elmont-UBS Arena).
+// docs/events.json (scripts/build-events.py, daily: the NHL's schedule and any
+// owner-listed events) plus Ticketmaster through the relay once its key is set.
+// Shown from 2 hours before the start until an hour after the usual end.
+let stationEvents = [];
+let eventsAt = 0;
+const EVENT_MIN = { hockey: 160, basketball: 150, sports: 180, show: 180 };
+function loadEvents() {
+  if (Date.now() - eventsAt < 30 * 60000) return;
+  eventsAt = Date.now();
+  const get = (u) => fetch(u, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  Promise.all([get('events.json'), window.PENN_RELAY ? get(window.PENN_RELAY + '/events') : null]).then(([a, b]) => {
+    const all = [...((a && a.events) || []), ...((b && b.events) || [])];
+    const seen = new Set();
+    stationEvents = all.filter((e) => {
+      const k = `${e.venue}|${Math.round(Date.parse(e.start) / 600000)}`; // same venue, same start: one event
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    }).sort((x, y) => Date.parse(x.start) - Date.parse(y.start));
+    renderEvents();
+  });
+}
+function eventsNow(nowS) {
+  return stationEvents.map((e) => {
+    const start = Date.parse(e.start) / 1000;
+    const end = start + (EVENT_MIN[e.kind] || 180) * 60;
+    return { ...e, startS: start, endS: end };
+  }).filter((e) => nowS >= e.startS - 2 * 3600 && nowS <= e.endS + 3600);
+}
+function eventText(e, nowS) {
+  const at = (t) => hm(t).replace(':00 ', ' ');
+  const msg = /garden/i.test(e.venue);
+  const where = msg ? 'Madison Square Garden' : e.venue;
+  if (nowS < e.startS) return msg
+    ? `<b>${esc(e.title)}</b> at ${where}, ${at(e.startS)}. Expect crowds at Penn before it starts and when it ends, around ${at(e.endS)}.`
+    : `<b>${esc(e.title)}</b> at ${esc(where)}, ${at(e.startS)}. LIRR trains to Elmont-UBS Arena will be crowded.`;
+  if (nowS < e.endS) return msg
+    ? `<b>${esc(e.title)}</b> at ${where} ends around ${at(e.endS)}. Expect crowds at Penn from then.`
+    : `<b>${esc(e.title)}</b> at ${esc(where)} ends around ${at(e.endS)}. Expect crowded LIRR trains back toward Penn after that.`;
+  return msg
+    ? `<b>${esc(e.title)}</b> just ended at ${where}. Expect crowds at Penn for the next hour.`
+    : `<b>${esc(e.title)}</b> just ended at ${esc(where)}. LIRR trains back toward Penn will be crowded.`;
+}
+const EVENT_ICON = '<svg class="ic ev-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z" fill="currentColor"/></svg>';
+function eventsHtml() {
+  const nowS = Date.now() / 1000;
+  return eventsNow(nowS).map((e) => `<div class="ev-note">${EVENT_ICON}<p>${eventText(e, nowS)}</p></div>`).join('');
+}
+function renderEvents() {
+  const el = $('events-note');
+  if (el) el.innerHTML = eventsHtml();
+  if (board && board.notices) renderAlertsTab();
+}
+loadEvents();
+setInterval(() => { loadEvents(); renderEvents(); }, 60000);
+
 // Phones: every notice on its own tab, by where it applies, with a count on
 // the tab. (Computers keep the strips above the trains and in the subway panel.)
 function renderAlertsTab() {
@@ -3364,10 +3471,13 @@ function renderAlertsTab() {
     return `<div class="al-card${n.urgent ? ' urgent' : ''}" data-nid="${esc(n.id)}"><span class="who">${noticeWho(n)}</span><p><span class="kind">${esc(friendlyType(n.type))}</span>${noticeFull(n)}${map || opts ? `<br>${map}${opts}` : ''}</p></div>`;
   };
   const group = (title, list, none) => `<h2 class="al-h">${title}</h2>${list.length ? list.map(card).join('') : `<p class="al-none">${none}</p>`}`;
-  $('alerts').innerHTML = lirrAltHtml() + njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
+  const ev = eventsHtml();
+  const lifts = elevatorsHtml();
+  $('alerts').innerHTML = (ev ? `<h2 class="al-h">Events</h2>${ev}` : '') + lirrAltHtml() + njtAltHtml() + group('Trains at Penn', rail, 'No notices for LIRR, NJ Transit or Amtrak right now.')
     + group('Subway', subway, 'No subway notices for the lines at Penn right now.')
-    + group('PATH', board.notices.path || [], 'No PATH alerts right now.');
-  const n = rail.length + subway.length + (board.notices.path || []).length;
+    + group('PATH', board.notices.path || [], 'No PATH alerts right now.')
+    + `<h2 class="al-h">Elevators and escalators</h2>${lifts || '<p class="al-none">All elevators and escalators in the 34 St-Penn Station subway are working, per the MTA.</p>'}`;
+  const n = rail.length + subway.length + (board.notices.path || []).length + eventsNow(Date.now() / 1000).length + eneOut.length;
   $('alerts-count').textContent = n ? String(n) : '';
 }
 document.addEventListener('toggle', (e) => {

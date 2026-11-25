@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Limelight&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611251145">
+<link rel="stylesheet" href="style.css?v=202611251204">
 </head>
 <body data-view="departures">
 
@@ -51,6 +51,7 @@
       <!-- Notices sit in the train column, so the subway panel starts at the top beside them. -->
       <div id="notices" class="notices"></div>
       <div id="njt-alt"></div>
+      <div id="events-note"></div>
       <div id="rail-notices"></div>
       <div class="cols" aria-hidden="true">
         <span>Time</span><span></span><span id="col-place">To</span><span>Status</span><span class="col-track">Track</span>
@@ -61,6 +62,7 @@
     <aside class="subway" aria-labelledby="sub-h">
       <h2 id="sub-h">Subway <span>34 St–Penn Station</span></h2>
       <div id="subway-notices"></div>
+      <div id="elevators"></div>
       <div id="subway"><p class="empty">Loading subway times…</p></div>
 
       <h2 id="path-h" class="path-h">PATH <span>33 St station, Sixth Av at 32 St</span></h2>
@@ -116,8 +118,8 @@
   </div>
 </dialog>
 
-<script src="config.js?v=202611251145"></script>
-<script src="feeds.js?v=202611251145"></script>
-<script src="app.js?v=202611251145"></script>
+<script src="config.js?v=202611251204"></script>
+<script src="feeds.js?v=202611251204"></script>
+<script src="app.js?v=202611251204"></script>
 </body>
 </html>

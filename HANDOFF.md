@@ -744,3 +744,18 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Weekday holidays use the weekend shuttle table. They're detected as weekdays with few Metro-North trains to Beacon (`weekendDates`).
 - Coach USA's file has a Stewart stop (2577798), but no trip calls there.
 - Live 62 bus: the relay has a new route, `/njt-bus-stop?stop=NNNNN` (getBusDV, digits only, cached 30 s). Newark Penn's Raymond Blvd bus lanes are stop 18835. The PATH + 62 option uses the first 62 "VIA AIRPORT" bus after you reach Newark Penn, with its gate. It's shown as live when a vehicle is assigned, otherwise as scheduled.
+
+## Nov 25: event warnings and elevator outages
+- **Event warnings.** `docs/events.json` is built by `scripts/build-events.py` from two sources: the NHL's own schedule (Rangers home games at MSG, Islanders home games at UBS Arena) and `docs/events-extra.json`.
+  - `docs/events-extra.json` is the owner's own list, for concerts, Knicks games, parades and the like. Entries look like `{"venue","title","start" with offset,"kind"}`.
+  - A daily Action (`.github/workflows/events.yml`) rebuilds the file. It also runs when `events-extra.json` changes.
+  - The relay's `/events` route adds Ticketmaster Discovery events at MSG and UBS Arena once the Worker secret `TICKETMASTER_KEY` is set. Without the key it returns nothing.
+  - The NBA blocks automated access to its own files, so we don't fetch them, and we don't send browser-like headers to get around that.
+  - The NHL rate-limits the relay (429), which is why hockey is a daily file and not fetched live.
+  - On the board, a gold banner shows above the trains and on the Alerts tab. It appears from 2 h before an event's start until 1 h after its usual end. Usual lengths: hockey 160 min, basketball 150, other sports and shows 180.
+  - MSG text: crowds at Penn before the start and when it ends. UBS Arena text: crowded LIRR trains to Elmont-UBS Arena.
+- **Elevator and escalator outages at 34 St-Penn Station.**
+  - Live from the MTA's feed (`nyct%2Fnyct_ene.json`, no key, open to browsers), refreshed every 3 min.
+  - The MTA's "what to do instead" advice comes from `docs/penn-elevators.json` (`scripts/build-penn-elevators.py`, weekly). The advice's own status sentence is dropped because it can be older than the outage.
+  - Shown in the subway panel and on the Alerts tab under "Elevators and escalators", which says when all are working.
+  - Amtrak and NJ Transit don't publish elevator status for the Penn concourses, so only the MTA's equipment is covered (subway, plus the LIRR entrance elevators EL34X and EL618).

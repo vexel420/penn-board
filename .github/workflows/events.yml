@@ -1,0 +1,39 @@
+# Daily refresh of big events near the stations (owner, Nov 2026): the NHL's
+# schedule for Rangers games at Madison Square Garden and Islanders games at
+# UBS Arena, plus anything listed in docs/events-extra.json. Commits
+# docs/events.json only if it changed. Run it by hand after editing the extra list.
+name: Refresh events
+
+on:
+  schedule:
+    - cron: '41 9 * * *'   # daily 09:41 UTC (about 4:41 AM in New York)
+  push:
+    paths: ['docs/events-extra.json']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rebuild-data
+  cancel-in-progress: false
+
+jobs:
+  events:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build events
+        run: python3 scripts/build-events.py
+      - name: Commit if anything changed
+        run: |
+          git add docs/events.json
+          if git diff --cached --quiet; then
+            echo "No event changes today."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Daily events refresh"
+          git push

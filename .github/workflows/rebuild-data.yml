@@ -68,6 +68,10 @@ jobs:
       - name: LIRR timetable (other options for delayed trains)
         run: python3 scripts/build-lirr-timetable.py "$RUNNER_TEMP/gtfslirr.zip"
 
+      - name: Penn elevators and escalators (the MTA's advice when one is out)
+        continue-on-error: true
+        run: python3 scripts/build-penn-elevators.py
+
       - name: Stewart Airport (Metro-North to Beacon; Coach USA part kept as is)
         run: |
           curl -fsSL --retry 3 -o "$RUNNER_TEMP/gtfsmnr.zip" https://rrgtfsfeeds.s3.amazonaws.com/gtfsmnr.zip

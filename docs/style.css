@@ -665,3 +665,19 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 .am-saved b { color: var(--gold); }
 .am-saved button { background: none; border: 0; font: inherit; color: var(--gold); text-decoration: underline; cursor: pointer; }
 .am-tag { display: inline-block; padding: .05rem .45rem; border-radius: 4px; font-size: .78rem; font-weight: 800; background: #3a2a14; color: var(--late); margin-left: .3rem; }
+
+/* ---------- event warnings ---------- */
+.ev-note { display: flex; gap: .7rem; align-items: flex-start; margin: 0 0 .7rem; padding: .75rem .9rem; border: 1px solid var(--gold); border-radius: 8px; background: rgba(230, 183, 81, .08); color: var(--ivory); }
+.ev-note p { margin: 0; font-size: 1.02rem; line-height: 1.4; }
+.ev-note b { color: var(--gold); }
+.ev-ic { flex: none; width: 1.4rem; height: 1.4rem; color: var(--gold); margin-top: .05rem; }
+#alerts .ev-note { margin: .4rem 0 .8rem; }
+
+/* ---------- elevator and escalator outages ---------- */
+.ene-note { display: flex; gap: .65rem; align-items: flex-start; margin: .5rem 0 .7rem; padding: .7rem .85rem; border: 1px solid var(--late); border-radius: 8px; background: rgba(240, 169, 74, .08); }
+.ene-note p { margin: 0; font-size: 1rem; line-height: 1.4; }
+.ene-note > div > p > b:first-child { color: var(--late); }
+.ene-ic { flex: none; width: 1.35rem; height: 1.35rem; color: var(--late); margin-top: .05rem; }
+.ene-alt { margin-top: .4rem; }
+.ene-alt summary { cursor: pointer; color: var(--late); font-weight: 700; font-size: .95rem; }
+.ene-alt p { margin: .35rem 0 0; font-size: .98rem; }
