@@ -38,6 +38,58 @@ const money = (x) => `$${x.toFixed(2)}`;
 const hm = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
 const minsText = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
 const airPl = (txt, cls) => `<span class="pl ${cls}">${txt}</span>`;
+// Live NJ Transit departures at one bus stop (relay /njt-bus-stop), 30 s fresh.
+const NEWARK_PENN_62_STOP = '18835'; // Raymond Blvd bus lanes, gates 2A and 3A
+const njtStopLive = new Map(); // stop -> { at, trips }
+const njtStopLoading = new Set();
+function loadNjtStop(stop) {
+  const cur = njtStopLive.get(stop);
+  if (njtStopLoading.has(stop) || (cur && Date.now() - cur.at < 30000) || !window.PENN_RELAY) return;
+  njtStopLoading.add(stop);
+  fetch(`${window.PENN_RELAY}/njt-bus-stop?stop=${stop}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((d) => { njtStopLive.set(stop, { at: Date.now(), trips: (d && d.DVTrip) || [] }); })
+    .catch(() => { njtStopLive.set(stop, { at: Date.now(), trips: (cur && cur.trips) || [] }); })
+    .finally(() => { njtStopLoading.delete(stop); if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); });
+}
+// As [{ route, sign, at (epoch s), late, gate, live }], soonest first.
+function njtStopBuses(stop) {
+  loadNjtStop(stop);
+  const cur = njtStopLive.get(stop);
+  if (!cur) return [];
+  const nowS = Date.now() / 1000, now = nyNow().mins;
+  const clockMin = (re, x) => { const c = re.exec(x || ''); return c ? (+c[1] % 12) * 60 + +c[2] + (/pm/i.test(c[3]) ? 720 : 0) : null; };
+  return cur.trips.map((x) => {
+    const t = clockMin(/(\d+):(\d+)\s*(AM|PM)/i, x.departuretime);
+    const st = clockMin(/(\d+):(\d+):\d+\s*(AM|PM)/i, x.sched_dep_time);
+    if (t == null) return null;
+    let inMin = (t - now + 1440) % 1440;
+    if (inMin > 1200) return null; // just left
+    let late = st != null ? (t - st + 1440) % 1440 : 0;
+    if (late > 720) late = 0;
+    return { route: String(x.public_route || ''), sign: String(x.header || ''), at: nowS - (nowS % 60) + inMin * 60, late, gate: String(x.lanegate || '').split('_')[0], live: !!x.vehicle_id && x.vehicle_id !== 'EMPTY' };
+  }).filter(Boolean).sort((a, b) => a.at - b.at);
+}
+// From Newark Penn, once PATH gets you there: one stop on NJ Transit to the
+// airport (with the AirTrain), or the 62 bus (live from NJ Transit at its
+// stop). Shared by every hub (owner, Nov 25: no hub gets better information).
+// `before`: the legs up to Newark Penn; `paid`: fare so far; `paidText`: what for.
+// `live`: false when the PATH train is estimated rather than live.
+function newarkPennOptions(before, atNewark, night, paid, paidText, live) {
+  const out = [];
+  const tr = atNewark + (AIR_MIN.change + (night ? AIR_MIN.njtNewarkWaitNight : AIR_MIN.njtNewarkWait)) * 60;
+  out.push({ at: tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: paid + FARES.njtNewarkEwr, live,
+    fareText: paidText === 'PATH' ? undefined : `${money(paid + FARES.njtNewarkEwr)} one way (${paidText} + NJ Transit with the AirTrain)`,
+    legs: [...before, [tr, `${airPl('NJ Transit', 'p-njt')} at Newark Penn, one stop to Newark Airport`], [tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
+  // The 62: NJ Transit's own departures at Newark Penn (stop 18835) when in.
+  const ready62 = atNewark + AIR_MIN.change * 60;
+  const b62 = njtStopBuses(NEWARK_PENN_62_STOP).find((x) => x.route === '62' && /AIRPORT/i.test(x.sign) && x.at >= ready62);
+  const bus = b62 ? b62.at : ready62 + AIR_MIN.bus62Wait * 60;
+  const gate = b62 && b62.gate ? b62.gate : night ? '2A' : '3A';
+  out.push({ at: bus + AIR_MIN.bus62Ride * 60, fare: paid + FARES.njtBus1, live, fareText: `${money(paid + FARES.njtBus1)} one way (${paidText} + one-zone bus fare)`,
+    legs: [...before, [bus, `${airPl('62 bus', 'p-njt')} at Newark Penn (Raymond Blvd, gate ${esc(gate)}) to your terminal${b62 ? (b62.live ? ` · <span class="sb-live">live</span>${b62.late >= 2 ? ` <span class="bus-late">${b62.late} min late</span>` : ''}` : ' (scheduled)') : ', about every 20 min'}`]] });
+  return out;
+}
+
 // ---------- buses to JFK and LaGuardia (owner, Nov 25) ----------
 // docs/airport-buses.json (scripts/build-airport-buses.py): for each MTA bus
 // route to the airport, the subway ride from Penn to a stop of that bus, and

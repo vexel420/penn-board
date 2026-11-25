@@ -3621,7 +3621,7 @@ const HUB_AIR = {
   toPabt: 10, toPabtText: 'Walk up 8 Av to Port Authority (41 St), or the A, C or E one stop',
   toGct: 15, toGctText: () => `${lineName('2')} or ${lineName('3')} to Times Sq, then the ${lineName('S')} or ${lineName('7')} to Grand Central`,
 };
-function hubAirportLoad() { loadLirrTT(); loadNjtStop(NEWARK_PENN_62_STOP); loadSubwayGuide(); }
+function hubAirportLoad() { loadLirrTT(); loadNjtStop(NEWARK_PENN_62_STOP); loadSubwayGuide(); loadPathFeed(); }
 // The next live departures from Penn that call at a station (railroads).
 function railTo(carriers, stop, nowS) {
   return ((board && board.departures) || []).filter((r) => carriers.includes(r.carrier) && r.tone !== 'stop' && r.tone !== 'departed' && !r.departed
@@ -3634,37 +3634,6 @@ function subwayTo(route, stopId, nowS) {
     .flatMap((g) => g.trains).filter((t) => t.time >= nowS + 60 && (t.stops || []).includes(stopId)).sort((a, b) => a.time - b.time);
 }
 const subRide = (key, fallback) => { const r = subwayGuide && subwayGuide.rides && subwayGuide.rides[key]; return (r && (nyNow().mins < 5 * 60 ? r.night : r.day)) || fallback; };
-// Live NJ Transit departures at one bus stop (relay /njt-bus-stop), 30 s fresh.
-const NEWARK_PENN_62_STOP = '18835'; // Raymond Blvd bus lanes, gates 2A and 3A
-const njtStopLive = new Map(); // stop -> { at, trips }
-const njtStopLoading = new Set();
-function loadNjtStop(stop) {
-  const cur = njtStopLive.get(stop);
-  if (njtStopLoading.has(stop) || (cur && Date.now() - cur.at < 30000) || !window.PENN_RELAY) return;
-  njtStopLoading.add(stop);
-  fetch(`${window.PENN_RELAY}/njt-bus-stop?stop=${stop}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
-    .then((d) => { njtStopLive.set(stop, { at: Date.now(), trips: (d && d.DVTrip) || [] }); })
-    .catch(() => { njtStopLive.set(stop, { at: Date.now(), trips: (cur && cur.trips) || [] }); })
-    .finally(() => { njtStopLoading.delete(stop); if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); });
-}
-// As [{ route, sign, at (epoch s), late, gate, live }], soonest first.
-function njtStopBuses(stop) {
-  loadNjtStop(stop);
-  const cur = njtStopLive.get(stop);
-  if (!cur) return [];
-  const nowS = Date.now() / 1000, now = nyNow().mins;
-  const clockMin = (re, x) => { const c = re.exec(x || ''); return c ? (+c[1] % 12) * 60 + +c[2] + (/pm/i.test(c[3]) ? 720 : 0) : null; };
-  return cur.trips.map((x) => {
-    const t = clockMin(/(\d+):(\d+)\s*(AM|PM)/i, x.departuretime);
-    const st = clockMin(/(\d+):(\d+):\d+\s*(AM|PM)/i, x.sched_dep_time);
-    if (t == null) return null;
-    let inMin = (t - now + 1440) % 1440;
-    if (inMin > 1200) return null; // just left
-    let late = st != null ? (t - st + 1440) % 1440 : 0;
-    if (late > 720) late = 0;
-    return { route: String(x.public_route || ''), sign: String(x.header || ''), at: nowS - (nowS % 60) + inMin * 60, late, gate: String(x.lanegate || '').split('_')[0], live: !!x.vehicle_id && x.vehicle_id !== 'EMPTY' };
-  }).filter(Boolean).sort((a, b) => a.at - b.at);
-}
 // The next train on a subway route from one Penn station that reaches a station.
 function subwayFromTo(route, from, to, nowS) {
   return ((board && board.subway) || []).filter((g) => g.route === route && g.trains[0] && g.trains[0].stops && g.trains[0].stops[0] === from)
@@ -3711,19 +3680,34 @@ function hubAirportOptions(code, nowS) {
       const atNewark = p.time + ((/hoboken/i.test(p.dest) ? AIR_MIN.pathJsqViaHob : AIR_MIN.pathJsq) + AIR_MIN.change + (night ? AIR_MIN.pathNewarkWaitNight : AIR_MIN.pathNewarkWait) + AIR_MIN.pathNewark) * 60;
       const pathLegs = [[p.time - AIR_MIN.walkToPath * 60, 'Walk to the 33 St PATH station (6 Av & 32 St)'],
         [p.time, `${airPl('PATH', 'p-path')} to ${esc(p.dest)}, then change for Newark`]];
-      const tr = atNewark + (AIR_MIN.change + (night ? AIR_MIN.njtNewarkWaitNight : AIR_MIN.njtNewarkWait)) * 60;
-      o.push({ at: tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: FARES.path + FARES.njtNewarkEwr,
-        legs: [...pathLegs, [tr, `${airPl('NJ Transit', 'p-njt')} at Newark Penn, one stop to Newark Airport`], [tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
-      // The 62: NJ Transit's own departures at Newark Penn (stop 18835) when in.
-      const ready62 = atNewark + AIR_MIN.change * 60;
-      const b62 = njtStopBuses(NEWARK_PENN_62_STOP).find((x) => x.route === '62' && /AIRPORT/i.test(x.sign) && x.at >= ready62);
-      const bus = b62 ? b62.at : ready62 + AIR_MIN.bus62Wait * 60;
-      const gate = b62 && b62.gate ? b62.gate : night ? '2A' : '3A';
-      o.push({ at: bus + AIR_MIN.bus62Ride * 60, fare: FARES.path + FARES.njtBus1, fareText: `${money(FARES.path + FARES.njtBus1)} one way (PATH + one-zone bus fare)`,
-        legs: [...pathLegs, [bus, `${airPl('62 bus', 'p-njt')} at Newark Penn (Raymond Blvd, gate ${esc(gate)}) to your terminal${b62 ? (b62.live ? ` · <span class="sb-live">live</span>${b62.late >= 2 ? ` <span class="bus-late">${b62.late} min late</span>` : ''}` : ' (scheduled)') : ', about every 20 min'}`]] });
+      o.push(...newarkPennOptions(pathLegs, atNewark, night, FARES.path, 'PATH'));
+    }
+    // The E to World Trade Center, then PATH straight to Newark (no change at
+    // Journal Square). Same as the Grand Central board's 4/5 to Fulton St route.
+    const e = subwayFromTo('E', 'A28', 'E01', nowS);
+    if (e) {
+      const night = nyNow().mins < 6 * 60 || nyNow().mins >= 23 * 60;
+      const w = pathFromStation('WTC', /newark/i, e.time + (11 + 5) * 60);
+      if (w) {
+        o.push(...newarkPennOptions([[e.time, `${lineName('E')} to World Trade Center, then walk through to the PATH station`],
+          [w.time, `${airPl('PATH', 'p-path')} to Newark`]], w.time + 22 * 60, night, FARES.subway + FARES.path, 'subway + PATH'));
+      }
     }
   }
   return o;
+}
+// PATH's live departures at any station (relay /path), for the World Trade Center route.
+let pathFeedAll = null, pathFeedAt = 0;
+function loadPathFeed() {
+  if (!window.PENN_RELAY || Date.now() - pathFeedAt < 20000) return;
+  pathFeedAt = Date.now();
+  fetch(`${window.PENN_RELAY}/path`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => { pathFeedAll = d; if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }).catch(() => {});
+}
+function pathFromStation(station, destRe, after) {
+  const st = ((pathFeedAll && pathFeedAll.results) || []).find((r) => r.consideredStation === station);
+  const t = Date.now() / 1000;
+  return ((st && st.destinations) || []).flatMap((d) => d.messages || []).map((m) => ({ dest: m.headSign || '', time: t + (parseInt(m.secondsToArrival, 10) || 0) }))
+    .filter((x) => destRe.test(x.dest) && x.time >= after).sort((a, b) => a.time - b.time)[0];
 }
 
 // ---------- Buses tab (testing) ----------

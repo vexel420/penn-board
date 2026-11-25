@@ -799,3 +799,13 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - **Data:**
   - `docs/ewr-express.json` now also has `gct`: departures from Grand Central (41 St between Park and Lexington). 77 trips a day start there; Port Authority's times are unchanged.
   - `docs/airport-buses-gct.json` comes from `build-airport-buses.py --from gct` (weekly job).
+- **Same options at every hub (owner, Nov 25: "not giving one hub better information than others").**
+  - The PATH-to-Newark-Penn connections (NJ Transit one stop, or the live 62 bus) are one shared function, `newarkPennOptions()` in airport.js. The 62 reader (`loadNjtStop`/`njtStopBuses`) is shared too.
+  - Newark from either hub:
+    - the Newark Airport Express;
+    - NJ Transit and Amtrak (Grand Central: after the subway to Penn; Amtrak from Amtraker);
+    - PATH from 33 St, changing at Journal Square (Grand Central: an 18-min walk. PATH's feed looks only about 20 min ahead, so without a live train far enough out it's estimated from the usual gap and marked Estimated);
+    - PATH from World Trade Center straight to Newark (Penn: the E; Grand Central: the 4/5 to Fulton St).
+  - JFK from either hub: LIRR, the E and the A with the AirTrain, and buses. Grand Central reaches the A via the 7 to Times Sq.
+  - Checked Nov 25 (options per airport, Penn / Grand Central): JFK 5/5, LGA 3/4 (Grand Central adds the 7 + Q70), EWR 7/7, ISP 2/2, SWF 2/2.
+  - A hub's own functions must not be defined in airport.js: a function declared twice across scripts silently replaces the first.

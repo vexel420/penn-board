@@ -576,7 +576,41 @@ function loadMtaBusStop(stop) {
     .catch(() => mtaBusLive.set(stop, { at: Date.now(), error: true }))
     .finally(() => { if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); });
 }
-function hubAirportLoad() { loadLirr(); loadNjtPenn(); }
+// PATH's live departures (relay /path): from 33 St (a walk) and World Trade Center.
+let pathFeed = null, pathAt = 0;
+function loadPath() {
+  if (!RELAY || Date.now() - pathAt < 20000) return;
+  pathAt = Date.now();
+  fetch(`${RELAY}/path`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => { pathFeed = d; if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }).catch(() => {});
+}
+function pathFrom(station, destRe, after) {
+  const st = ((pathFeed && pathFeed.results) || []).find((r) => r.consideredStation === station);
+  const t = nowS();
+  return ((st && st.destinations) || []).flatMap((d) => d.messages || []).map((m) => ({ dest: m.headSign || '', time: t + (parseInt(m.secondsToArrival, 10) || 0) }))
+    .filter((x) => destRe.test(x.dest) && x.time >= after).sort((a, b) => a.time - b.time)[0];
+}
+// Amtrak trains from Penn that stop at Newark Airport (Amtraker, as on the Penn board).
+let amtrakEwr = [], amtrakAt = 0;
+function loadAmtrak() {
+  if (Date.now() - amtrakAt < 60000) return;
+  amtrakAt = Date.now();
+  const epoch = (iso) => (iso ? Date.parse(iso) / 1000 : 0);
+  fetch('https://api-v3.amtraker.com/v3/trains', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    const out = [];
+    for (const list of Object.values(d || {})) for (const tr of list) {
+      const st = tr.stations || [];
+      const a = st.findIndex((x) => x.code === 'NYP'), b = st.findIndex((x) => x.code === 'EWR');
+      if (a < 0 || b <= a || st[a].status === 'Departed') continue;
+      out.push({ dep: epoch(st[a].dep || st[a].schDep), arr: epoch(st[b].arr || st[b].schArr), line: tr.routeName, train: tr.trainNum });
+    }
+    amtrakEwr = out.filter((x) => x.dep).sort((x, y) => x.dep - y.dep);
+    if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport();
+  }).catch(() => {});
+}
+const WALK_33ST_MIN = 18; // Grand Central (42 St & Park Av) to the 33 St PATH station (6 Av & 32 St)
+const FULTON_TO_WTC_PATH_MIN = 6; // through the Fulton Center and the Oculus
+const PATH_WTC_NEWARK_MIN = 22;
+function hubAirportLoad() { loadLirr(); loadNjtPenn(); loadPath(); loadAmtrak(); loadNjtStop(NEWARK_PENN_62_STOP); }
 function hubAirportOptions(code, nowS) {
   const o = [];
   const lirrFare = (r) => (r.fare === 'peak' ? FARES.cityPeak : FARES.cityOff);
@@ -597,6 +631,14 @@ function hubAirportOptions(code, nowS) {
       const air = e + (23 + AIR_MIN.change) * 60;
       o.push({ at: air + (AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60, fare: FARES.subway + FARES.airtrainJfk,
         legs: [[six.time, `${lineName('6')} one stop to 51 St, then walk through to the ${lineName('E')} at Lexington Av/53 St`], [e, `${lineName('E')} to Sutphin Blvd-Archer Av-JFK`], [air, `${airPl('AirTrain', 'p-air')} to your terminal`]] });
+    }
+    // The 7 to Times Sq, through to the A at 42 St-Port Authority, the A to Howard Beach, the AirTrain.
+    const seven = subwayFromTo('7', '723', '725', nowS);
+    if (seven) {
+      const a = seven.time + (3 + 5) * 60;
+      const air = a + (48 + AIR_MIN.change) * 60;
+      o.push({ at: air + (AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60, fare: FARES.subway + FARES.airtrainJfk,
+        legs: [[seven.time, `${lineName('7')} to Times Sq-42 St, then walk through to the ${lineName('A')} at 42 St-Port Authority`], [a, `${lineName('A')} to Howard Beach-JFK`], [air, `${airPl('AirTrain', 'p-air')} to your terminal`]] });
     }
   } else if (code === 'LGA') {
     // LIRR to Woodside, then the Q70 LaGuardia Link (free).
@@ -626,6 +668,36 @@ function hubAirportOptions(code, nowS) {
         legs: [[dep - (TO_PENN_MIN + 3) * 60, `${lineName('S')} to Times Sq, then the ${lineName('1')}, ${lineName('2')} or ${lineName('3')} one stop to 34 St-Penn Station`],
           [dep, `${airPl('NJ Transit', 'p-njt')} from Penn Station to Newark Airport${n.track ? `, track ${esc(n.track)}` : ''}`],
           [dep + (AIR_MIN.njtEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
+    }
+    // Amtrak from Penn (reservation required), after the subway to Penn.
+    const m = amtrakEwr.find((x) => x.dep >= ready);
+    if (m) {
+      o.push({ at: (m.arr || m.dep + AIR_MIN.amtrakEwr * 60) + (AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: null, fareText: `Amtrak fare varies by train, plus ${money(FARES.subway)} for the subway`,
+        note: 'Reservation required: buy an Amtrak ticket for this train before you board. NJ Transit tickets aren’t valid on Amtrak.',
+        legs: [[m.dep - (TO_PENN_MIN + 3) * 60, `${lineName('S')} to Times Sq, then the ${lineName('1')}, ${lineName('2')} or ${lineName('3')} one stop to 34 St-Penn Station`],
+          [m.dep, `${airPl('Amtrak', 'p-amtrak')} ${esc(m.line || '')} from Penn Station to Newark Airport`],
+          [(m.arr || m.dep + AIR_MIN.amtrakEwr * 60) + AIR_MIN.change * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
+    }
+    // PATH to Newark Penn, then NJ Transit one stop or the 62 bus (shared with Penn: newarkPennOptions).
+    const night = nyNow().mins < 6 * 60 || nyNow().mins >= 23 * 60;
+    // a) Walk to the 33 St station (cheapest: no subway fare), change at Journal Square.
+    // PATH's feed looks about 20 min ahead, so past the walk there may be no
+    // live train yet: then the usual gap (every 10 min by day, 20 at night), marked Estimated.
+    const live33 = pathFrom('33S', /journal square/i, nowS + WALK_33ST_MIN * 60);
+    const p = live33 || { dest: 'Journal Square', time: nowS + (WALK_33ST_MIN + (night ? 10 : 5)) * 60, est: true };
+    if (p) {
+      const atNewark = p.time + ((/hoboken/i.test(p.dest) ? AIR_MIN.pathJsqViaHob : AIR_MIN.pathJsq) + AIR_MIN.change + (night ? AIR_MIN.pathNewarkWaitNight : AIR_MIN.pathNewarkWait) + AIR_MIN.pathNewark) * 60;
+      o.push(...newarkPennOptions([[p.time - WALK_33ST_MIN * 60, 'Walk to the 33 St PATH station (6 Av & 32 St), about 18 min'],
+        [p.time, `${airPl('PATH', 'p-path')} to ${esc(p.dest)}, then change for Newark${p.est ? `, about every ${night ? 20 : 10} min` : ''}`]], atNewark, night, FARES.path, 'PATH', p.est ? false : undefined));
+    }
+    // b) The 4 or 5 to Fulton St, then PATH from World Trade Center straight to Newark.
+    const lex = ['4', '5'].map((r) => { const t = subwayFromTo(r, '631', '418', nowS); return t && { ...t, route: r }; }).filter(Boolean).sort((x, y) => x.time - y.time)[0];
+    if (lex) {
+      const w = pathFrom('WTC', /newark/i, lex.time + (10 + FULTON_TO_WTC_PATH_MIN) * 60);
+      if (w) {
+        o.push(...newarkPennOptions([[lex.time, `${lineName(lex.route)} to Fulton St, then walk through to the World Trade Center PATH station`],
+          [w.time, `${airPl('PATH', 'p-path')} to Newark`]], w.time + (PATH_WTC_NEWARK_MIN) * 60, night, FARES.subway + FARES.path, 'subway + PATH'));
+      }
     }
   }
   return o;
