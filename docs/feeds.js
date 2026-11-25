@@ -692,5 +692,7 @@ async function upcomingNotices(feed) {
   return parseAlerts(raw, () => true).map((n) => ({ ...n, id: `preview-${n.id}`, carrier: feed === 'lirr' ? 'lirr' : 'subway', preview: true }));
 }
 
-return { board, njtActiveNow, upcomingNotices, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath };
+return { board, njtActiveNow, upcomingNotices, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath,
+  // Shared with the Grand Central page (docs/gct.js).
+  parseTripUpdates, parseAlerts, alertUrl, lirrStationName: stationName, LIRR_BRANCHES, URGENT };
 });

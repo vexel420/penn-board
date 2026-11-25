@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build docs/penn-elevators.json: the elevators and escalators at 34 St-Penn
-Station (both subway stations and the LIRR entrance), with what each serves and
+Station (both subway stations and the LIRR entrance) and Grand Central-42 St, with what each serves and
 the MTA's own advice when it's out (owner, Nov 25: elevator outages on the board).
 
 The live outages come from the MTA's feed in the browser; this file adds the
@@ -13,7 +13,7 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / 'docs' / 'penn-elevators.json'
 URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene_equipments.json'
-STATIONS = {'34 St-Penn Station'}
+STATIONS = {'34 St-Penn Station', 'Grand Central-42 St'}
 
 
 def main():

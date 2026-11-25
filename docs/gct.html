@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d5c66">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="NYP Board">
+<title>Grand Central departures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=202611251230">
+</head>
+<!-- Grand Central (owner, Nov 25): the Penn board's layout in the "Celestial"
+     theme, the concourse ceiling's teal and gold. Its own script (gct.js), so
+     nothing here can break the Penn page. -->
+<body class="hub-gct" data-view="departures">
+
+<header class="mast">
+  <svg class="mast-stars" viewBox="0 0 1000 140" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <g fill="currentColor"><circle cx="380" cy="24" r="2"/><circle cx="455" cy="46" r="1.5"/><circle cx="530" cy="18" r="2.2"/><circle cx="610" cy="40" r="1.4"/><circle cx="690" cy="16" r="1.8"/><circle cx="760" cy="54" r="1.4"/><circle cx="850" cy="30" r="2"/><circle cx="920" cy="80" r="1.3"/><circle cx="540" cy="96" r="1.2"/><circle cx="700" cy="104" r="1.5"/><circle cx="960" cy="22" r="1.2"/></g>
+    <polyline points="380,24 455,46 530,18 610,40 690,16 760,54 850,30" fill="none" stroke="currentColor" stroke-width="1"/>
+  </svg>
+  <div class="mast-in">
+    <h1><span class="mast-kicker">New York <a class="hub-pill" href="index.html" title="Switch to Penn Station">⇄ Penn Station</a></span>Grand Central</h1>
+    <p class="clock" aria-live="off"><span id="clock">--:--</span><span id="clock-s" class="secs"></span><span id="clock-ap" class="ap"></span></p>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="controls" aria-label="Board controls">
+    <div class="seg" role="group" aria-label="Show">
+      <button type="button" data-view="departures" aria-pressed="true">Departures</button>
+      <button type="button" data-view="arrivals" aria-pressed="false">Arrivals</button>
+      <button type="button" data-view="subway" aria-pressed="false" class="only-narrow">Subway, buses</button>
+      <button type="button" data-view="alerts" aria-pressed="false" class="only-narrow">Alerts<span class="tab-count" id="alerts-count"></span></button>
+    </div>
+    <div class="chips" role="group" aria-label="Line">
+      <button type="button" data-line="all" aria-pressed="true">All</button>
+      <button type="button" data-line="HU" aria-pressed="false">Hudson</button>
+      <button type="button" data-line="HA" aria-pressed="false">Harlem</button>
+      <button type="button" data-line="NH" aria-pressed="false">New Haven</button>
+      <button type="button" data-line="lirr" aria-pressed="false">LIRR</button>
+    </div>
+    <div class="trip-bar"><a class="split-btn" href="split.html" title="Penn and Grand Central side by side">Side by side</a></div>
+  </nav>
+
+  <div class="layout">
+    <section class="rail" aria-labelledby="rail-h">
+      <h2 id="rail-h" class="sr">Trains</h2>
+      <div id="notices" class="notices"></div>
+      <div id="rail-notices"></div>
+      <div class="cols" aria-hidden="true">
+        <span>Time</span><span></span><span id="col-place">To</span><span>Status</span><span class="col-track">Track</span>
+      </div>
+      <ol id="rows" class="rows"><li class="empty">Loading the board…</li></ol>
+    </section>
+
+    <aside class="subway" aria-labelledby="sub-h">
+      <h2 id="sub-h">Subway <span>Grand Central-42 St</span></h2>
+      <div id="subway-notices"></div>
+      <div id="elevators"></div>
+      <div id="subway"><p class="empty">Loading subway times…</p></div>
+      <h2 class="path-h">Buses <span>at Grand Central, live from MTA Bus Time</span></h2>
+      <div id="gct-buses"><p class="empty">Loading buses…</p></div>
+      <p class="walk">To Penn Station: the S to Times Sq, then the 1, 2 or 3 one stop down (about 15 min), or a 20-minute walk.</p>
+    </aside>
+  </div>
+
+  <section id="alerts" class="alerts-tab" aria-label="Service alerts"></section>
+
+  <footer class="foot">
+    <p id="updated">Connecting…</p>
+    <p>Metro-North, LIRR, subway and bus data was obtained from the MTA. It may not be real-time data, and may be late, incomplete or wrong. Confirm on the station screens.</p>
+    <p>An independent project, not affiliated with or licensed by the MTA.</p>
+  </footer>
+</main>
+
+<script src="config.js?v=202611251230"></script>
+<script src="feeds.js?v=202611251230"></script>
+<script src="gct.js?v=202611251230"></script>
+</body>
+</html>

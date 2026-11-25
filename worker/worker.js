@@ -6,6 +6,8 @@
 //   GET /alerts/subway  MTA subway service notices for lines at Penn (1 2 3 A C E,
 //                       or the Penn stations), in effect now or within the hour
 //   GET /alerts/lirr    LIRR service notices in effect now or within the hour
+//   GET /alerts/mnr     Metro-North service notices (Grand Central page)
+//   GET /alerts/subway-gct  subway notices for the lines at Grand Central (4 5 6 7 S)
 //   GET /path-alerts    PATH's alerts from the last 8 hours (Port Authority)
 //   GET /njt            NJ Transit's departures from Penn (station NY), with
 //                       tracks and status, plus its station messages. Uses the
@@ -25,7 +27,11 @@ const PATH_ALERTS = 'https://www.panynj.gov/bin/portauthority/alerts?agency=PATH
 const MTA_ALERTS = {
   subway: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json',
   lirr: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Flirr-alerts.json',
+  mnr: 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fmnr-alerts.json',
 };
+// Grand Central (owner, Nov 25): its subway lines and stations (4/5/6 631, 7 723, S 901).
+const GCT_LINES = new Set(['4', '5', '6', '6X', '7', '7X', 'GS', 'S']);
+const GCT_STOP = /^(631|723|901)[NS]?$/;
 const PENN_LINES = new Set(['1', '2', '3', 'A', 'C', 'E']);
 const PENN_STOP = /^(128|A28)[NS]?$/;
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-methods': 'GET, OPTIONS' };
@@ -48,7 +54,7 @@ async function upstream(url, seconds) {
 const plain = (t) => (t && t.translation ? { translation: t.translation.filter((x) => x.language === 'en') } : t);
 
 async function alerts(feed, aheadHours = 1) {
-  const data = await (await upstream(MTA_ALERTS[feed], 20)).json();
+  const data = await (await upstream(MTA_ALERTS[feed === 'subway-gct' ? 'subway' : feed], 20)).json();
   const soon = Date.now() / 1000 + aheadHours * 3600;
   const now = Date.now() / 1000;
   const entity = (data.entity || []).filter((e) => {
@@ -58,6 +64,7 @@ async function alerts(feed, aheadHours = 1) {
     const periods = a.active_period || [];
     const live = !periods.length || periods.some((p) => (+p.start || 0) - early <= soon && now <= (+p.end || Infinity));
     if (!live) return false;
+    if (feed === 'subway-gct') return (a.informed_entity || []).some((x) => GCT_LINES.has(x.route_id) || GCT_STOP.test(x.stop_id || ''));
     if (feed !== 'subway') return true;
     return (a.informed_entity || []).some((x) => PENN_LINES.has(x.route_id) || PENN_STOP.test(x.stop_id || ''));
   // The full text is kept: for the subway it holds the MTA's alternatives
@@ -452,7 +459,7 @@ export default {
           return json(JSON.stringify(d), 15);
         }
       }
-      const m = pathname.match(/^\/alerts\/(subway|lirr)$/);
+      const m = pathname.match(/^\/alerts\/(subway|lirr|mnr|subway-gct)$/);
       if (m) {
         // Filter once per 20 s per Cloudflare location, not once per visitor.
         const cache = caches.default;

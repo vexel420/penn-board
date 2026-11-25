@@ -165,14 +165,15 @@ async function flipTile(f, from, ch, delay) {
     prev = c;
   }
 }
-// Masthead and clock.
+// Masthead and clock. The pill switches to the Grand Central board (owner, Nov 25).
+const HUB_PILL = '<a class="hub-pill" href="gct.html" title="Switch to Grand Central">⇄ Grand Central</a>';
 function renderMastFlip() {
   const h = document.querySelector('.mast h1');
   if (flipMode) {
-    h.innerHTML = `<span class="mast-kicker">New York</span><span class="mast-flip">${flipText('mast', 'Penn Station')}</span><span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">New York ${HUB_PILL}</span><span class="mast-flip">${flipText('mast', 'Penn Station')}</span><span class="h1-sub" id="h1-sub"></span>`;
     runFlips(h);
   } else {
-    h.innerHTML = '<span class="mast-kicker">New York</span>Penn Station<span class="h1-sub" id="h1-sub"></span>';
+    h.innerHTML = `<span class="mast-kicker">New York ${HUB_PILL}</span>Penn Station<span class="h1-sub" id="h1-sub"></span>`;
     flipShown.delete('mast');
   }
   setHeading();
@@ -3727,8 +3728,10 @@ const mastTitle = document.querySelector('.mast h1');
 mastTitle.setAttribute('role', 'button');
 mastTitle.tabIndex = 0;
 mastTitle.title = 'Reload the board';
-mastTitle.addEventListener('click', () => location.reload());
-mastTitle.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.reload(); } });
+mastTitle.addEventListener('click', (e) => { if (!e.target.closest('.hub-pill')) location.reload(); });
+mastTitle.addEventListener('keydown', (e) => { if (e.target.closest('.hub-pill')) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.reload(); } });
+// Inside the side-by-side view (split.html) the page knows it's framed.
+if (window.self !== window.top) document.body.classList.add('in-split');
 document.querySelector('.style-seg').addEventListener('click', (e) => {
   const b = e.target.closest('button[data-style]');
   if (b) setBoardStyle(b.dataset.style === 'flip');

@@ -759,3 +759,18 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - The MTA's "what to do instead" advice comes from `docs/penn-elevators.json` (`scripts/build-penn-elevators.py`, weekly). The advice's own status sentence is dropped because it can be older than the outage.
   - Shown in the subway panel and on the Alerts tab under "Elevators and escalators", which says when all are working.
   - Amtrak and NJ Transit don't publish elevator status for the Penn concourses, so only the MTA's equipment is covered (subway, plus the LIRR entrance elevators EL34X and EL618).
+
+## Nov 25: Grand Central board (Celestial), the hub pill and the side-by-side view
+- **`docs/gct.html` + `docs/gct.js`.** The Grand Central board has its own script, so a Grand Central bug can't break Penn. It shares `style.css`, and `body.hub-gct` overrides the color variables for the Celestial theme: teal and gold, gold constellations in the masthead, Cinzel for the name.
+- **Trains** come from TrainTime: `/arrivals/0NY` for Metro-North and `/arrivals/GCT` for the LIRR at Grand Central Madison.
+  - Times are scheduled times. otp is in seconds and negative means late, as at Penn. Departures never run early.
+  - Grand Central posts tracks early, so a row says "Boarding" only once a track is posted and the train leaves within 15 min. "All aboard" covers the last 60 s.
+  - A train that drops off the list near its time shows as Departed for 3 min.
+  - Metro-North station names: `docs/mnr-stations.json` (`scripts/build-mnr-stations.py`, rebuilt in the weekly job). LIRR names reuse feeds.js.
+- **Subway:** the MTA's 1–7/S feed, read in the page. Stations are 631 (4/5/6), 723 (7) and 901 (S).
+- **Buses:** MTA Bus Time through the relay, at 6 stops (codes in `BUS_STOPS`): M42 both ways at Park Av, M101–M103 downtown on Lexington and uptown on 3 Av, M1–M4 uptown on Madison.
+- **Notices:** three new relay routes. `/alerts/mnr` is Metro-North. `/alerts/subway-gct` covers the 4 5 6 7 S lines and the Grand Central stations. LIRR notices are kept unless they're about Penn only. TrainTime's own alerts (special schedules) are included too.
+- **Elevators:** `docs/penn-elevators.json` now also lists Grand Central-42 St equipment.
+- **feeds.js exports** `parseTripUpdates`, `parseAlerts`, `alertUrl`, `lirrStationName`, `LIRR_BRANCHES` and `URGENT` for the Grand Central page.
+- **Switching:** the owner's choice for testing is a pill on the masthead's "New York" line. Penn says "⇄ Grand Central" and Grand Central says "⇄ Penn Station". On Penn the masthead's tap-to-reload ignores taps on the pill, and `HUB_PILL` is redrawn with the flip-board masthead.
+- **Side by side:** `docs/split.html` puts both live pages in frames. "Desktop size" renders each at 1280 px and scales it to fit. "Phone size" renders each at 390×844. Swap sides and Reload both are on the toolbar. The "Side by side" button shows only at 1100 px and wider, and hides inside the frames (`.in-split`).

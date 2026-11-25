@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Penn and Grand Central, side by side</title>
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;700;800&display=swap" rel="stylesheet">
+<!-- Side by side (owner, Nov 25): both boards live at once on a computer, to
+     watch for bugs. Each board runs in its own frame, exactly as on its own
+     page. "Desktop size" shows each at a full computer width, scaled to fit;
+     "Phone size" shows each as a phone would. -->
+<style>
+:root { --bg: #0b0f0d; --bar: #121815; --line: #2c4034; --ivory: #f2ead8; --gold: #e6b751; --teal: #8fd3c7; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ivory); font-family: "Archivo", Arial, sans-serif; }
+.bar { height: 52px; display: flex; align-items: center; gap: .6rem; padding: 0 16px; background: var(--bar); border-bottom: 1px solid var(--line); }
+.bar h1 { font-size: 1rem; margin: 0 1rem 0 0; font-weight: 800; letter-spacing: .02em; }
+.bar button, .bar a { font: inherit; font-weight: 700; font-size: .9rem; color: var(--ivory); background: none; border: 1px solid var(--line); border-radius: 99px; padding: .35rem .85rem; cursor: pointer; text-decoration: none; }
+.bar button[aria-pressed="true"] { background: var(--ivory); color: #121815; border-color: var(--ivory); }
+.bar .sp { flex: 1; }
+.bar .note { font-size: .85rem; color: #c4ccc2; }
+.panes { position: absolute; top: 52px; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px; }
+.pane { position: relative; overflow: hidden; border-radius: 8px; border: 1px solid var(--line); background: #000; }
+.pane .lab { position: absolute; z-index: 2; left: 10px; bottom: 10px; font-size: .75rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; padding: .2rem .5rem; border-radius: 4px; background: rgba(0,0,0,.7); }
+.pane iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #fff; }
+.phone .pane { display: grid; place-items: center; background: #070908; }
+.phone .pane iframe { position: relative; border-radius: 22px; box-shadow: 0 0 0 8px #1b1f1d; }
+@media (max-width: 1099px) { .panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>Side by side</h1>
+  <button type="button" data-size="desktop">Desktop size</button>
+  <button type="button" data-size="phone">Phone size</button>
+  <button type="button" id="swap">Swap sides</button>
+  <button type="button" id="reload">Reload both</button>
+  <span class="sp"></span>
+  <span class="note">Each side is the real, live page.</span>
+  <a href="index.html">Back to Penn</a>
+</div>
+<div class="panes" id="panes">
+  <div class="pane"><iframe id="f1" title="Penn Station board"></iframe><span class="lab" id="l1"></span></div>
+  <div class="pane"><iframe id="f2" title="Grand Central board"></iframe><span class="lab" id="l2"></span></div>
+</div>
+<script>
+const PAGES = [['index.html', 'Penn Station'], ['gct.html', 'Grand Central']];
+const DESKTOP_W = 1280, PHONE = [390, 844];
+const store = { get: (k, d) => { try { return localStorage.getItem(k) || d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} } };
+let size = store.get('splitSize', 'desktop');
+let order = store.get('splitOrder', '01');
+const frames = [document.getElementById('f1'), document.getElementById('f2')];
+function load() {
+  order.split('').forEach((k, i) => {
+    const [src, name] = PAGES[+k];
+    if (!frames[i].src.endsWith(src)) frames[i].src = src;
+    document.getElementById(`l${i + 1}`).textContent = name;
+    frames[i].title = `${name} board`;
+  });
+}
+function fit() {
+  document.body.classList.toggle('phone', size === 'phone');
+  document.querySelectorAll('[data-size]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.size === size)));
+  for (const f of frames) {
+    const box = f.parentElement.getBoundingClientRect();
+    if (size === 'desktop') {
+      const s = Math.min(1, box.width / DESKTOP_W);
+      f.style.width = `${DESKTOP_W}px`;
+      f.style.height = `${box.height / s}px`;
+      f.style.transform = `scale(${s})`;
+    } else {
+      const s = Math.min(1, (box.height - 24) / PHONE[1], (box.width - 24) / PHONE[0]);
+      f.style.width = `${PHONE[0]}px`;
+      f.style.height = `${PHONE[1]}px`;
+      f.style.transform = `scale(${s})`;
+      f.style.transformOrigin = '50% 50%';
+    }
+    if (size === 'desktop') f.style.transformOrigin = '0 0';
+  }
+}
+document.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { size = b.dataset.size; store.set('splitSize', size); fit(); }));
+document.getElementById('swap').addEventListener('click', () => { order = order === '01' ? '10' : '01'; store.set('splitOrder', order); frames.forEach((f) => { f.removeAttribute('src'); }); load(); });
+document.getElementById('reload').addEventListener('click', () => frames.forEach((f) => f.contentWindow && f.contentWindow.location.reload()));
+addEventListener('resize', fit);
+load(); fit();
+</script>
+</body>
+</html>
