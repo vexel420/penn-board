@@ -817,3 +817,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - A 2-minute final call for late trains.
   - Departed trains kept through a reload (`gctDeparted` in localStorage).
   - Event banners for UBS Arena (and Yankee Stadium or Citi Field once a source lists them); MSG stays on Penn.
+- **"Other options" for a delayed train on Grand Central** (the button in a row's notice dropdown): the quickest trips to the same stations, direct or with one change, from the timetable.
+  - The LIRR uses lirr-timetable.json from Grand Central Madison (stop 349).
+  - Metro-North uses the new `docs/mnr-timetable.json` (`build-lirr-timetable.py --mnr`, weekly job). It's the same format, plus `names`, and keeps only the next 3 weeks because Metro-North's file has many date-specific services (about 0.9 MB, loaded only when the sheet opens).
+  - Trains already on the live board show live time and track.

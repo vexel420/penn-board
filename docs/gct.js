@@ -190,7 +190,7 @@ function rowAlertHtml(r) {
   if (view !== 'departures' || r.tone === 'departed') return '';
   const ns = rowNotices(r);
   const label = ns.length ? (r.railroad === 'lirr' ? mtaType(ns[0].type) : rowAlertSummary(ns)) : '';
-  const delay = ns.length ? dropPill(`${r.id}|alert`, `${label}${ns.length > 1 ? ` (${ns.length})` : ''}`, 'warn', ns, 'rail') : '';
+  const delay = ns.length ? dropPill(`${r.id}|alert`, `${label}${ns.length > 1 ? ` (${ns.length})` : ''}`, 'warn', ns, 'rail', `<button type="button" class="al-map" data-options="${esc(r.id)}">Other options</button>`) : '';
   const stops = [...(r.via || []), r.place].map(normName);
   const boarding = r.railroad === 'lirr' ? notices.rail.filter((n) => n.carrier === 'lirr' && happeningNow(n) && /boarding change/i.test(n.type) && stops.some((st) => st && normName(n.text).includes(st))) : [];
   const hid = ns.length ? null : hiddenDelayMin(r);
@@ -351,11 +351,11 @@ function untilText(n) {
   const sameDay = fmt(p[1], { day: 'numeric' }) === fmt(nowS(), { day: 'numeric' });
   return `until ${sameDay ? '' : `${fmt(p[1], { weekday: 'short' })} `}${fmt(p[1], { hour: 'numeric', minute: '2-digit' })}`;
 }
-function dropPill(key, label, kind, ns, where = 'subway') {
+function dropPill(key, label, kind, ns, where = 'subway', extra = '') {
   const open = openDrops.has(key);
   if (open) {
     const items = ns.map((n) => { const u = untilText(n); return `<span class="drop-n">${noticeBody(n)}${u ? `<small>${esc(u)}</small>` : ''}</span>`; }).join('');
-    dropBodies.set(key, `<span class="drop${kind === 'warn' ? '' : ' info'}">${items}<span class="drop-links"><button type="button" class="al-map" data-goto="${where}">See full alert</button></span></span>`);
+    dropBodies.set(key, `<span class="drop${kind === 'warn' ? '' : ' info'}">${items}<span class="drop-links"><button type="button" class="al-map" data-goto="${where}">See full alert</button>${extra}</span></span>`);
   }
   return `<button type="button" class="late-pill ${kind === 'warn' ? 'warn-pill' : 'info-pill'}" data-drop="${esc(key)}" aria-expanded="${open}">${kind === 'warn' ? WARN_IC : ''}${esc(label)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button>`;
 }
@@ -542,6 +542,115 @@ function liftsHtml() {
   }).join('');
 }
 function renderLifts() { $('elevators').innerHTML = liftsHtml(); renderAlertsTab(); }
+
+// ---------- Other options for a delayed train (as on the Penn board) ----------
+// The quickest ways from Grand Central to the stations the delayed train
+// serves, direct or with one change, from the railroad's timetable
+// (lirr-timetable.json from Grand Central Madison, stop 349; mnr-timetable.json
+// from Grand Central, stop 1). A first train already on the live board shows
+// its live time and track instead, so a card turns from "Scheduled" to "Live".
+const TTG = { lirr: { file: 'lirr-timetable.json', from: '349', change: 180 }, mnr: { file: 'mnr-timetable.json', from: '1', change: 180 } };
+const ttg = {}, ttgLoading = {};
+let lirrDoc = null;
+const loadTTG = (c) => ttgLoading[c] || (ttgLoading[c] = Promise.all([fetch(TTG[c].file).then((x) => (x.ok ? x.json() : null)).catch(() => null),
+  c === 'lirr' ? fetch('lirr-data.json').then((x) => (x.ok ? x.json() : null)).catch(() => null) : null]).then(([t, d]) => { ttg[c] = t; if (d) lirrDoc = d; }));
+// Stations every train shares (where they all stop on the way out): not a reason to switch.
+const SHARED_SKIP = /^(grand central|grand central madison|harlem 125 st|jamaica|woodside|forest hills|kew gardens)$/i;
+const trainNo = (x) => String(x || '').replace(/^0+(?=\d)/, '');
+function ttgTripsNear(tt) {
+  const out = [];
+  const t0 = nowS();
+  for (let k = 0; k < 2; k++) {
+    const day = new Set(tt.dates[nyNow(k).date.replace(/-/g, '')] || []);
+    const midnight = t0 + k * 86400 - nyNow().mins * 60 - (t0 % 60);
+    for (const [route, head, train, svc, flat] of tt.trips) {
+      if (!day.has(svc)) continue;
+      const calls = [];
+      for (let i = 0; i < flat.length; i += 2) calls.push([tt.stops[flat[i]], midnight + flat[i + 1] * 60]);
+      if (calls[calls.length - 1][1] < t0 || calls[0][1] > t0 + 14 * 3600) continue;
+      out.push({ route, head, train: trainNo(train), calls });
+    }
+  }
+  return out;
+}
+function ttgPlans(tt, from, changeS, targets, skipTrain, fromS) {
+  const trips = ttgTripsNear(tt);
+  const byStop = new Map();
+  for (const t of trips) t.calls.forEach(([sid], i) => { if (!byStop.has(sid)) byStop.set(sid, []); byStop.get(sid).push([t, i]); });
+  const firsts = trips.map((t) => [t, t.calls.findIndex(([sid]) => sid === from)])
+    .filter(([t, i]) => i >= 0 && i < t.calls.length - 1 && t.calls[i][1] >= fromS && t.calls[i][1] <= fromS + 12 * 3600 && t.train !== skipTrain);
+  const best = new Map();
+  const offer = (sid, plan) => {
+    const b = best.get(sid);
+    if (!b || plan.arrive < b.arrive || (plan.arrive === b.arrive && ((!plan.change && b.change) || (!!plan.change === !!b.change && plan.leave > b.leave)))) best.set(sid, plan);
+  };
+  for (const [t, i] of firsts) {
+    const leave = t.calls[i][1];
+    for (let j = i + 1; j < t.calls.length; j++) {
+      const [hub, at] = t.calls[j];
+      if (targets.has(hub)) offer(hub, { first: t, leave, arrive: at });
+      for (const [u, k] of byStop.get(hub) || []) {
+        if (u === t || u.train === skipTrain || u.calls[k][1] < at + changeS || u.calls[k][1] > at + 90 * 60) continue;
+        if (u.calls.slice(k + 1).some(([sid]) => sid === from)) continue; // heading back toward Grand Central
+        for (let m = k + 1; m < u.calls.length; m++) if (targets.has(u.calls[m][0])) offer(u.calls[m][0], { first: t, leave, change: { at: hub, time: u.calls[k][1], second: u }, arrive: u.calls[m][1] });
+      }
+    }
+  }
+  return best;
+}
+const MNR_ROUTE_LINE = { 1: 'HU', 2: 'HA', 3: 'NH', 4: 'NC', 5: 'DN', 6: 'WB' };
+const ttgName = (c, id) => (c === 'lirr' ? (lirrDoc && lirrDoc.stops[id] ? lirrDoc.stops[id][0] : id) : ((ttg.mnr && ttg.mnr.names[id]) || mnrName(id)));
+function ttgChip(c, route) {
+  if (c === 'lirr') { const r = lirrDoc && lirrDoc.routes[route]; return `<span class="pl" style="background:${esc((r && r.color) || '#2f6fe0')};color:${esc((r && r.text) || '#fff')}">${esc(r ? r.name : 'LIRR')}</span>`; }
+  const l = MNR_LINES[MNR_ROUTE_LINE[route]] || ['Metro-North', 'mnr'];
+  return `<span class="plate ${l[1]}">${esc(l[0])}</span>`;
+}
+const hmT = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
+function ttgPlansHtml(r) {
+  const c = r.railroad, tt = ttg[c];
+  if (tt === undefined || (c === 'lirr' && !lirrDoc)) return null;
+  if (!tt) return '';
+  const mine = new Set([...(r.via || []), r.place].map(normName).filter((x) => !SHARED_SKIP.test(x)));
+  const nameOf = (id) => normName(ttgName(c, id));
+  const targets = new Set(tt.stops.filter((id) => mine.has(nameOf(id))));
+  if (!targets.size) return '';
+  const best = ttgPlans(tt, TTG[c].from, TTG[c].change, targets, trainNo(r.train), nowS() + 60);
+  const groups = new Map();
+  for (const [sid, p] of best) {
+    const key = `${p.first.train}|${p.change ? p.change.second.train : ''}`;
+    if (!groups.has(key)) groups.set(key, { p, stops: [] });
+    groups.get(key).stops.push([sid, p.arrive]);
+  }
+  const cards = [...groups.values()].sort((a, b) => a.p.leave - b.p.leave || b.stops.length - a.stops.length).slice(0, 5).map(({ p, stops }) => {
+    const live = rail.departures.find((x) => x.railroad === c && trainNo(x.train) === p.first.train && x.tone !== 'departed');
+    const leave = live ? live.time : p.leave;
+    const tag = live ? '<span class="tagx tag-live">Live</span>' : '<span class="tagx tag-sched">Scheduled</span>';
+    const how = p.change ? `Change at ${esc(ttgName(c, p.change.at))} for the ${hmT(p.change.time)} train to ${esc(p.change.second.head)}.` : 'No change.';
+    stops.sort((a, b) => a[1] - b[1]);
+    const gets = stops.slice(0, 6).map(([sid, at]) => `${esc(ttgName(c, sid))} ${hmT(at)}`).join(', ') + (stops.length > 6 ? ` and ${stops.length - 6} more` : '');
+    return `<li class="cm-stn"><div class="opt-h">${ttgChip(c, p.first.route)}<span>${tag} ${hmT(leave)}${live && live.track ? `, track ${esc(live.track)}` : ''}</span></div>
+      <span class="cm-dir">To ${esc(p.first.head)}. ${how} Gets you to ${gets}.</span></li>`;
+  }).join('');
+  return cards ? `<h3 class="cm-h">Other ways to the same stations</h3><ul class="cm-stns">${cards}</ul>` : '';
+}
+function openOptions(r) {
+  changeOpen = { id: 'options', view: 1 };
+  $('chg-map').hidden = true;
+  $('chg-kind').textContent = 'Other options';
+  $('chg-h').innerHTML = `${esc(r.branch)}${r.railroad === 'mnr' ? ' Line' : ''} to ${esc(r.place)}`;
+  $('chg-top').innerHTML = rowNotices(r).map((n) => `<p class="cm-sum">⚠ ${noticeBody(n)}</p>`).join('');
+  let html = ttgPlansHtml(r);
+  if (html === null) { loadTTG(r.railroad).then(() => { if (changeOpen && changeOpen.id === 'options' && $('change').open) openOptions(r); }); html = '<p class="cm-live">Checking the timetable…</p>'; }
+  $('chg-below').innerHTML = `${html || `<p class="cm-live">No other train from ${r.railroad === 'lirr' ? 'Grand Central Madison' : 'Grand Central'} reaches these stations in the next few hours.</p>`}
+    <p class="cm-live">Live: time and track from the live board. Scheduled: from the ${r.railroad === 'lirr' ? 'LIRR' : 'Metro-North'} timetable until the train is on the board. Fares and tickets differ by line; check before you board.</p>`;
+  openSheet();
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-options]');
+  if (!b) return;
+  const r = rail.departures.find((x) => x.id === b.dataset.options);
+  if (r) openOptions(r);
+});
 
 // ---------- event warnings (as on the Penn board) ----------
 // The same event list (docs/events.json, plus Ticketmaster through the relay
