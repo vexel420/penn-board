@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Build docs/ewr-express.json: Newark Airport Express (Coach USA) departures
-from Port Authority Bus Terminal to Newark Airport's terminals, from the Coach
+from Port Authority Bus Terminal and Grand Central to Newark Airport's terminals, from the Coach
 USA timetable file (the owner's NJ Transit developer portal download, "Coach
 USA", gtfs.zip). Fare $23.50 one way (newarkairport.com, Nov 2026).
 
 {"days": {"wk": [[minutes at Port Authority, {"A": m, "B": m, "C": m}], ...], "sa": [...], "su": [...]},
+ "gct": {the same, minutes at Grand Central},
  "until": "YYYYMMDD"}
 
 The file isn't public, so this is rebuilt by hand when Coach USA's schedule
@@ -40,24 +41,32 @@ def main(path):
     for st in rows(z, 'stop_times.txt'):
         if st['trip_id'] in trips:
             calls[st['trip_id']].append((int(st['stop_sequence']), stops[st['stop_id']], st['departure_time'] or st['arrival_time']))
+    # Departures toward the airport from each pickup: Port Authority ("days",
+    # the Penn board) and Grand Central (41 St between Park and Lexington Avs,
+    # "gct", the Grand Central board; owner, Nov 25).
     days = {'wk': [], 'sa': [], 'su': []}
+    gct = {'wk': [], 'sa': [], 'su': []}
     until = '0'
     for tid, cs in calls.items():
         cs.sort()
-        pa = next((c for c in cs if c[1] == 'Port Authority Bus Terminal'), None)
-        if not pa:
-            continue  # toward the city
-        term = {c[1][-1]: mins(c[2]) for c in cs if c[1].startswith('Terminal ') and c[0] > pa[0]}
         c = cal.get(trips[tid])
-        if not c or not term:
+        if not c:
             continue
-        until = max(until, c['end_date'])
-        for k, d in (('wk', 'wednesday'), ('sa', 'saturday'), ('su', 'sunday')):
-            if c[d] == '1':
-                days[k].append([mins(pa[2]), term])
-    for v in days.values():
+        for stop, out in (('Port Authority Bus Terminal', days), ('Grand Central', gct)):
+            pa = next((x for x in cs if x[1] == stop), None)
+            if not pa:
+                continue
+            term = {x[1][-1]: mins(x[2]) for x in cs if x[1].startswith('Terminal ') and x[0] > pa[0]}
+            if not term:
+                continue  # toward the city
+            until = max(until, c['end_date'])
+            for k, d in (('wk', 'wednesday'), ('sa', 'saturday'), ('su', 'sunday')):
+                if c[d] == '1':
+                    out[k].append([mins(pa[2]), term])
+    for v in [*days.values(), *gct.values()]:
         v.sort()
-    OUT.write_text(json.dumps({'days': days, 'until': until}, separators=(',', ':')))
+    OUT.write_text(json.dumps({'days': days, 'gct': gct, 'until': until}, separators=(',', ':')))
+    print('Grand Central: ' + ', '.join(f'{k} {len(v)} trips' for k, v in gct.items()))
     print(f'Wrote {OUT}: ' + ', '.join(f'{k} {len(v)} trips' for k, v in days.items()) + f', until {until}')
     print('weekday first/last:', days['wk'][0], days['wk'][-1])
 

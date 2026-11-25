@@ -784,3 +784,18 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
   - The flip engine moved unchanged from app.js into `docs/flip.js`, which both pages load before their own script.
   - Subway pills on Grand Central: Delays (dropped when the train runs on time), the MTA's skipped-stops type, Express to local and Reduced service. Each opens the notice's words; "See full alert" goes to the notices.
   - On-time checks use `subway-times.json`, which now also has Grand Central's 631 and 723. `build-subway-data.py` adds the `GCT` station set; Penn's data is unchanged. The shuttle (901) has only two stops, so it has no timetable entry.
+
+## Nov 25: the airport helper at every hub
+- **The split:** the shared part lives in `docs/airport.js`, loaded after each board's own script. It holds the screen, fares, the LaGuardia airline picker, airport buses, the Newark Airport Express, Islip and Stewart.
+- **Each hub provides:**
+  - `HUB_AIR`, which says where trips start, the bus plans file, the Newark Airport Express pickup and walk, how to reach Port Authority (Stewart coach) and Grand Central (Stewart trains), and `lirrFrom`.
+  - `hubAirportOptions(code, nowS)` for its own trains, plus `hubAirportLoad()`, `railTo()`, `lirrArrivalAt()`, `subwayFromTo()`, `lineName()`, `loadMtaBusStop()`/`mtaBusLive`, `openSheet()` and `changeOpen`.
+- **Penn's part** (JFK/LGA/EWR rail, subway, PATH and the 62) stays in app.js, unchanged.
+- **Grand Central's part** is in gct.js:
+  - JFK: LIRR from Grand Central Madison to Jamaica plus AirTrain; or the 6 one stop to 51 St, through to the E at Lexington Av/53 St, the E to Sutphin, then AirTrain.
+  - LaGuardia: LIRR to Woodside plus Q70; or the 7 to 74 St plus Q70.
+  - Newark: NJ Transit from Penn, live through the relay's /njt, after the S and 1/2/3 to Penn (15 min).
+  - LIRR arrival times come from lirr-timetable.json, with Grand Central Madison as stop 349.
+- **Data:**
+  - `docs/ewr-express.json` now also has `gct`: departures from Grand Central (41 St between Park and Lexington). 77 trips a day start there; Port Authority's times are unchanged.
+  - `docs/airport-buses-gct.json` comes from `build-airport-buses.py --from gct` (weekly job).

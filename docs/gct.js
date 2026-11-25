@@ -85,6 +85,7 @@ function parseArrivals(list, railroad) {
       place: name(leaving ? stops[stops.length - 1] : stops[0]),
       via: stops.slice(leaving ? 0 : 1, leaving ? -1 : undefined).map(name),
       track: a.track || '', status, tone, where: lirr ? 'Grand Central Madison' : '',
+      fare: lirr ? (a.peak_code === 'P' ? 'peak' : 'offpeak') : '', leaves: time,
     });
   }
   return out;
@@ -209,7 +210,7 @@ async function loadSubway() {
         if (!groups.has(key)) groups.set(key, { stn: stn.id, route, dir, svc, express: x, trains: [] });
         // `code`: the trip's scheduled start, to match it to the timetable (on time or late).
         const code = (/^(\d{6})_/.exec(trip.trip || '') || [])[1] || '';
-        groups.get(key).trains.push({ time: stop.time, dest: trip.stops[trip.stops.length - 1].id.slice(0, -1), code });
+        groups.get(key).trains.push({ time: stop.time, dest: trip.stops[trip.stops.length - 1].id.slice(0, -1), code, stops: trip.stops.slice(at).map((x) => x.id.slice(0, -1)) });
       }
     }
     subway = [...groups.values()].map((g) => ({ ...g, trains: g.trains.sort((a, b) => a.time - b.time) }));
@@ -503,6 +504,140 @@ function renderAlertsTab() {
   const n = r.length + notices.subway.length + lifts.length;
   $('alerts-count').textContent = n ? String(n) : '';
 }
+
+// ---------- To the airport (shared with every hub: airport.js) ----------
+// Grand Central's own routes; airport.js adds airport buses (from Grand
+// Central's subway lines), the Newark Airport Express (it starts here, on 41 St),
+// Islip and Stewart (Metro-North straight from here).
+const HUB_AIR = {
+  id: 'gct', from: 'Grand Central', buses: 'airport-buses-gct.json',
+  ewrFrom: 'gct', ewrWalk: 4, ewrWalkText: 'Walk to the Newark Airport Express stop on 41 St, between Park and Lexington Avs', ewrStop: 'Grand Central (41 St)',
+  toPabt: 15, toPabtText: 'The S to Times Sq-42 St, then walk west on 42 St to Port Authority (8 Av)',
+  toGct: 0, lirrFrom: ' from Grand Central Madison',
+};
+const TO_PENN_MIN = 15; // the S to Times Sq, then the 1, 2 or 3 one stop, to the NJ Transit concourse
+let changeOpen = null;
+const lineName = (route) => bullet(String(route).replace(/X$/, ''), 'inl');
+// The next live departures from here that call at a station (Metro-North or the LIRR).
+function railTo(carriers, stop, nowS) {
+  const want = carriers.map((c) => (c === 'lirr' ? 'lirr' : c === 'mnr' ? 'mnr' : ''));
+  return rail.departures.filter((r) => want.includes(r.railroad) && r.tone !== 'stop' && r.tone !== 'departed' && r.time >= nowS + 60
+    && r.via.concat(r.place).some((v) => new RegExp(`^${stop}\\b`, 'i').test(v))).sort((a, b) => a.time - b.time);
+}
+// The next train on a subway line from one of Grand Central's stations that reaches a station.
+function subwayFromTo(route, from, to, nowS) {
+  return subway.filter((g) => g.route === route && g.stn === from).flatMap((g) => g.trains)
+    .filter((t) => t.time >= nowS + 60 && (t.stops || []).includes(to)).sort((a, b) => a.time - b.time)[0];
+}
+// When a live LIRR train from Grand Central Madison reaches a station, by the
+// LIRR timetable (lirr-timetable.json, the same file as the Penn board's).
+let lirrTT = null, lirrNames = null, lirrLoading = null;
+function loadLirr() {
+  if (lirrLoading) return lirrLoading;
+  lirrLoading = Promise.all([fetch('lirr-timetable.json').then((r) => (r.ok ? r.json() : null)), fetch('lirr-data.json').then((r) => (r.ok ? r.json() : null))])
+    .then(([t, d]) => { lirrTT = t; lirrNames = d && d.stops; if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }).catch(() => {});
+  return lirrLoading;
+}
+const GCM_STOP = '349'; // Grand Central Madison in the LIRR's timetable
+function lirrArrivalAt(r, station) {
+  if (!lirrTT || !lirrNames) return null;
+  const sid = Object.keys(lirrNames).find((k) => String(lirrNames[k][0]).toLowerCase() === station.toLowerCase());
+  const si = lirrTT.stops.indexOf(sid), gi = lirrTT.stops.indexOf(GCM_STOP);
+  if (si < 0 || gi < 0) return null;
+  for (const k of [0, -1]) {
+    const day = new Set(lirrTT.dates[nyNow(k).date.replace(/-/g, '')] || []);
+    for (const [, , train, svc, flat] of lirrTT.trips) {
+      if (!day.has(svc) || String(train).replace(/^0+/, '') !== String(r.train).replace(/^0+/, '')) continue;
+      let at = null, from = null;
+      for (let i = 0; i < flat.length; i += 2) { if (flat[i] === si) at = flat[i + 1]; if (flat[i] === gi) from = flat[i + 1]; }
+      if (at != null && from != null && at > from) return r.time + (at - from) * 60;
+    }
+  }
+  return null;
+}
+// NJ Transit's live departures from Penn (for Newark Airport), through the relay.
+let njtPenn = [], njtAt = 0;
+function loadNjtPenn() {
+  if (!RELAY || Date.now() - njtAt < 30000) return;
+  njtAt = Date.now();
+  fetch(`${RELAY}/njt`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+    njtPenn = d && d.ITEMS ? PennFeeds.parseNjt(d.ITEMS).filter((x) => x.carrier === 'njt') : [];
+    if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport();
+  }).catch(() => {});
+}
+// Live MTA Bus Time arrivals at one stop (the airport buses), through the relay.
+const mtaBusLive = new Map();
+function loadMtaBusStop(stop) {
+  const c = mtaBusLive.get(stop);
+  if (!RELAY || (c && (c.loading || Date.now() - c.at < 30000))) return;
+  mtaBusLive.set(stop, { ...(c || {}), loading: true });
+  fetch(`${RELAY}/mta-bus-stop?stop=${encodeURIComponent(stop)}`).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((d) => mtaBusLive.set(stop, { at: Date.now(), buses: d.buses || [] }))
+    .catch(() => mtaBusLive.set(stop, { at: Date.now(), error: true }))
+    .finally(() => { if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); });
+}
+function hubAirportLoad() { loadLirr(); loadNjtPenn(); }
+function hubAirportOptions(code, nowS) {
+  const o = [];
+  const lirrFare = (r) => (r.fare === 'peak' ? FARES.cityPeak : FARES.cityOff);
+  const lirrLeg = (r, to) => `${airPl('LIRR', 'p-lirr')} to ${to} from Grand Central Madison${r.track ? `, track ${esc(r.track)}` : ''}`;
+  if (code === 'JFK') {
+    // LIRR from Grand Central Madison to Jamaica, then the AirTrain.
+    const l = railTo(['lirr'], 'Jamaica', nowS)[0];
+    if (l) {
+      const arr = lirrArrivalAt(l, 'Jamaica') || l.time + 22 * 60;
+      const air = arr + AIR_MIN.change * 60;
+      o.push({ at: air + (AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60, fare: lirrFare(l) + FARES.airtrainJfk,
+        legs: [[l.time, lirrLeg(l, 'Jamaica')], [air, `${airPl('AirTrain', 'p-air')} to your terminal`]] });
+    }
+    // The 6 one stop to 51 St, walk through to the E at Lexington Av/53 St, the E to Sutphin Blvd, the AirTrain.
+    const six = subwayFromTo('6', '631', '630', nowS);
+    if (six) {
+      const e = six.time + (2 + 5) * 60;
+      const air = e + (23 + AIR_MIN.change) * 60;
+      o.push({ at: air + (AIR_MIN.airtrainJfkWait + AIR_MIN.airtrainJfkRide) * 60, fare: FARES.subway + FARES.airtrainJfk,
+        legs: [[six.time, `${lineName('6')} one stop to 51 St, then walk through to the ${lineName('E')} at Lexington Av/53 St`], [e, `${lineName('E')} to Sutphin Blvd-Archer Av-JFK`], [air, `${airPl('AirTrain', 'p-air')} to your terminal`]] });
+    }
+  } else if (code === 'LGA') {
+    // LIRR to Woodside, then the Q70 LaGuardia Link (free).
+    const l = railTo(['lirr'], 'Woodside', nowS)[0];
+    if (l) {
+      const arr = lirrArrivalAt(l, 'Woodside') || l.time + 12 * 60;
+      const bus = arr + (AIR_MIN.change + AIR_MIN.q70Wait) * 60;
+      o.push({ at: bus + AIR_MIN.q70FromWoodside * 60, fare: lirrFare(l),
+        legs: [[l.time, lirrLeg(l, 'Woodside')], [bus, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free), about every 10 min`]] });
+    }
+    // The 7 to 74 St-Broadway, then the Q70 LaGuardia Link (free).
+    const seven = subwayFromTo('7', '723', '710', nowS);
+    if (seven) {
+      const bus = seven.time + (19 + AIR_MIN.change + AIR_MIN.q70Wait) * 60;
+      o.push({ at: bus + AIR_MIN.q70FromJacksonHts * 60, fare: FARES.subway,
+        fareText: `${money(FARES.subway)} one way (the Q70 is free)`,
+        legs: [[seven.time, `${lineName('7')} to 74 St-Broadway`], [bus, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free) from Roosevelt Av, about every 10 min`]] });
+    }
+  } else if (code === 'EWR') {
+    // To Penn on the subway, then NJ Transit (live from NJ Transit).
+    const ready = nowS + (TO_PENN_MIN + 3) * 60;
+    const n = njtPenn.filter((r) => (r.leaves ?? r.time) >= ready && (r.via || []).concat(r.place).some((v) => /^Newark Airport\b/i.test(v))).sort((a, b) => (a.leaves ?? a.time) - (b.leaves ?? b.time))[0];
+    if (n) {
+      const dep = n.leaves ?? n.time;
+      o.push({ at: dep + (AIR_MIN.njtEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: FARES.njtEwr + FARES.subway,
+        fareText: `${money(FARES.njtEwr)} NJ Transit (AirTrain included), plus ${money(FARES.subway)} for the subway`,
+        legs: [[dep - (TO_PENN_MIN + 3) * 60, `${lineName('S')} to Times Sq, then the ${lineName('1')}, ${lineName('2')} or ${lineName('3')} one stop to 34 St-Penn Station`],
+          [dep, `${airPl('NJ Transit', 'p-njt')} from Penn Station to Newark Airport${n.track ? `, track ${esc(n.track)}` : ''}`],
+          [dep + (AIR_MIN.njtEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
+    }
+  }
+  return o;
+}
+function openSheet() {
+  const d = $('change');
+  if (!d.open) { d.showModal(); history.pushState({ changeMap: true }, ''); }
+  d.querySelector('.cm-body').scrollTop = 0;
+}
+$('chg-close').addEventListener('click', () => { if ($('change').open) $('change').close(); });
+window.addEventListener('popstate', () => { if ($('change').open) $('change').close(); });
+$('change').addEventListener('close', () => { changeOpen = null; if (history.state && history.state.changeMap) history.back(); });
 
 // ---------- page ----------
 let lastClock = '';

@@ -10,14 +10,19 @@ bus, and (JFK, Lefferts Blvd) the free AirTrain to the terminals. Times are
 timetable medians, half the bus's daytime gap for the wait. The board shows
 the bus's live arrivals (MTA Bus Time, stop code `board`).
 
-    python3 scripts/build-airport-buses.py gtfs_subway.zip gtfs_q.zip gtfs_b.zip gtfs_busco.zip gtfs_m.zip
+    python3 scripts/build-airport-buses.py [--from gct] gtfs_subway.zip gtfs_q.zip gtfs_b.zip gtfs_busco.zip gtfs_m.zip
 """
 import csv, io, json, math, statistics, sys, zipfile
 from collections import defaultdict
 from pathlib import Path
 
-OUT = Path(__file__).resolve().parent.parent / 'docs' / 'airport-buses.json'
+DOCS = Path(__file__).resolve().parent.parent / 'docs'
+OUT = DOCS / 'airport-buses.json'
 PENN = {'A28': ('A', 'C', 'E'), '128': ('1', '2', '3')}
+# Grand Central's stations (owner, Nov 25: the airport helper at every hub):
+# --from gct writes docs/airport-buses-gct.json.
+HUBS = {'penn': (PENN, DOCS / 'airport-buses.json'),
+        'gct': ({'631': ('4', '5', '6'), '723': ('7',), '901': ('GS',)}, DOCS / 'airport-buses-gct.json')}
 WALK_PENN = 8            # minutes between the two Penn subway stations
 NEAR_M = 250             # a bus stop this close to a subway station
 WALK_M_PER_MIN = 75
@@ -95,9 +100,9 @@ def subway_times(zpath):
         if sid not in best or t < best[sid][0]:
             best[sid] = (t, legs)
     for start, lines in PENN.items():
-        extra = 0 if start == 'A28' else 0  # either Penn station; the board shows which
+        extra = 0  # either station of the hub; the board shows which
         for r, b, m in net[start]:
-            if r not in lines:
+            if r.replace('X', '') not in lines and r not in lines:
                 continue
             t1 = extra + gap.get((r, start), 10) / 2 + m
             offer(b, t1, [(r, start, b, round(m))])
@@ -194,6 +199,10 @@ def main(subway_zip, bus_zips):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 3:
+    args = sys.argv[1:]
+    if args[:1] == ['--from']:
+        PENN, OUT = HUBS[args[1]]
+        args = args[2:]
+    if len(args) < 2:
         sys.exit(__doc__)
-    main(sys.argv[1], sys.argv[2:])
+    main(args[0], args[1:])

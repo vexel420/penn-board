@@ -50,7 +50,9 @@ jobs:
         run: python3 scripts/build-subway-bus-links.py "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_bx.zip "$RUNNER_TEMP"/gtfs_m.zip "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_si.zip "$RUNNER_TEMP"/gtfs_busco.zip
 
       - name: Buses to JFK and LaGuardia (airport helper)
-        run: python3 scripts/build-airport-buses.py "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_busco.zip "$RUNNER_TEMP"/gtfs_m.zip
+        run: |
+          python3 scripts/build-airport-buses.py "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_busco.zip "$RUNNER_TEMP"/gtfs_m.zip
+          python3 scripts/build-airport-buses.py --from gct "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_busco.zip "$RUNNER_TEMP"/gtfs_m.zip
 
       - name: Bus to Islip airport (Suffolk County Transit route 6)
         continue-on-error: true

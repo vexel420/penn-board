@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611251748">
+<link rel="stylesheet" href="style.css?v=202611251755">
 </head>
 <!-- Grand Central (owner, Nov 25): the Penn board's layout in the "Celestial"
      theme, the concourse ceiling's teal and gold. Its own script (gct.js), so
@@ -48,7 +48,7 @@
       <button type="button" data-line="NH" aria-pressed="false">New Haven</button>
       <button type="button" data-line="lirr" aria-pressed="false">LIRR</button>
     </div>
-    <div class="trip-bar"><a class="split-btn" href="split.html" title="Penn and Grand Central side by side">Side by side</a></div>
+    <div class="trip-bar"><button type="button" id="to-airport"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V18l-2 1.5V21l3.5-1 3.5 1v-1.5L13 18v-5z" fill="currentColor"/></svg>To the airport</button><a class="split-btn" href="split.html" title="Penn and Grand Central side by side">Side by side</a></div>
   </nav>
 
   <div class="layout">
@@ -92,9 +92,22 @@
   </footer>
 </main>
 
-<script src="config.js?v=202611251748"></script>
-<script src="feeds.js?v=202611251748"></script>
-<script src="flip.js?v=202611251748"></script>
-<script src="gct.js?v=202611251748"></script>
+<dialog id="change" aria-labelledby="chg-h">
+  <div class="cm-body">
+    <div class="cm-head">
+      <div><p class="cm-kind" id="chg-kind"></p><h2 id="chg-h"></h2></div>
+      <button type="button" class="rr-close" id="chg-close">Close</button>
+    </div>
+    <div id="chg-top" class="cm-top"></div>
+    <div id="chg-map" class="cm-map" role="img" aria-label="Map"></div>
+    <div id="chg-below" class="cm-below"></div>
+  </div>
+</dialog>
+
+<script src="config.js?v=202611251755"></script>
+<script src="feeds.js?v=202611251755"></script>
+<script src="flip.js?v=202611251755"></script>
+<script src="gct.js?v=202611251755"></script>
+<script src="airport.js?v=202611251755"></script>
 </body>
 </html>
