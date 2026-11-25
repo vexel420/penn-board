@@ -776,3 +776,11 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - **Tap to reload:** tapping the station name reloads that board on both pages (Grand Central added Nov 25); taps on the pill switch boards instead.
 - **Switching:** the owner's choice for testing is a pill on the masthead's "New York" line. Penn says "⇄ Grand Central" and Grand Central says "⇄ Penn Station". On Penn the masthead's tap-to-reload ignores taps on the pill, and `HUB_PILL` is redrawn with the flip-board masthead.
 - **Side by side:** `docs/split.html` puts both live pages in frames. Below 1100 px wide (phones) it loads neither board and shows a short note with links to each instead. "Desktop size" renders each at 1280 px and scales it to fit. "Phone size" renders each at 390×844. Swap sides and Reload both are on the toolbar. The "Side by side" button shows only at 1100 px and wider, and hides inside the frames (`.in-split`).
+- **Same toggles as Penn on Grand Central (Nov 25):**
+  - Board style (Standard / Flip board).
+  - Subway "Rows with more than one destination" (Take turns / All destinations).
+  - "Delay pills" (With advisories / All late trains).
+  - The choices are saved under the same keys, so both boards follow one setting.
+  - The flip engine moved unchanged from app.js into `docs/flip.js`, which both pages load before their own script.
+  - Subway pills on Grand Central: Delays (dropped when the train runs on time), the MTA's skipped-stops type, Express to local and Reduced service. Each opens the notice's words; "See full alert" goes to the notices.
+  - On-time checks use `subway-times.json`, which now also has Grand Central's 631 and 723. `build-subway-data.py` adds the `GCT` station set; Penn's data is unchanged. The shuttle (901) has only two stops, so it has no timetable entry.

@@ -33,6 +33,9 @@ SIMPLIFY = 0.00004  # degrees, about 4 m: drops points that don't change the dra
 # Penn's two subway stations, and the next stations that only local trains
 # call at (the same rule as serviceFromPenn in docs/feeds.js).
 PENN = {'128', 'A28'}
+# Grand Central-42 St's three stations (owner, Nov 25): their timetables too,
+# so the Grand Central board can tell on-time trains from late ones.
+GCT = {'631', '723', '901'}
 LOCAL_NEXT = {'129', '126', 'A30', 'A25'}
 # Lines checked for a break in service from Penn late at night.
 NIGHT_GAP_LINES = {'C', '3'}
@@ -235,7 +238,7 @@ def main(zip_path):
         if not day:
             continue
         for i, c in enumerate(cs):
-            if c[1] in PENN and i + 2 < len(cs):
+            if c[1] in PENN | GCT and i + 2 < len(cs):
                 express = not any(n in LOCAL_NEXT for n in names[i + 1:i + 4])
                 # The trip's id in the MTA's live feed starts with its scheduled
                 # start in hundredths of a minute ("033750_1..N03R"); the

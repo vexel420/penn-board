@@ -135,12 +135,12 @@ function rowHtml(r) {
   const via = r.via.length
     ? `<details class="via" data-id="${esc(r.id)}"><summary>${meta}, <u>${r.via.length} stop${r.via.length === 1 ? '' : 's'}</u></summary><p>${r.via.map(esc).join(', ')}</p><p class="last-stop">${view === 'departures' ? 'Last stop' : 'From'}: <b>${esc(r.place)}</b></p></details>`
     : `<div class="meta">${meta}</div>`;
-  const track = r.track ? `<div class="track${r.tone === 'final' ? ' ring' : ''}" aria-label="Track ${esc(r.track)}"><b>${esc(r.track)}</b></div>` : '<div class="track none" aria-label="Track not posted"><b>–</b></div>';
+  const track = r.track ? `<div class="track${r.tone === 'final' ? ' ring' : ''}" aria-label="Track ${esc(r.track)}"><b>${flipText(`${r.id}|k`, r.track, r.tone === 'final' ? 'final' : '')}</b></div>` : `<div class="track none" aria-label="Track not posted"><b>${flipMode ? flipText(`${r.id}|k`, '') : '–'}</b></div>`;
   return `<li class="row ${r.tone}">
-    <div class="time"><b>${t.hm}<small>${t.ap}</small></b><span>${left === 'gone' ? '' : left}</span></div>
+    <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.plateClass}">${esc(r.plate)}</span></div>
-    <div class="dest"><div class="place">${esc(r.place)}</div>${via}</div>
-    <div class="status ${r.tone}">${esc(r.status)}${notes.length ? `<small>${notes.join(', ')}</small>` : ''}</div>
+    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}</div>
+    <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${notes.length ? `<small>${notes.join(', ')}</small>` : ''}</div>
     ${track}
   </li>`;
 }
@@ -151,6 +151,7 @@ function renderRail() {
   $('rows').innerHTML = rows.length ? rows.map(rowHtml).join('')
     : `<li class="empty">${rail.error && !rail.at ? 'Train times didn’t load. Trying again shortly.' : rail.at ? `No ${line === 'all' ? '' : 'trains on this line '}${line === 'all' ? view : ''} in the next few hours.` : 'Loading the board…'}</li>`;
   document.querySelectorAll('#rows details').forEach((d) => { if (open.has(d.dataset.id)) d.open = true; });
+  runFlips($('rows'));
   scheduleFinal(rows);
 }
 // Redraw on the second a train enters its final call (as at Penn).
@@ -164,12 +165,18 @@ function scheduleFinal(rows) {
 }
 
 // ---------- subway: 4 5 6 (Lexington Av), 7 (Flushing), S (shuttle) ----------
+// Laid out as on the Penn board (owner, Nov 25: the same toggles and pills):
+// one row per line, direction and kind of service; a row whose trains go to
+// more than one place either takes turns or lists every place (toggle), and
+// carries the MTA's notices as pills (Delays, Stops skipped, Express to local,
+// Reduced service) that open the notice's own words.
 const SUBWAY_FEED = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fgtfs';
 const STATIONS = [
-  { id: '631', lines: ['4', '5', '6'], dirs: { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, svc: (r) => (r === '6' ? 'Local' : 'Express') },
-  { id: '723', lines: ['7'], dirs: { N: 'Queens', S: 'Times Sq and Hudson Yards' } },
-  { id: '901', lines: ['GS'], dirs: { N: 'Times Sq-42 St', S: 'Times Sq-42 St' } },
+  { id: '631', lines: ['4', '5', '6'], dirs: { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, svc: (r) => (r === '6' ? 'local' : 'express') }, // the diamond 6 is local in Manhattan
+  { id: '723', lines: ['7'], dirs: { N: 'Queens', S: 'Times Sq and Hudson Yards' }, svc: (r, x) => (x ? 'express' : 'local') },
+  { id: '901', lines: ['GS'], dirs: { S: 'Times Sq-42 St' }, svc: () => 'local', oneWay: true },
 ];
+const SVC_NAMES = { express: 'Express', local: 'Local' };
 let subwayData = null, subway = [], subwayErr = '';
 fetch('subway-data.json').then((r) => (r.ok ? r.json() : null)).then((d) => { subwayData = d; renderSubway(); }).catch(() => {});
 // Express runs of the 6 and the 7 (the MTA's "6X", "7X") get the MTA's diamond, not the circle.
@@ -181,6 +188,7 @@ function bullet(route, cls = '', express = false) {
   const diamond = express && DIAMOND_WHERE[route];
   return `<span class="bullet ${cls}${diamond ? ' diamond' : ''}" style="background:${esc(info ? info.color : '#808183')};color:${esc(info ? info.text : '#fff')}" aria-label="${esc(label)} ${diamond ? 'express ' : ''}train">${esc(label)}</span>`;
 }
+const stationName = (id) => (subwayData && subwayData.stops[id] ? subwayData.stops[id][0] : id);
 async function loadSubway() {
   try {
     const trips = PennFeeds.parseTripUpdates(new Uint8Array(await (await fetch(SUBWAY_FEED, { cache: 'no-store' })).arrayBuffer()));
@@ -194,33 +202,198 @@ async function loadSubway() {
         if (!stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
         const route = trip.route.replace(/X$/, '');
         if (!stn.lines.includes(route)) continue;
-        const dir = stop.id.slice(-1);
-        const dest = trip.stops[trip.stops.length - 1].id.slice(0, -1);
-        const key = `${stn.id}|${route}|${dir}|${dest}|${/X$/.test(trip.route) ? 'x' : ''}`;
-        if (!groups.has(key)) groups.set(key, { stn: stn.id, route, dir, dest, express: /X$/.test(trip.route), times: [] });
-        groups.get(key).times.push(stop.time);
+        const x = /X$/.test(trip.route);
+        const dir = stn.oneWay ? 'S' : stop.id.slice(-1);
+        const svc = stn.svc(route, x);
+        const key = `${stn.id}|${route}|${dir}|${svc}|${x ? 'x' : ''}`;
+        if (!groups.has(key)) groups.set(key, { stn: stn.id, route, dir, svc, express: x, trains: [] });
+        // `code`: the trip's scheduled start, to match it to the timetable (on time or late).
+        const code = (/^(\d{6})_/.exec(trip.trip || '') || [])[1] || '';
+        groups.get(key).trains.push({ time: stop.time, dest: trip.stops[trip.stops.length - 1].id.slice(0, -1), code });
       }
     }
-    subway = [...groups.values()].map((g) => ({ ...g, times: g.times.sort((a, b) => a - b).slice(0, 3) }));
+    subway = [...groups.values()].map((g) => ({ ...g, trains: g.trains.sort((a, b) => a.time - b.time) }));
     subwayErr = '';
   } catch (e) { subwayErr = e.message || String(e); }
   renderSubway();
 }
-const minsHtml = (times) => times.map((x, i) => { const m = Math.max(0, Math.round((x - nowS()) / 60)); return i === 0 ? (m < 1 ? '<b class="now">now</b>' : `<b>${m}</b> min`) : String(m); }).join(', ');
+
+// On time or late, against the timetable at Grand Central (subway-times.json, as at Penn).
+let subwayTimes = null;
+fetch('subway-times.json').then((r) => (r.ok ? r.json() : null)).then((d) => {
+  if (!d || !d.penn) return;
+  subwayTimes = new Map();
+  for (const [stn, ls] of Object.entries(d.penn)) for (const [ln, ds] of Object.entries(ls)) for (const [dir, days] of Object.entries(ds)) for (const [day, list] of Object.entries(days)) {
+    subwayTimes.set(`${stn}|${ln}|${dir}|${day}`, new Map(list.split(',').map((x) => { const [c, m] = x.split(':'); return [c, +m]; })));
+  }
+  renderSubway();
+}).catch(() => {});
+const nyParts = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit', hourCycle: 'h23' });
+function nyNow(off = 0) {
+  const p = {};
+  nyParts.formatToParts(new Date(Date.now() + off * 86400000)).forEach((x) => { p[x.type] = x.value; });
+  return { day: p.weekday === 'Sat' ? 'saturday' : p.weekday === 'Sun' ? 'sunday' : 'weekday', mins: +p.hour * 60 + +p.minute, date: `${p.year}-${p.month}-${p.day}` };
+}
+// The subway's holiday schedule (Sunday service) on its six big holidays, as on the Penn board.
+function subwayHoliday(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  const wd = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+  const nth = Math.ceil(d / 7), last = d + 7 > new Date(Date.UTC(y, m, 0)).getUTCDate();
+  return (m === 1 && d === 1) || (m === 7 && d === 4) || (m === 12 && d === 25) || (m === 5 && wd === 1 && last) || (m === 9 && wd === 1 && nth === 1) || (m === 11 && wd === 4 && nth === 4);
+}
+const minsToEpoch = (mins) => { const n = nyNow(); return Math.floor(Date.now() / 60000) * 60 - n.mins * 60 + mins * 60; };
+function subwayLateBy(stnId, route, dir, x) {
+  if (!subwayTimes || !x || !x.code) return null;
+  let best = null;
+  for (const off of [-1, 0, 1]) {
+    const n = nyNow(off);
+    const day = subwayHoliday(n.date) ? 'sunday' : n.day;
+    const m = (subwayTimes.get(`${stnId}|${route}|${dir}|${day}`) || new Map()).get(x.code);
+    if (m == null) continue;
+    const diff = x.time - minsToEpoch(off * 1440 + m);
+    if (Math.abs(diff) < 3 * 3600 && (best == null || Math.abs(diff) < Math.abs(best))) best = diff;
+  }
+  return best;
+}
+const ON_TIME_S = 180;
+const LATE_PILL_MIN = 5;
+const subwayOnTime = (stnId, route, dir, x) => { const d = subwayLateBy(stnId, route, dir, x); return d != null && d <= ON_TIME_S; };
+
+// The two toggles under the panel, shared with the Penn board (same saved choices).
+let subwayStyle = store.get('subwayStyle', 'turns') === 'b' ? 'b' : 'turns';
+let allLatePills = store.get('subwayLatePills', 'advisory') === 'all';
+const subwayStyleHtml = () => `<div class="sub-style"><span>Rows with more than one destination</span><div class="style-seg">
+  <button type="button" data-sstyle="turns" aria-pressed="${subwayStyle === 'turns'}">Take turns</button><button type="button" data-sstyle="b" aria-pressed="${subwayStyle === 'b'}">All destinations</button></div></div>
+  <div class="sub-style"><span>Delay pills</span><div class="style-seg">
+  <button type="button" data-latepills="advisory" aria-pressed="${!allLatePills}">With advisories</button><button type="button" data-latepills="all" aria-pressed="${allLatePills}">All late trains</button></div></div>`;
+$('sub-toggles').addEventListener('click', (e) => {
+  const lp = e.target.closest('[data-latepills]');
+  if (lp) { allLatePills = lp.dataset.latepills === 'all'; store.set('subwayLatePills', allLatePills ? 'all' : 'advisory'); renderSubway(); return; }
+  const b = e.target.closest('[data-sstyle]');
+  if (b) { subwayStyle = b.dataset.sstyle; store.set('subwayStyle', subwayStyle); renderSubway(); }
+});
+
+// Pills: the MTA's notices for the line, each named with the MTA's own type,
+// opening a dropdown with the notice's words (as on the Penn board).
+const WARN_IC = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5 1.5 21h21zM11 9h2v6h-2zm0 8h2v2h-2z" fill="currentColor" fill-rule="evenodd"/></svg>';
+const warnPill = (txt) => `<span class="late-pill warn-pill">${WARN_IC}${txt}</span>`;
+const openDrops = new Set();
+const dropBodies = new Map();
+const happeningNow = (n) => n.activeNow !== false;
+const DELAY_TYPES = /delay|cancel|suspend|single track/i;
+const SERVICE_SWITCH = /\b(running|runs|run|operating|operates)\s+(express|local)\b|\bexpress (between|from|to|in)\b|\blocal (between|from|to|in)\b|\breroute|\bruns? via\b/i;
+const DOWN_WORDS = /\b(downtown|southbound|brooklyn-bound|manhattan-bound|hudson yards-bound|times sq-bound)\b/i, UP_WORDS = /\b(uptown|northbound|bronx-bound|queens-bound|flushing-bound)\b/i;
+const dirMatch = (n, dir) => {
+  const first = String(n.text).split(/\.\s/)[0];
+  const down = DOWN_WORDS.test(first), up = UP_WORDS.test(first);
+  if (!dir || down === up) return true;
+  return dir === 'S' ? down : up;
+};
+const onLine = (n, route) => (n.lines || []).some((l) => l.replace(/X$/, '') === route || (route === 'GS' && l === 'S'));
+const subNotices = (route, dir, test) => notices.subway.filter((n) => happeningNow(n) && onLine(n, route) && dirMatch(n, dir) && test(n));
+const mtaType = (t) => { const x = String(t || '').replace(/^Planned - /, ''); return x.charAt(0).toUpperCase() + x.slice(1).toLowerCase(); };
+function untilText(n) {
+  const p = (n.periods || []).find(([a, b]) => a <= nowS() + 60 && b > nowS());
+  if (!p || !isFinite(p[1])) return '';
+  const fmt = (t, o) => new Date(t * 1000).toLocaleString('en-US', { timeZone: 'America/New_York', ...o });
+  const sameDay = fmt(p[1], { day: 'numeric' }) === fmt(nowS(), { day: 'numeric' });
+  return `until ${sameDay ? '' : `${fmt(p[1], { weekday: 'short' })} `}${fmt(p[1], { hour: 'numeric', minute: '2-digit' })}`;
+}
+function dropPill(key, label, kind, ns) {
+  const open = openDrops.has(key);
+  if (open) {
+    const items = ns.map((n) => { const u = untilText(n); return `<span class="drop-n">${noticeBody(n)}${u ? `<small>${esc(u)}</small>` : ''}</span>`; }).join('');
+    dropBodies.set(key, `<span class="drop${kind === 'warn' ? '' : ' info'}">${items}<span class="drop-links"><button type="button" class="al-map" data-goto="subway">See full alert</button></span></span>`);
+  }
+  return `<button type="button" class="late-pill ${kind === 'warn' ? 'warn-pill' : 'info-pill'}" data-drop="${esc(key)}" aria-expanded="${open}">${kind === 'warn' ? WARN_IC : ''}${esc(label)}<span class="chev" aria-hidden="true">${open ? '▾' : '▸'}</span></button>`;
+}
+const pills = (...ps) => {
+  const h = ps.filter(Boolean).join('');
+  if (!h) return '';
+  const drops = [...h.matchAll(/data-drop="([^"]+)"/g)].map((m) => m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&')).filter((k) => openDrops.has(k)).map((k) => dropBodies.get(k) || '').join('');
+  return `<span class="pills">${h}</span>${drops}`;
+};
+function subwayPills(stnId, route, dir, svc, train) {
+  const k = (x) => `${stnId}|${route}|${dir}|${x}`;
+  const delays = subNotices(route, dir, (n) => /delay/i.test(n.type) && (DELAY_TYPES.test(n.type) || /\bdelay|\blate\b|cancel/i.test(n.text)) && !SERVICE_SWITCH.test(n.text));
+  // "Delays" comes off a train running on time; with "All late trains", a
+  // train 5+ min behind its timetable gets a pill even with no notice.
+  let delay = '';
+  if (delays.length) delay = subwayOnTime(stnId, route, dir, train) ? '' : dropPill(k('delays'), 'Delays', 'warn', delays);
+  else if (allLatePills) { const late = subwayLateBy(stnId, route, dir, train); if (late != null && late >= LATE_PILL_MIN * 60) delay = warnPill(`${Math.round(late / 60)} min late`); }
+  const e2l = subNotices(route, dir, (n) => /express to local/i.test(n.type));
+  const skip = subNotices(route, dir, (n) => /stops skipped|local to express/i.test(n.type) && !e2l.includes(n));
+  const red = subNotices(route, dir, (n) => /reduced service/i.test(n.type));
+  return delay
+    + (skip.length ? dropPill(k('skip'), mtaType(skip[0].type), 'warn', skip) : '')
+    + (e2l.length ? dropPill(k('e2l'), 'Express to local', 'info', e2l) : '')
+    + (red.length ? dropPill(k('reduced'), 'Reduced service', 'info', red) : '');
+}
+document.addEventListener('click', (e) => {
+  const d = e.target.closest('[data-drop]');
+  if (d) { const k = d.dataset.drop; openDrops.has(k) ? openDrops.delete(k) : openDrops.add(k); renderSubway(); return; }
+  const g = e.target.closest('[data-goto="subway"]');
+  if (g) {
+    // Phones: the Alerts tab; computers: open the subway notices above the panel.
+    if (matchMedia('(max-width: 960px)').matches) document.querySelector('.seg [data-view="alerts"]').click();
+    else { const st = document.querySelector('#subway-notices details'); if (st) { st.open = true; st.scrollIntoView({ block: 'start', behavior: 'smooth' }); } }
+  }
+});
+
+// A row taking turns shows each destination's next trains for a few seconds.
+const ROTATE_MS = 8000;
+const turnCycles = new Map();
+const minsHtml = (times) => minsList(times.map((time) => ({ time })));
+const minsList = (list) => {
+  const ts = list.slice(0, 3).map((x) => Math.max(0, Math.round((x.time - nowS()) / 60)));
+  return `${ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}`;
+};
+function rowHtmlSub(stn, g) {
+  const t = nowS();
+  let upcoming = g.trains.filter((x) => x.time >= t - 30);
+  if (!upcoming.length) return '';
+  const name = (id) => (stn.id === '901' ? 'Times Sq-42 St' : stationName(id));
+  const note = g.express && DIAMOND_WHERE[g.route] && g.dir === 'N' ? `<small>${DIAMOND_WHERE[g.route]}</small>` : '';
+  const ends = [...new Set(upcoming.map((x) => x.dest))];
+  const key = `${stn.id}|${g.route}|${g.dir}|${g.svc}|${g.express}`;
+  if (ends.length > 1 && subwayStyle === 'b') {
+    // Every destination, each with its own next times and pills.
+    const body = ends.map((e) => {
+      const mine = upcoming.filter((x) => x.dest === e);
+      return `<span class="b-row"><span>${esc(name(e))}${pills(subwayPills(stn.id, g.route, g.dir, g.svc, mine[0]))}</span><span class="smins">${minsList(mine)}</span></span>`;
+    }).join('');
+    return `<div class="sline optb">${bullet(g.route, '', g.express)}<span class="b-wrap"><span class="b-times">${body}</span>${note}</span></div>`;
+  }
+  if (ends.length > 1) {
+    // Take turns, starting with the destination whose train comes first; while a train is "now", stay on it.
+    const arriving = Math.round((upcoming[0].time - t) / 60) <= 0;
+    const order = arriving ? '' : ends.join(',');
+    const turnNow = Math.floor(Date.now() / ROTATE_MS);
+    const c = turnCycles.get(key);
+    if (!c || c.order !== order) turnCycles.set(key, { order, from: turnNow });
+    if (!arriving) upcoming = upcoming.filter((x) => x.dest === ends[(turnNow - turnCycles.get(key).from) % ends.length]);
+  }
+  return `<div class="sline">${bullet(g.route, '', g.express)}<span class="sdest"><span class="dname">${esc(name(upcoming[0].dest))}</span>${note}${pills(subwayPills(stn.id, g.route, g.dir, g.svc, upcoming[0]))}</span><span class="smins">${minsList(upcoming)}</span></div>`;
+}
+let subTurnTimer = 0;
 function renderSubway() {
+  $('sub-toggles').innerHTML = subwayStyleHtml();
   if (!subway.length) { $('subway').innerHTML = `<p class="empty">${subwayErr ? 'Subway times didn’t load. Trying again shortly.' : 'Loading subway times…'}</p>`; return; }
-  const name = (id) => (subwayData && subwayData.stops[id] ? subwayData.stops[id][0] : id);
+  dropBodies.clear();
   $('subway').innerHTML = STATIONS.map((stn) => {
-    const here = subway.filter((g) => g.stn === stn.id && g.times.some((x) => x > nowS() - 20));
+    const here = subway.filter((g) => g.stn === stn.id && g.trains.some((x) => x.time > nowS() - 30));
     if (!here.length) return '';
-    const dirs = (stn.id === '901' ? ['S', 'N'].slice(0, 1) : ['N', 'S']).map((dir) => {
-      const list = here.filter((g) => stn.id === '901' || g.dir === dir).sort((a, b) => a.times[0] - b.times[0]);
-      if (!list.length) return '';
-      const bySvc = stn.svc ? ['Express', 'Local'].map((s) => [s, list.filter((g) => stn.svc(g.route) === s)]).filter(([, l]) => l.length) : [['', list]];
-      return `<div class="dir"><h3>${esc(stn.dirs[dir])}</h3>${bySvc.map(([s, l]) => `<div class="svc">${s ? `<h4>${s}</h4>` : ''}${l.map((g) => `<div class="sline">${bullet(g.route, '', g.express)}<span class="sdest"><span class="dname">${esc(stn.id === '901' ? 'Times Sq-42 St' : name(g.dest))}</span>${g.express && DIAMOND_WHERE[g.route] && g.dir === 'N' ? `<small>${DIAMOND_WHERE[g.route]}</small>` : ''}</span><span class="smins">${minsHtml(g.times)}</span></div>`).join('')}</div>`).join('')}</div>`;
+    const dirs = Object.keys(stn.dirs).map((dir) => {
+      const mine = here.filter((g) => g.dir === dir);
+      if (!mine.length) return '';
+      const svcs = stn.id === '901' ? [['', mine]] : ['express', 'local'].map((sv) => [SVC_NAMES[sv], mine.filter((g) => g.svc === sv)]).filter(([, l]) => l.length);
+      return `<div class="dir"><h3>${esc(stn.dirs[dir])}</h3>${svcs.map(([label, l]) => `<div class="svc">${label ? `<h4>${label}</h4>` : ''}${l.sort((a, b) => a.trains[0].time - b.trains[0].time || (a.express - b.express)).map((g) => rowHtmlSub(stn, g)).join('')}</div>`).join('')}</div>`;
     }).join('');
     return `<section class="stn" aria-label="${stn.lines.map((l) => (l === 'GS' ? 'S' : l)).join(', ')} trains"><div class="stn-lines">${stn.lines.map((l) => bullet(l, 'small')).join('')}</div>${dirs}</section>`;
   }).join('');
+  // Rows taking turns move on every few seconds.
+  clearTimeout(subTurnTimer);
+  if (subwayStyle === 'turns') subTurnTimer = setTimeout(renderSubway, ROTATE_MS - (Date.now() % ROTATE_MS) + 30);
 }
 
 // ---------- buses (MTA Bus Time, through the relay) ----------
@@ -275,7 +448,10 @@ function noticeWho(n) {
   const first = ln[0] ? Object.values(MNR_LINES).find(([nm]) => nm === ln[0]) : null;
   return `<span class="plate ${first ? first[1] : 'mnr'}">${esc(ln.length === 1 ? ln[0] : 'Metro-North')}</span>`;
 }
-const noticeBody = (n) => `${esc(n.text)}${n.desc || n.more ? `<span class="n-more">${esc(n.desc || n.more)}</span>` : ''}`;
+// The MTA writes lines into notice text as "[2]"; those become line bullets,
+// and pictograms like "[accessibility icon]" are dropped (as on the Penn board).
+const noticeText = (t) => esc(t).replace(/\[[a-z ]+? icon\]/gi, '').replace(/\[([A-Z0-9]{1,2})\]/g, (m, l) => (subwayData && subwayData.routes[l] ? bullet(l, 'tiny') : `<b>${l}</b>`)).replace(/ {2,}/g, ' ').trim();
+const noticeBody = (n) => `${noticeText(n.text)}${n.desc || n.more ? `<span class="n-more">${noticeText(n.desc || n.more).replace(/\n+/g, '<br>')}</span>` : ''}`;
 function strip(list, where, label) {
   if (!list.length) return '';
   return `<details class="al-strip${list.some((n) => n.urgent) ? ' urgent' : ''}" data-where="${where}"><summary><span class="n">${list.length}</span><span>${label}</span><span class="more"><span class="hide">Hide</span><span class="show">Show</span></span></summary>${list.map((n) => `<div class="al-item${n.urgent ? ' urgent' : ''}"><span class="who">${noticeWho(n)}</span><p style="margin:0"><span class="kind">${esc(n.type)}</span>${noticeBody(n)}</p></div>`).join('')}</details>`;
@@ -329,13 +505,43 @@ function renderAlertsTab() {
 }
 
 // ---------- page ----------
+let lastClock = '';
 function renderClock() {
   const p = {};
   new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit', second: '2-digit' }).formatToParts(new Date()).forEach((x) => { p[x.type] = x.value; });
-  $('clock').textContent = `${p.hour}:${p.minute}`;
+  const hm = `${p.hour}:${p.minute}`;
+  if (flipMode) {
+    // Tiles turn only when the minute changes; no seconds on the flip board.
+    if (lastClock !== hm + p.dayPeriod) { $('clock').innerHTML = flipText('clock', hm); $('clock-ap').innerHTML = flipText('clock-ap', p.dayPeriod); runFlips($('clock').parentNode); lastClock = hm + p.dayPeriod; }
+    $('clock-s').textContent = '';
+    return;
+  }
+  $('clock').textContent = hm;
   $('clock-s').textContent = `:${p.second}`;
   $('clock-ap').textContent = p.dayPeriod;
 }
+// Board style (Standard or Flip board), shared with the Penn board.
+const HUB_PILL = '<a class="hub-pill" href="index.html" title="Switch to Penn Station">⇄ Penn Station</a>';
+function renderMast() {
+  const h = document.querySelector('.mast h1');
+  h.innerHTML = flipMode
+    ? `<span class="mast-kicker">New York ${HUB_PILL}</span><span class="mast-flip">${flipText('mast', 'Grand Central')}</span>`
+    : `<span class="mast-kicker">New York ${HUB_PILL}</span>Grand Central`;
+  if (flipMode) runFlips(h); else flipShown.delete('mast');
+}
+function setBoardStyle(flip) {
+  flipMode = flip;
+  store.set('boardStyle', flip ? 'flip' : 'standard');
+  document.body.classList.toggle('flipboard', flip);
+  document.querySelectorAll('.style-seg [data-style]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.style === 'flip') === flip)));
+  for (const k of [...flipShown.keys()]) if (k !== 'mast') flipShown.delete(k); // rows flip in fresh
+  lastClock = '';
+  renderMast(); renderClock(); renderRail();
+}
+document.querySelector('.style-bar .style-seg').addEventListener('click', (e) => { const b = e.target.closest('button[data-style]'); if (b) setBoardStyle(b.dataset.style === 'flip'); });
+document.body.classList.toggle('flipboard', flipMode);
+document.querySelectorAll('.style-seg [data-style]').forEach((b) => b.setAttribute('aria-pressed', String((b.dataset.style === 'flip') === flipMode)));
+renderMast();
 function renderStamp() {
   const el = $('updated');
   if (!rail.at) { el.textContent = rail.error ? 'Can’t reach the train feeds. Trying again.' : 'Connecting…'; return; }

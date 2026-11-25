@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611251238">
+<link rel="stylesheet" href="style.css?v=202611251746">
 </head>
 <!-- Grand Central (owner, Nov 25): the Penn board's layout in the "Celestial"
      theme, the concourse ceiling's teal and gold. Its own script (gct.js), so
@@ -70,10 +70,20 @@
       <h2 class="path-h">Buses <span>at Grand Central, live from MTA Bus Time</span></h2>
       <div id="gct-buses"><p class="empty">Loading buses…</p></div>
       <p class="walk">To Penn Station: the S to Times Sq, then the 1, 2 or 3 one stop down (about 15 min), or a 20-minute walk.</p>
+      <!-- Display choices for the subway list (shared with the Penn board). -->
+      <div id="sub-toggles"></div>
     </aside>
   </div>
 
   <section id="alerts" class="alerts-tab" aria-label="Service alerts"></section>
+
+  <div class="style-bar">
+    <span>Board style</span>
+    <div class="style-seg" role="group" aria-label="Board style">
+      <button type="button" data-style="standard" aria-pressed="true"><span class="ic-lines" aria-hidden="true"><i></i><i></i><i></i></span>Standard</button>
+      <button type="button" data-style="flip" aria-pressed="false"><span class="ic-tiles" aria-hidden="true"><i></i><i></i><i></i></span>Flip board</button>
+    </div>
+  </div>
 
   <footer class="foot">
     <p id="updated">Connecting…</p>
@@ -82,8 +92,9 @@
   </footer>
 </main>
 
-<script src="config.js?v=202611251238"></script>
-<script src="feeds.js?v=202611251238"></script>
-<script src="gct.js?v=202611251238"></script>
+<script src="config.js?v=202611251746"></script>
+<script src="feeds.js?v=202611251746"></script>
+<script src="flip.js?v=202611251746"></script>
+<script src="gct.js?v=202611251746"></script>
 </body>
 </html>

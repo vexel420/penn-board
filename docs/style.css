@@ -723,3 +723,7 @@ body.hub-gct {
 .bullet.diamond { border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); box-shadow: none; width: 2.35rem; height: 2.35rem; margin: -.18rem; }
 .bullet.small.diamond { width: 1.65rem; height: 1.65rem; margin: -.12rem; }
 .bullet.tiny.diamond { margin: 0; }
+
+/* Flip board on Grand Central: teal tiles, gold letters. */
+.hub-gct .mast-flip .f, .hub-gct.flipboard .clock .f { --tile: #123f48; --tile-top: #174a54; --seam: #08262c; color: #f3d88f; }
+.hub-gct .mast-flip { font-family: "Archivo", sans-serif; }
