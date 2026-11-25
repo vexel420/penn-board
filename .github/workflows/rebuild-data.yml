@@ -68,6 +68,11 @@ jobs:
       - name: LIRR timetable (other options for delayed trains)
         run: python3 scripts/build-lirr-timetable.py "$RUNNER_TEMP/gtfslirr.zip"
 
+      - name: Stewart Airport (Metro-North to Beacon; Coach USA part kept as is)
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/gtfsmnr.zip" https://rrgtfsfeeds.s3.amazonaws.com/gtfsmnr.zip
+          python3 scripts/build-swf.py "$RUNNER_TEMP/gtfsmnr.zip"
+
       - name: NJ Transit timetable (through the relay, locked to this repository)
         # NJ Transit's file needs the owner's login, which only the relay holds.
         # The relay hands it over only with a GitHub-signed token for this repo.

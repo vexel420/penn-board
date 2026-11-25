@@ -560,6 +560,7 @@ body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view=
 .bf-bus .gate { display: inline-block; border: 1px solid var(--gold); color: var(--gold); border-radius: 4px; padding: 0 .3rem; font-size: .72rem; font-weight: 800; margin-left: .25rem; vertical-align: .1em; }
 .bf-bus .kind { font-size: .7rem; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--dim); margin-left: .3rem; }
 .p-partner { background: #5b5b5b; }
+.p-mnr { background: #00843d; }
 
 /* Buses to skipped subway stops (MTA Bus Time). */
 .skip-bus { flex-basis: 100%; order: -1; display: block; margin: .1rem 0 .3rem; }

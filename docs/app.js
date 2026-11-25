@@ -3662,8 +3662,11 @@ const AIR_MIN = {
   walkToPath: 5, pathJsq: 17, pathJsqViaHob: 26, pathNewark: 11, pathNewarkWait: 5, pathNewarkWaitNight: 15,
   njtNewarkWait: 8, njtNewarkWaitNight: 20, njtNewarkEwr: 6, bus62Wait: 8, bus62Ride: 20,
 };
+// Islip is on hold (owner, Nov 25): its options stay in the code, no button.
+const AIRPORTS = [['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark'], ['SWF', 'Stewart']];
 let airportPick = 'JFK';
 try { airportPick = localStorage.getItem('airport') || 'JFK'; } catch {}
+if (!AIRPORTS.some(([c]) => c === airportPick)) airportPick = 'JFK';
 const money = (x) => `$${x.toFixed(2)}`;
 const hm = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
 const minsText = (m) => (m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
@@ -3680,6 +3683,37 @@ function subwayTo(route, stopId, nowS) {
     .flatMap((g) => g.trains).filter((t) => t.time >= nowS + 60 && (t.stops || []).includes(stopId)).sort((a, b) => a.time - b.time);
 }
 const subRide = (key, fallback) => { const r = subwayGuide && subwayGuide.rides && subwayGuide.rides[key]; return (r && (nyNow().mins < 5 * 60 ? r.night : r.day)) || fallback; };
+// Live NJ Transit departures at one bus stop (relay /njt-bus-stop), 30 s fresh.
+const NEWARK_PENN_62_STOP = '18835'; // Raymond Blvd bus lanes, gates 2A and 3A
+const njtStopLive = new Map(); // stop -> { at, trips }
+const njtStopLoading = new Set();
+function loadNjtStop(stop) {
+  const cur = njtStopLive.get(stop);
+  if (njtStopLoading.has(stop) || (cur && Date.now() - cur.at < 30000) || !window.PENN_RELAY) return;
+  njtStopLoading.add(stop);
+  fetch(`${window.PENN_RELAY}/njt-bus-stop?stop=${stop}`, { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((d) => { njtStopLive.set(stop, { at: Date.now(), trips: (d && d.DVTrip) || [] }); })
+    .catch(() => { njtStopLive.set(stop, { at: Date.now(), trips: (cur && cur.trips) || [] }); })
+    .finally(() => { njtStopLoading.delete(stop); if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); });
+}
+// As [{ route, sign, at (epoch s), late, gate, live }], soonest first.
+function njtStopBuses(stop) {
+  loadNjtStop(stop);
+  const cur = njtStopLive.get(stop);
+  if (!cur) return [];
+  const nowS = Date.now() / 1000, now = nyNow().mins;
+  const clockMin = (re, x) => { const c = re.exec(x || ''); return c ? (+c[1] % 12) * 60 + +c[2] + (/pm/i.test(c[3]) ? 720 : 0) : null; };
+  return cur.trips.map((x) => {
+    const t = clockMin(/(\d+):(\d+)\s*(AM|PM)/i, x.departuretime);
+    const st = clockMin(/(\d+):(\d+):\d+\s*(AM|PM)/i, x.sched_dep_time);
+    if (t == null) return null;
+    let inMin = (t - now + 1440) % 1440;
+    if (inMin > 1200) return null; // just left
+    let late = st != null ? (t - st + 1440) % 1440 : 0;
+    if (late > 720) late = 0;
+    return { route: String(x.public_route || ''), sign: String(x.header || ''), at: nowS - (nowS % 60) + inMin * 60, late, gate: String(x.lanegate || '').split('_')[0], live: !!x.vehicle_id && x.vehicle_id !== 'EMPTY' };
+  }).filter(Boolean).sort((a, b) => a.at - b.at);
+}
 function airportOptions(code, nowS) {
   const o = [];
   const lirrFare = (r) => (r.fare === 'peak' ? FARES.cityPeak : FARES.cityOff);
@@ -3714,13 +3748,18 @@ function airportOptions(code, nowS) {
       const tr = atNewark + (AIR_MIN.change + (night ? AIR_MIN.njtNewarkWaitNight : AIR_MIN.njtNewarkWait)) * 60;
       o.push({ at: tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change + AIR_MIN.airtrainEwrWait + AIR_MIN.airtrainEwrRide) * 60, fare: FARES.path + FARES.njtNewarkEwr,
         legs: [...pathLegs, [tr, `${airPl('NJ Transit', 'p-njt')} at Newark Penn, one stop to Newark Airport`], [tr + (AIR_MIN.njtNewarkEwr + AIR_MIN.change) * 60, `${airPl('AirTrain', 'p-air')} to your terminal (included)`]] });
-      const bus = atNewark + (AIR_MIN.change + AIR_MIN.bus62Wait) * 60;
+      // The 62: NJ Transit's own departures at Newark Penn (stop 18835) when in.
+      const ready62 = atNewark + AIR_MIN.change * 60;
+      const b62 = njtStopBuses(NEWARK_PENN_62_STOP).find((x) => x.route === '62' && /AIRPORT/i.test(x.sign) && x.at >= ready62);
+      const bus = b62 ? b62.at : ready62 + AIR_MIN.bus62Wait * 60;
+      const gate = b62 && b62.gate ? b62.gate : night ? '2A' : '3A';
       o.push({ at: bus + AIR_MIN.bus62Ride * 60, fare: FARES.path + FARES.njtBus1, fareText: `${money(FARES.path + FARES.njtBus1)} one way (PATH + one-zone bus fare)`,
-        legs: [...pathLegs, [bus, `${airPl('62 bus', 'p-njt')} at Newark Penn (Raymond Blvd, gate ${night ? '2A' : '3A'}) to your terminal`]] });
+        legs: [...pathLegs, [bus, `${airPl('62 bus', 'p-njt')} at Newark Penn (Raymond Blvd, gate ${esc(gate)}) to your terminal${b62 ? (b62.live ? ` · <span class="sb-live">live</span>${b62.late >= 2 ? ` <span class="bus-late">${b62.late} min late</span>` : ''}` : ' (scheduled)') : ', about every 20 min'}`]] });
     }
   }
   if (code === 'EWR') o.push(...ewrExpressOptions(nowS));
   if (code === 'ISP') o.push(...ispOptions(nowS));
+  if (code === 'SWF') o.push(...swfOptions(nowS));
   o.push(...airportBusOptions(code, nowS));
   return o;
 }
@@ -3896,23 +3935,121 @@ function ispOptions(nowS) {
   }
   return out;
 }
+// ---------- New York Stewart (SWF) (owner, Nov 25) ----------
+// No direct bus from the city any more (Stewart Airport's own page, Nov 2026).
+// Two ways, both ending on Leprechaun Lines' Newburgh Beacon Bridge Shuttle,
+// free in 2026, on the runs that stop at the terminal:
+//   Metro-North Hudson Line, Grand Central to Beacon (live: TrainTime's Grand
+//   Central departures, the same source as the board's LIRR), then the shuttle;
+//   Coach USA (ShortLine) from Port Authority to the Route 17K Park & Ride in
+//   Newburgh, then the shuttle.
+// docs/swf.json (scripts/build-swf.py): the Metro-North and Coach USA
+// timetables, and the shuttle's westbound runs that stop at Stewart.
+let swfData;
+let swfLoading = null;
+const loadSwf = () => swfLoading || (swfLoading = fetch('swf.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => { swfData = d; if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }));
+let mnrLive = null, mnrLiveAt = 0, mnrLiveLoading = null;
+function loadMnrLive() {
+  if (mnrLiveLoading || Date.now() - mnrLiveAt < 60000) return;
+  mnrLiveLoading = fetch('https://backend-unified.mylirr.org/arrivals/0NY', { headers: { 'accept-version': '3.0' }, cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+    .then((d) => { mnrLive = ((d && d.arrivals) || []).filter((a) => a.railroad === 'MNR' && (a.stops || []).includes('0BC')); })
+    .catch(() => {})
+    .finally(() => { mnrLiveAt = Date.now(); mnrLiveLoading = null; if (changeOpen && changeOpen.id === 'airport' && $('change').open && airportPick === 'SWF') renderAirport(); });
+}
+const PENN_TO_GCT_MIN = 15;  // 1, 2 or 3 to Times Sq, the S or 7, up to the Metro-North concourse
+// Days from today (0, 1) with their midnight, timetable date and shuttle schedule.
+function swfDays(nowS) {
+  return [0, 1].map((k) => {
+    const n = nyNow(k);
+    const ymd = n.date.replace(/-/g, '');
+    const weekend = n.day !== 'weekday' || (swfData.weekendDates || []).includes(ymd);
+    return { ymd, weekend, midnight: nowS + k * 86400 - nyNow().mins * 60 - (nowS % 60) };
+  });
+}
+// The first shuttle run to the terminal leaving a stop (0 Beacon, 1 Park & Ride) at or after t.
+function swfShuttleAfter(stop, t, nowS) {
+  for (const d of swfDays(nowS)) {
+    const run = (swfData.shuttle[d.weekend ? 'we' : 'wk'] || []).find((r) => d.midnight + r[stop] * 60 >= t);
+    if (run) return { leave: d.midnight + run[stop] * 60, arrive: d.midnight + run[2] * 60 };
+  }
+  return null;
+}
+function swfOptions(nowS) {
+  loadSwf();
+  if (!swfData) return [];
+  const out = [];
+  const MAX_WAIT = 75 * 60; // don't offer a shuttle more than this long after you get there
+  // Metro-North: the first train you can reach from Penn whose shuttle works out.
+  if (swfData.mnr) {
+    loadMnrLive();
+    const live = new Map((mnrLive || []).map((a) => [String(a.train_num), a]));
+    const reach = nowS + PENN_TO_GCT_MIN * 60 + 2 * 60;
+    const trains = [];
+    for (const d of swfDays(nowS)) {
+      const svc = new Set(swfData.mnr.dates[d.ymd] || []);
+      for (const [s, num, dep, arr] of swfData.mnr.trips) {
+        if (!svc.has(s)) continue;
+        const a = live.get(String(num));
+        if (a && a.status && a.status.canceled) continue;
+        const shift = a ? a.time - (d.midnight + dep * 60) : 0;
+        if (Math.abs(shift) > 3 * 3600) continue; // another day's train with the same number
+        trains.push({ num, dep: d.midnight + dep * 60 + shift, arr: d.midnight + arr * 60 + shift, live: !!a, track: a && a.track, late: Math.round(shift / 60) });
+      }
+    }
+    trains.sort((x, y) => x.dep - y.dep);
+    for (const tr of trains.filter((x) => x.dep >= reach).slice(0, 12)) {
+      const sh = swfShuttleAfter(0, tr.arr + 3 * 60, nowS);
+      if (!sh || sh.leave - tr.arr > MAX_WAIT) continue;
+      const subAt = tr.dep - (PENN_TO_GCT_MIN + 2) * 60; // leave Penn by
+      out.push({ at: sh.arrive, fare: null, live: tr.live, tag: 'Scheduled',
+        fareText: `Metro-North fare to Beacon, plus ${money(FARES.subway)} for the subway; the shuttle is free in 2026`,
+        note: 'The shuttle stops at the terminal only on some runs; these times are for those. Check Leprechaun Lines’ schedule before you travel, especially on holidays.',
+        legs: [[subAt, `${lineName('2')} or ${lineName('3')} to Times Sq, then the ${lineName('S')} or ${lineName('7')} to Grand Central`],
+          [tr.dep, `${airPl('Metro-North', 'p-mnr')} Hudson Line to Beacon, train ${esc(tr.num)}${tr.track ? `, track ${esc(tr.track)}` : ''}${tr.live ? ` · <span class="sb-live">live</span>${tr.late >= 2 ? ` <span class="bus-late">${tr.late} min late</span>` : ''}` : ' (scheduled)'}`],
+          [sh.leave, `${airPl('Newburgh Beacon Bridge Shuttle', 'p-partner')} (free) from Beacon station to the terminal (scheduled)`]] });
+      break;
+    }
+  }
+  // Coach USA to Newburgh, then the shuttle from the Park & Ride.
+  if (swfData.coach) {
+    const ready = nowS + TO_PABT_MIN * 60;
+    const buses = [];
+    for (const d of swfDays(nowS)) {
+      const svc = new Set(swfData.coach.dates[d.ymd] || []);
+      for (const [s, route, dep, arr] of swfData.coach.toNewburgh) if (svc.has(s)) buses.push({ route, dep: d.midnight + dep * 60, arr: d.midnight + arr * 60 });
+    }
+    for (const b of buses.filter((x) => x.dep >= ready).sort((x, y) => x.dep - y.dep).slice(0, 10)) {
+      const sh = swfShuttleAfter(1, b.arr + 5 * 60, nowS);
+      if (!sh || sh.leave - b.arr > MAX_WAIT) continue;
+      out.push({ at: sh.arrive, fare: null, live: false, tag: 'Scheduled',
+        fareText: 'Coach USA fare to Newburgh (buy at Port Authority or online); the shuttle is free in 2026',
+        note: 'Get off at the Newburgh ShortLine Transportation Center (Route 17K Park & Ride). The shuttle stops at the terminal only on some runs; check Coach USA’s and Leprechaun Lines’ schedules before you travel.',
+        legs: [[b.dep - TO_PABT_MIN * 60, 'Walk up 8 Av to Port Authority (41 St), or the A, C or E one stop'],
+          [b.dep, `${airPl(`Coach USA ${esc(b.route)}`, 'p-partner')} from Port Authority Bus Terminal to Newburgh (Route 17K Park & Ride)`],
+          [sh.leave, `${airPl('Newburgh Beacon Bridge Shuttle', 'p-partner')} (free) from the Park & Ride to the terminal`]] });
+      break;
+    }
+  }
+  return out;
+}
 function renderAirport() {
   const nowS = Date.now() / 1000;
   const opts = airportOptions(airportPick, nowS).sort((a, b) => a.at - b.at);
   const fastest = opts[0];
   const priced = opts.filter((x) => x.fare != null);
   const cheapest = priced.length ? priced.reduce((a, b) => (b.fare < a.fare || (b.fare === a.fare && b.at < a.at) ? b : a)) : null;
-  $('chg-top').innerHTML = `<div class="sheet-air four">${[['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark'], ['ISP', 'Islip']].map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}`;
+  $('chg-top').innerHTML = `<div class="sheet-air four">${AIRPORTS.map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}`;
   const lgaT = airportPick === 'LGA' && lgaTerminal !== 'any' ? `Terminal ${lgaTerminal}` : '';
   $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}${x.live === false ? `<span class="tagx tag-sched">${x.tag || 'Estimated'}</span>` : '<span class="tagx tag-live">Live</span>'}${x.only ? `<span class="am-tag">${esc(x.only)}</span>` : ''}</span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
     <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at ${lgaT || x.term || 'the airport'} (estimated)</span></li></ul>
     <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
-    : '<p class="cm-live">No trains to there are listed from Penn right now.</p>')
-    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; Newark Airport Express times are Coach USA’s schedule. Check before you travel.</p>';
+    : `<p class="cm-live">${airportPick === 'SWF' ? 'No connection to Stewart in the next day: the shuttle to the terminal runs only at certain times.' : 'No trains to there are listed from Penn right now.'}</p>`)
+    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; Newark Airport Express and Coach USA times are Coach USA’s schedule; Metro-North is live from TrainTime; the Stewart shuttle is Leprechaun Lines’ schedule. Check before you travel.</p>';
 }
 function openAirport() {
   changeOpen = { id: 'airport', view: 1 };
-  loadAirportBuses(); loadLirrTT(); loadEwrExpress(); loadIspBus();
+  loadAirportBuses(); loadLirrTT(); loadEwrExpress(); loadSwf(); loadNjtStop(NEWARK_PENN_62_STOP);
   $('chg-map').hidden = true;
   $('chg-kind').textContent = 'From Penn Station';
   $('chg-h').textContent = 'To the airport';

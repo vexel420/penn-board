@@ -361,6 +361,19 @@ export default {
         ctx.waitUntil(cache.put(key, res.clone()));
         return res;
       }
+      if (pathname === '/njt-bus-stop') {
+        // Live NJ Transit bus departures at one stop (a stop number, digits
+        // only), cached 30 s. For the 62 at Newark Penn in the airport helper.
+        const stop = new URL(request.url).searchParams.get('stop') || '';
+        if (!/^\d{3,6}$/.test(stop)) return fail(400, 'stop number needed');
+        const cache = caches.default, key = new Request(`https://relay.local/njt-bus-stop?stop=${stop}`, { method: 'GET' });
+        const hit = await cache.match(key);
+        if (hit) return hit;
+        const d = await busCall(env, 'getBusDV', { stop, direction: '', route: '', IP: '' });
+        const res = json(JSON.stringify(d), 30);
+        ctx.waitUntil(cache.put(key, res.clone()));
+        return res;
+      }
       if (pathname === '/njt-day') {
         // The day's whole schedule from Penn (NJ Transit trains only), for
         // the last trains before the overnight break. Cached 1 hour.

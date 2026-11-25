@@ -733,3 +733,14 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Newark Airport Express: `scripts/build-ewr-express.py <Coach USA gtfs.zip>` → `docs/ewr-express.json` (Port Authority departures to Terminals B, C, A by weekday/Saturday/Sunday; file runs to May 1, 2027). Not public, so rebuilt by hand when Coach USA changes its schedule. Shown as "Scheduled", $23.50 (newarkairport.com).
 - Islip bus: Suffolk County Transit route 6 (the only bus to the terminal) from the LIRR's Central Islip or Patchogue station; `scripts/build-isp-bus.py` (feed https://tracksctbus.org/gtfs, no key; weekly rebuild) → `docs/isp-bus.json`, fare $2.25 from its fare data. LIRR arrival from lirr-timetable.json (`lirrArrivalAt`).
 - Not yet: live NJ Transit 62 at Newark Penn.
+
+## Nov 25: Stewart (SWF), Islip on hold, live 62 bus
+- Airport buttons are JFK, LGA, EWR, SWF. Islip is on hold (owner): `ispOptions` and `docs/isp-bus.json` stay, but there's no button (`AIRPORTS` in app.js). A saved 'ISP' pick falls back to JFK.
+- Stewart: per swfny.com (Nov 2026) there's no direct NYC bus any more. Two options, both ending on Leprechaun Lines' Newburgh Beacon Bridge Shuttle (free in 2026), on runs that stop at the terminal:
+  1. Subway to Grand Central, then the Metro-North Hudson Line to Beacon, then the shuttle. Metro-North is live from TrainTime (`backend-unified.mylirr.org/arrivals/0NY`, matched by train number), with the timetable from the MTA's gtfsmnr.zip.
+  2. Coach USA 700 from Port Authority to the Newburgh ShortLine Transportation Center (Route 17K Park & Ride), then the shuttle. Scheduled; Coach USA has no live data or fares in its file.
+- `scripts/build-swf.py` builds `docs/swf.json`. The shuttle times are typed from Leprechaun's brochure dated 07/04/26 (westbound runs that stop at Stewart). Re-type them when the brochure changes.
+- The weekly Action rebuilds the Metro-North part only. The Coach USA part comes from the uploaded Coach USA GTFS, which isn't public, and its dates run out 2027-05-01. Rebuild with: `python3 scripts/build-swf.py gtfsmnr.zip coach-usa-gtfs.zip`.
+- Weekday holidays use the weekend shuttle table. They're detected as weekdays with few Metro-North trains to Beacon (`weekendDates`).
+- Coach USA's file has a Stewart stop (2577798), but no trip calls there.
+- Live 62 bus: the relay has a new route, `/njt-bus-stop?stop=NNNNN` (getBusDV, digits only, cached 30 s). Newark Penn's Raymond Blvd bus lanes are stop 18835. The PATH + 62 option uses the first 62 "VIA AIRPORT" bus after you reach Newark Penn, with its gate. It's shown as live when a vehicle is assigned, otherwise as scheduled.
