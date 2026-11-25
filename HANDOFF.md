@@ -735,7 +735,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Not yet: live NJ Transit 62 at Newark Penn.
 
 ## Nov 25: Stewart (SWF), Islip on hold, live 62 bus
-- Airport buttons are JFK, LGA, EWR, SWF. Islip is on hold (owner): `ispOptions` and `docs/isp-bus.json` stay, but there's no button (`AIRPORTS` in app.js). A saved 'ISP' pick falls back to JFK.
+- Airport buttons: JFK, LGA, EWR, ISP, SWF (owner brought Islip back, Nov 25; five across, `.sheet-air.five`).
 - Stewart: per swfny.com (Nov 2026) there's no direct NYC bus any more. Two options, both ending on Leprechaun Lines' Newburgh Beacon Bridge Shuttle (free in 2026), on runs that stop at the terminal:
   1. Subway to Grand Central, then the Metro-North Hudson Line to Beacon, then the shuttle. Metro-North is live from TrainTime (`backend-unified.mylirr.org/arrivals/0NY`, matched by train number), with the timetable from the MTA's gtfsmnr.zip.
   2. Coach USA 700 from Port Authority to the Newburgh ShortLine Transportation Center (Route 17K Park & Ride), then the shuttle. Scheduled; Coach USA has no live data or fares in its file.

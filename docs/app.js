@@ -3662,8 +3662,7 @@ const AIR_MIN = {
   walkToPath: 5, pathJsq: 17, pathJsqViaHob: 26, pathNewark: 11, pathNewarkWait: 5, pathNewarkWaitNight: 15,
   njtNewarkWait: 8, njtNewarkWaitNight: 20, njtNewarkEwr: 6, bus62Wait: 8, bus62Ride: 20,
 };
-// Islip is on hold (owner, Nov 25): its options stay in the code, no button.
-const AIRPORTS = [['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark'], ['SWF', 'Stewart']];
+const AIRPORTS = [['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark'], ['ISP', 'Islip'], ['SWF', 'Stewart']];
 let airportPick = 'JFK';
 try { airportPick = localStorage.getItem('airport') || 'JFK'; } catch {}
 if (!AIRPORTS.some(([c]) => c === airportPick)) airportPick = 'JFK';
@@ -4039,17 +4038,17 @@ function renderAirport() {
   const fastest = opts[0];
   const priced = opts.filter((x) => x.fare != null);
   const cheapest = priced.length ? priced.reduce((a, b) => (b.fare < a.fare || (b.fare === a.fare && b.at < a.at) ? b : a)) : null;
-  $('chg-top').innerHTML = `<div class="sheet-air four">${AIRPORTS.map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}`;
+  $('chg-top').innerHTML = `<div class="sheet-air five">${AIRPORTS.map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}`;
   const lgaT = airportPick === 'LGA' && lgaTerminal !== 'any' ? `Terminal ${lgaTerminal}` : '';
   $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}${x.live === false ? `<span class="tagx tag-sched">${x.tag || 'Estimated'}</span>` : '<span class="tagx tag-live">Live</span>'}${x.only ? `<span class="am-tag">${esc(x.only)}</span>` : ''}</span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
     <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at ${lgaT || x.term || 'the airport'} (estimated)</span></li></ul>
     <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
     : `<p class="cm-live">${airportPick === 'SWF' ? 'No connection to Stewart in the next day: the shuttle to the terminal runs only at certain times.' : 'No trains to there are listed from Penn right now.'}</p>`)
-    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; Newark Airport Express and Coach USA times are Coach USA’s schedule; Metro-North is live from TrainTime; the Stewart shuttle is Leprechaun Lines’ schedule. Check before you travel.</p>';
+    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; Newark Airport Express and Coach USA times are Coach USA’s schedule; Metro-North is live from TrainTime; the Stewart shuttle is Leprechaun Lines’ schedule; the Islip bus is Suffolk County Transit’s. Check before you travel.</p>';
 }
 function openAirport() {
   changeOpen = { id: 'airport', view: 1 };
-  loadAirportBuses(); loadLirrTT(); loadEwrExpress(); loadSwf(); loadNjtStop(NEWARK_PENN_62_STOP);
+  loadAirportBuses(); loadLirrTT(); loadEwrExpress(); loadSwf(); loadIspBus(); loadNjtStop(NEWARK_PENN_62_STOP);
   $('chg-map').hidden = true;
   $('chg-kind').textContent = 'From Penn Station';
   $('chg-h').textContent = 'To the airport';

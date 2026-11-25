@@ -648,6 +648,9 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 
 /* Airport helper: four airports, LaGuardia terminal and airline picker. */
 .sheet-air.four { grid-template-columns: repeat(4, 1fr); }
+.sheet-air.five { grid-template-columns: repeat(5, 1fr); gap: .35rem; }
+.sheet-air.five button { padding: .55rem .1rem; font-size: 1.05rem; }
+.sheet-air.five button small { font-size: .72rem; letter-spacing: -.01em; }
 .am-label { font-size: .82rem; letter-spacing: .06em; text-transform: uppercase; color: var(--gold); font-weight: 800; margin: .55rem 0 .15rem; }
 .am-row { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
 .am-chip { border: 1px solid var(--line); border-radius: 99px; padding: .4rem .85rem; font: inherit; font-weight: 700; font-size: .95rem; color: var(--ivory); background: #19271f; cursor: pointer; }
