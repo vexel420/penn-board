@@ -1473,14 +1473,23 @@ let slideStarted = -Infinity, slideWait = 0;
 // everything under it bounce. Forgotten when the window, the layout or the
 // subway style changes, and every 15 minutes (one settle, not constant motion).
 const rowMax = new Map();
-let rowMaxKey = '', rowMaxAt = 0;
+let rowMaxKey = '', rowMaxAt = 0, pageMax = 0;
 function holdHeights(root) {
   if (!root) return;
   const key = `${innerWidth}|${document.body.className}|${subwayStyle}|${flipMode}`; // (not the height: Safari's toolbar changes it all the time)
-  if (key !== rowMaxKey || Date.now() - rowMaxAt > 15 * 60000) { rowMax.clear(); rowMaxKey = key; rowMaxAt = Date.now(); document.querySelectorAll('#subway, #path').forEach((x) => { x.style.minHeight = ''; }); }
-  // (The whole section too, under its own key, so a refresh can't make the page short.)
-  if (!root.dataset.k) root.dataset.k = `root|${root.id}`;
-  const els = [root, ...root.querySelectorAll('[data-k]')];
+  if (key !== rowMaxKey || Date.now() - rowMaxAt > 15 * 60000) {
+    rowMax.clear(); rowMaxKey = key; rowMaxAt = Date.now();
+    document.querySelectorAll('#subway, #path').forEach((x) => { x.style.minHeight = ''; });
+    pageMax = 0; document.body.style.minHeight = '';
+  }
+  // The page as a whole never gets shorter either: at the very bottom, a page
+  // getting shorter (a bus row, an alert) made Safari pull the view up (owner,
+  // Nov 26). Spare room, if any, sits at the very end of the page.
+  requestAnimationFrame(() => {
+    const h = document.body.offsetHeight;
+    if (h > pageMax) { pageMax = h; document.body.style.minHeight = `${h}px`; }
+  });
+  const els = [...root.querySelectorAll('[data-k]')];
   for (const el of els) { const m = rowMax.get(el.dataset.k); if (m) el.style.minHeight = `${m}px`; }
   for (const el of els) {
     const h = el.offsetHeight, m = rowMax.get(el.dataset.k) || 0;
@@ -1488,6 +1497,11 @@ function holdHeights(root) {
   }
 }
 let subwayEmptySince = 0;
+// (Also between redraws: the bus list and alerts change on their own timers.)
+setInterval(() => {
+  const h = document.body.offsetHeight;
+  if (h > pageMax) { pageMax = h; document.body.style.minHeight = `${h}px`; }
+}, 1000);
 function renderSubway() {
   if (!board) return;
   const busy = SLIDE_MS - (performance.now() - slideStarted);
