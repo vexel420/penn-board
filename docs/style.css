@@ -944,3 +944,37 @@ button.ev-note.ev-min, button.ene-note.ev-min { display: flex; align-items: cent
 button.ev-note.ev-min > span:first-of-type, button.ene-note.ev-min > span:first-of-type { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 button.ev-min .ev-open { flex: none; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
 button.ene-note.ev-min b { color: var(--late); }
+
+/* ---------- computers: swap the boards, or hide one for full width (owner, Nov 26) ---------- */
+.panel-tools, .panel-back { display: none; }
+@media (min-width: 961px) {
+  .panel-tools { display: flex; justify-content: flex-end; gap: .4rem; margin: -.3rem 0 .6rem; }
+  .panel-tools button, .panel-back { display: inline-flex; align-items: center; gap: .35rem; font: 700 .8rem "Archivo", sans-serif; color: var(--dim);
+    background: none; border: 1px solid var(--line); border-radius: 99px; padding: .25rem .6rem; cursor: pointer; }
+  .panel-tools button:hover, .panel-tools button:focus-visible, .panel-back:hover, .panel-back:focus-visible { color: var(--ivory); border-color: var(--ivory); }
+  .panel-tools .ic, .panel-back .ic { width: 1rem; height: 1rem; }
+  .side-switch button { user-select: none; }
+  /* The side panel as the main board; the trains in the narrow column on the right
+     (their rows stack there, like on a phone). */
+  body.side-main .layout { grid-template-columns: minmax(0, 1fr) 27rem; }
+  body.side-main .layout > aside.subway { order: -1; }
+  body.side-main .layout > .panel-back { order: 1; }
+  /* Subway as the main board: each station's two directions side by side. */
+  body.side-main aside.subway .stn { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1.6rem; align-items: start; }
+  body.side-main aside.subway .stn > :not(.dir) { grid-column: 1 / -1; }
+  body.side-main aside.subway .subway-h, body.side-main aside.subway h2 { font-size: 1.5rem; }
+  /* One side hidden: the other takes the full width. */
+  body.panel-off .layout { grid-template-columns: minmax(0, 1fr); }
+  body.panel-off:not(.side-main) .layout > aside.subway { display: none; }
+  body.panel-off.side-main .layout > .rail { display: none; }
+  body.panel-off.side-main .chips, body.panel-off.side-main .style-bar { display: none; }
+  .panel-back:not([hidden]) { display: inline-flex; position: fixed; right: 0; top: 40%; z-index: 40; border-radius: 10px 0 0 10px; border-right: 0;
+    background: var(--enamel-2); color: var(--ivory); padding: .7rem .6rem; writing-mode: vertical-rl; box-shadow: -4px 0 16px rgba(0, 0, 0, .35); }
+  .panel-back .ic { transform: rotate(90deg); }
+  html.split-big body.side-main .layout { grid-template-columns: minmax(0, 1fr) 22rem; }
+  body.panel-off .pt-hide { display: none; }
+}
+/* Inside the side-by-side page a board's scroll never carries over to the page around it. */
+body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
+/* Times Square with buses as the main board: the subway's platforms stack in the narrow column. */
+@media (min-width: 961px) { body.side-main.layout-subway .rail .plats { grid-template-columns: 1fr; } }

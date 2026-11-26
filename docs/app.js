@@ -3853,6 +3853,79 @@ function setSide(x) {
 }
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-side]'); if (b) setSide(b.dataset.side); });
 setPressed('.side-switch', 'side', side);
+// Computers: the side panel can be the main board, and either side can be
+// hidden for a full-width view (owner, Nov 26: "double tap subway and have it
+// swap rail and subway"; "a way to minimize the side tab all together").
+// Remembered on this device. Phones keep their tabs.
+let sideMain = false, panelOff = false;
+try { sideMain = localStorage.getItem('sideMain') === '1'; panelOff = localStorage.getItem('panelOff') === '1'; } catch {}
+const mainName = () => (HUB.layout === 'subway' ? 'Subway' : (HUB.mainLabel || 'departures').replace(/^./, (c) => c.toUpperCase()));
+const sideName = () => (HUB.layout === 'subway' || side === 'buses' ? 'Buses' : (HUB.path ? 'Subway & PATH' : 'Subway'));
+function applyDeskLayout() {
+  document.body.classList.toggle('side-main', sideMain);
+  document.body.classList.toggle('panel-off', panelOff);
+  const swap = document.querySelector('.pt-swap'), hide = document.querySelector('.pt-hide'), back = document.querySelector('.panel-back');
+  // What's on the side right now, and what's hidden.
+  const onSide = sideMain ? mainName() : sideName();
+  if (swap) { swap.setAttribute('aria-pressed', String(sideMain)); swap.title = sideMain ? `Put ${mainName()} back as the main board` : `Make ${sideName()} the main board (or double-click its tab)`; swap.querySelector('span').textContent = sideMain ? `${mainName()} to main` : 'Make main'; }
+  if (hide) { hide.title = `Hide ${onSide} for a full-width ${sideMain ? sideName() : mainName()}`; hide.querySelector('span').textContent = `Hide ${onSide}`; }
+  if (back) { back.hidden = !panelOff; back.querySelector('span').textContent = `Show ${onSide}`; }
+  // The bus map and lists size themselves to their box.
+  setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
+}
+function setDesk(k, v) {
+  if (k === 'main') sideMain = v; else panelOff = v;
+  try { localStorage.setItem(k === 'main' ? 'sideMain' : 'panelOff', v ? '1' : '0'); } catch {}
+  applyDeskLayout();
+}
+(function deskTools() {
+  const aside = document.querySelector('aside.subway'), layout = document.querySelector('.layout');
+  if (!aside || !layout) return;
+  const tools = document.createElement('div');
+  tools.className = 'panel-tools';
+  tools.innerHTML = '<button type="button" class="pt-swap" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h11l-3-3 1.4-1.4L22 8l-5.6 5.4L15 12l3-3H7zm10 10H6l3 3-1.4 1.4L2 16l5.6-5.4L9 12l-3 3h11z" fill="currentColor"/></svg><span>Make main</span></button>'
+    + '<button type="button" class="pt-hide"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h2v16H4zm5.4 7H20v2H9.4l3.3 3.3-1.4 1.4L5.6 12l5.7-5.7 1.4 1.4z" fill="currentColor" transform="rotate(180 12 12)"/></svg><span>Hide</span></button>';
+  aside.prepend(tools);
+  const back = document.createElement('button');
+  back.type = 'button'; back.className = 'panel-back'; back.hidden = true;
+  back.innerHTML = '<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z" fill="currentColor"/></svg><span>Show</span>';
+  layout.append(back);
+  tools.querySelector('.pt-swap').addEventListener('click', () => setDesk('main', !sideMain));
+  tools.querySelector('.pt-hide').addEventListener('click', () => setDesk('off', true));
+  back.addEventListener('click', () => setDesk('off', false));
+  // Double-click a panel tab (Subway, Buses): that becomes the main board, or goes back.
+  document.querySelector('.side-switch')?.addEventListener('dblclick', (e) => {
+    const b = e.target.closest('[data-side]'); if (!b || !WIDE.matches) return;
+    if (side !== b.dataset.side) setSide(b.dataset.side);
+    setDesk('main', !sideMain);
+  });
+  document.querySelector('.side-switch')?.addEventListener('click', () => applyDeskLayout());
+  applyDeskLayout();
+})();
+
+// Safari doesn't keep the reader's place when the board redraws above them
+// (Chrome does: "scroll anchoring"). Times Square, with the subway as its main
+// board, redraws under the reader every few seconds (owner, Nov 26: "jumping").
+// Before a redraw: the element at the reader's eye line; after: scroll so it
+// stays put. (Where the browser already did this, the difference is 0.)
+function keepAnchor(fn) {
+  return function anchored(...args) {
+    if (window.scrollY < 5) return fn.apply(this, args);
+    const el = document.elementFromPoint(innerWidth / 2, Math.min(160, innerHeight / 3));
+    if (!el || el === document.body || el === document.documentElement || el.closest('dialog, .station-bar')) return fn.apply(this, args);
+    const path = []; let n = el;
+    while (n && !n.id && n.parentElement && n !== document.body) { path.unshift([...n.parentElement.children].indexOf(n)); n = n.parentElement; }
+    const root = n && n.id, sig = el.tagName + '.' + el.className, top = el.getBoundingClientRect().top;
+    const out = fn.apply(this, args);
+    let m = root ? document.getElementById(root) : null;
+    for (const i of path) m = m && m.children[i];
+    if (m && m.tagName + '.' + m.className === sig) {
+      const d = m.getBoundingClientRect().top - top;
+      if (Math.abs(d) > 1 && Math.abs(d) < innerHeight) window.scrollBy(0, d);
+    }
+    return out;
+  };
+}
 function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderServiceNotices(); renderStamp(); if (busesShown()) renderBuses(); }
 
 // With server.js running, the server gathers everything. On static hosting
@@ -4080,6 +4153,14 @@ function tick() {
 // Tick on the second, so the seconds never skip or stall.
 function everySecond() { setTimeout(() => { tick(); everySecond(); }, 1000 - (Date.now() % 1000) + 5); }
 setPressed('.chips', 'carrier', carrier);
+// (The redraws that can change heights above the reader, kept anchored.)
+renderSubway = keepAnchor(renderSubway);
+renderRail = keepAnchor(renderRail);
+renderPath = keepAnchor(renderPath);
+renderEvents = keepAnchor(renderEvents);
+renderElevators = keepAnchor(renderElevators);
+renderHubBuses = keepAnchor(renderHubBuses);
+renderBuses = keepAnchor(renderBuses);
 // A reload (tapping the station name, or the browser's refresh) comes back to
 // the same tab and the same place on the page (owner, Nov 26: "jumping back to
 // the top on each refresh"). The board fills in after the page loads, so the
