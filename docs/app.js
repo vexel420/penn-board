@@ -4061,16 +4061,17 @@ function fitSubZoom() {
   // computer, so it always fits its platforms on the screen (owner, Nov 26: in
   // the 2-board view the 7 sat below the screen), in its fixed columns, down to 80%.
   if (HUB.layout === 'subway') {
-    const plats = document.querySelector('.main-sub .plats');
+    // (The size lives on #subway, which stays put; the platform grid inside it is
+    // rebuilt on every refresh, and keeping the size there re-measured it from
+    // 100% each time, which Safari can show as a jump.)
+    const sub = $('subway'), plats = sub && sub.querySelector('.plats');
     if (!plats) return;
-    if (!WIDE.matches || b.classList.contains('side-main')) { plats.style.zoom = ''; plats.dataset.sized = ''; return; }
-    // (Sized once per window size and layout; a data refresh changes nothing
-    // unless the platforms stop fitting, then one step smaller. No flashing.)
+    if (!WIDE.matches || b.classList.contains('side-main')) { sub.style.zoom = ''; sub.dataset.sized = ''; return; }
     const key = `${innerWidth}|${b.className}`;
     const fits = () => Math.max(...[...plats.querySelectorAll('.stn')].map((x) => x.getBoundingClientRect().bottom), 0) + window.scrollY <= innerHeight - 12;
-    let z = parseFloat(plats.style.zoom) || 1;
-    if (plats.dataset.sized !== key) { plats.dataset.sized = key; z = 1; plats.style.zoom = '1'; }
-    while (!fits() && z > 0.81) { z -= 0.05; plats.style.zoom = z.toFixed(2); }
+    let z = parseFloat(sub.style.zoom) || 1;
+    if (sub.dataset.sized !== key) { sub.dataset.sized = key; z = 1; sub.style.zoom = '1'; }
+    while (!fits() && z > 0.81) { z -= 0.05; sub.style.zoom = z.toFixed(2); }
     return;
   }
   const el = document.querySelector('aside.subway .sub-part'), box = document.querySelector('aside.subway');
@@ -4381,6 +4382,34 @@ setPressed('.chips', 'carrier', carrier);
 // Safari. Row and section heights are now held instead (holdHeights), and the
 // scroll adjustment itself moved the page on iPad, so only the fit remains.)
 renderSubway = ((f) => function () { const out = f.apply(this, arguments); fitSubZoom(); return out; })(renderSubway);
+// Scroll diagnostics, on request (owner's iPad; Safari can't be tested here):
+// add ?debug=scroll to the address (side by side passes it to its boards). A
+// small box lists every jump of 20+ px that no touch, wheel or key caused, with
+// the page height before and after and what redrew just before.
+(function scrollDebug() {
+  if (!/debug=scroll/.test(location.search)) return;
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;left:6px;bottom:6px;z-index:9999;max-width:min(30rem,90vw);max-height:40vh;overflow:auto;background:rgba(0,0,0,.85);color:#9f9;font:12px/1.35 monospace;padding:6px 8px;border-radius:6px;pointer-events:none;white-space:pre-wrap';
+  box.textContent = 'scroll debug on';
+  document.body.appendChild(box);
+  let lastInput = 0, lastY = scrollY, lastH = document.documentElement.scrollHeight;
+  const recent = [];
+  ['touchstart', 'touchmove', 'wheel', 'keydown', 'mousedown'].forEach((t) => addEventListener(t, () => { lastInput = performance.now(); }, { passive: true, capture: true }));
+  for (const name of ['renderSubway', 'renderRail', 'renderPath', 'renderEvents', 'renderElevators', 'renderHubBuses', 'renderBuses', 'renderNotices', 'renderServiceNotices', 'fitSubZoom']) {
+    const f = window[name]; if (typeof f !== 'function') continue;
+    window[name] = function (...a) { const h0 = document.documentElement.scrollHeight; const out = f.apply(this, a); recent.push([performance.now(), name, h0, document.documentElement.scrollHeight]); if (recent.length > 20) recent.shift(); return out; };
+  }
+  const log = (msg) => { const t = new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' }); box.textContent = `${t} ${msg}\n` + box.textContent.split('\n').slice(0, 12).join('\n'); };
+  addEventListener('scroll', () => {
+    const y = scrollY, h = document.documentElement.scrollHeight, now = performance.now();
+    if (Math.abs(y - lastY) >= 20 && now - lastInput > 700) {
+      const why = recent.filter((r) => now - r[0] < 400).map((r) => `${r[1]}${r[2] !== r[3] ? ` h${r[2]}→${r[3]}` : ''}`).join(', ') || 'no redraw';
+      log(`jump y${Math.round(lastY)}→${Math.round(y)} page h${lastH}→${h} [${why}]`);
+    }
+    lastY = y; lastH = h;
+  }, { passive: true });
+  setInterval(() => { const h = document.documentElement.scrollHeight; if (Math.abs(h - lastH) >= 20) { log(`page h${lastH}→${h} (y ${Math.round(scrollY)})`); lastH = h; } }, 500);
+})();
 // A reload (tapping the station name, or the browser's refresh) comes back to
 // the same tab and the same place on the page (owner, Nov 26: "jumping back to
 // the top on each refresh"). The board fills in after the page loads, so the

@@ -132,7 +132,9 @@ function build() {
   [...panes.children].forEach((p) => { if (!keep.includes(p)) p.remove(); });
   // Put them in order, moving only what's out of place (moving a frame reloads it).
   keep.forEach((p, i) => { if (panes.children[i] !== p) panes.insertBefore(p, panes.children[i] || null); });
-  keep.forEach((p) => { const f = p.querySelector('iframe'); const src = byId[p.dataset.hub].page; if (!f.getAttribute('src')) f.src = src; });
+  // (?debug=scroll on this page goes to every board too.)
+  const dbg = /debug=scroll/.test(location.search) ? '?debug=scroll' : '';
+  keep.forEach((p) => { const f = p.querySelector('iframe'); const src = byId[p.dataset.hub].page + dbg; if (!f.getAttribute('src')) f.src = src; });
   panes.style.setProperty('--n', ids.length);
   document.body.classList.toggle('four', count === 4);
   document.querySelectorAll('[data-count]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.count === count)));
@@ -182,7 +184,7 @@ document.getElementById('swap').addEventListener('click', () => { pair.reverse()
 // Nov 26: "I've been having to refresh each one manually to get a real refresh").
 document.getElementById('reload').addEventListener('click', () => frames().forEach((f) => {
   const u = new URL(f.getAttribute('src'), location.href);
-  u.searchParams.set('fresh', Date.now().toString(36));
+  u.searchParams.set('fresh', Date.now().toString(36)); // (keeps ?debug=scroll)
   f.src = u.pathname.split('/').pop() + u.search;
 }));
 const BIG = matchMedia('(min-width: 1100px)');
