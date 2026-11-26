@@ -3889,8 +3889,16 @@ setPressed('.side-switch', 'side', side);
 // hidden for a full-width view (owner, Nov 26: "double tap subway and have it
 // swap rail and subway"; "a way to minimize the side tab all together").
 // Remembered on this device. Phones keep their tabs.
+// Each board keeps its own (owner, Nov 26: Subway full screen at Penn made Times
+// Square open on its buses). A subway hub (Times Square) always opens with the
+// subway as the main board: buses as main is never remembered there.
 let sideMain = false, panelOff = false;
-try { sideMain = localStorage.getItem('sideMain') === '1'; panelOff = localStorage.getItem('panelOff') === '1'; } catch {}
+const deskKey = (k) => `${k === 'main' ? 'sideMain' : 'panelOff'}:${HUB.id}`;
+try {
+  sideMain = HUB.layout !== 'subway' && localStorage.getItem(deskKey('main')) === '1';
+  panelOff = localStorage.getItem(deskKey('off')) === '1';
+  localStorage.removeItem('sideMain'); localStorage.removeItem('panelOff'); // the old shared settings
+} catch {}
 const mainName = () => (HUB.layout === 'subway' ? 'Subway' : (HUB.mainLabel || 'departures').replace(/^./, (c) => c.toUpperCase()));
 const sideName = () => (HUB.layout === 'subway' || (side === 'buses' && !HUB.mergeSide) ? 'Buses' : HUB.mergeSide ? 'Subway & buses' : (HUB.path ? 'Subway & PATH' : 'Subway'));
 function applyDeskLayout() {
@@ -3942,7 +3950,7 @@ function fitSubZoom() {
 addEventListener('resize', () => fitSubZoom());
 function setDesk(k, v) {
   if (k === 'main') sideMain = v; else panelOff = v;
-  try { localStorage.setItem(k === 'main' ? 'sideMain' : 'panelOff', v ? '1' : '0'); } catch {}
+  try { localStorage.setItem(deskKey(k), v ? '1' : '0'); } catch {}
   applyDeskLayout();
 }
 (function deskTools() {
