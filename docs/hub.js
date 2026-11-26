@@ -58,13 +58,13 @@
     pabt: {
       tab: { code: 'PABT', serves: 'Buses, A C E', label: 'Port Authority', bg: '#1d3f86', ink: '#ffd24a' }, // the station bar (phones) and the station menu (computers), owner Nov 26
       id: 'pabt', page: 'pabt.html', name: 'Port Authority Bus Terminal', short: 'Port Authority', kicker: 'New York', title: 'Port Authority Bus Terminal', subwayTab: 'subway',
-      pill: { href: 'tsq.html', label: 'Times Square' },
+      pill: { href: 'tsq.html', label: 'Times Square–42 St' },
       ll: [40.7572, -73.9903],
       directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=Port+Authority+Bus+Terminal+New+York&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Port+Authority+Bus+Terminal+New+York&dirflg=r' },
       // The bus terminal (owner, Nov 26): departures are buses (NJ Transit live,
       // other companies from their timetables, docs/pabt-departures.json).
       busTerminal: true, airport: false, mainLabel: 'bus departures',
-      stations: [{ id: 'A27', lines: ['A', 'C', 'E'], note: 'Connected by an underground tunnel to Times Sq–42 St for the 1 2 3, 7, N Q R W and shuttle: follow the signs for Times Sq. About 5 min.', noteLink: { href: 'tsq.html', label: 'Times Square board' } }],
+      stations: [{ id: 'A27', lines: ['A', 'C', 'E'], note: 'Connected by an underground tunnel to Times Sq–42 St for the 1 2 3, 7, N Q R W and shuttle: follow the signs for Times Sq. About 5 min.', noteLink: { href: 'tsq.html', label: 'Times Square–42 St board' } }],
       subwayName: '42 St–Port Authority Bus Terminal', subwayWalk: 5,
       dirs: { A27: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } },
       subwayFeeds: ['gtfs-ace'], subwayAlerts: 'subway-lines?lines=A,C,E&stops=A27',
@@ -79,8 +79,8 @@
       ],
     },
     tsq: {
-      tab: { code: 'TSQ', serves: 'Subway, A C E across the tunnel', label: 'Times Sq', bg: '#fbfaf6', ink: '#111111', stripe: '#fccc0a' }, // the station bar (phones) and the station menu (computers), owner Nov 26
-      id: 'tsq', page: 'tsq.html', name: 'Times Square', short: 'Times Sq', kicker: 'New York', title: 'Times Square', subwayTab: 'subway',
+      tab: { code: 'TSQ', serves: 'Subway, A C E across the tunnel', label: 'Times Sq–42 St', bg: '#fbfaf6', ink: '#111111', stripe: '#fccc0a' }, // the station bar (phones) and the station menu (computers), owner Nov 26
+      id: 'tsq', page: 'tsq.html', name: 'Times Square–42 St', short: 'Times Sq–42 St', kicker: 'New York', title: 'Times Square–42 St', subwayTab: 'subway',
       pill: { href: 'pabt.html', label: 'Port Authority' },
       ll: [40.7557, -73.9871],
       directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=Times+Sq-42+St+New+York&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Times+Square+New+York&dirflg=r' },

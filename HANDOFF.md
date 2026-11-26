@@ -942,3 +942,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Computers (≥961px), owner: "bottom bar for mobile and B for desktop": the bar is hidden and a ▾ button (`.hub-dd`, in the masthead h1 via `HUB_DD`) opens `#hub-menu`: color tile, full name, `tab.serves`, ✓ on the current one. Closes on Esc (focus back to ▾), outside click, resize; arrow keys move through it. Clicking ▾ doesn't trigger the name's reload.
 - Not drawn inside split.html's frames (window.top check). Hidden when printing.
 - Mockups A (strip), B (tap-name sheet), D (arrows) were the alternatives if the owner revisits.
+- Times Square board is named "Times Square–42 St" everywhere (owner, Nov 26). MTA data has no in-station link from Times Sq to 42 St–Bryant Park (only Bryant Park ↔ 5 Av on the 7).
