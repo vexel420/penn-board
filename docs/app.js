@@ -1,5 +1,5 @@
 const REFRESH_MS = 20000;
-const CARRIERS = { lirr: 'LIRR', njt: 'NJ Transit', amtrak: 'Amtrak', path: 'PATH', mnr: 'Metro-North' };
+const CARRIERS = { lirr: 'LIRR', njt: 'NJ Transit', amtrak: 'Amtrak', path: 'PATH', mnr: 'Metro-North', njtbus: 'NJ Transit', bus: 'Bus' };
 // This board's hub (docs/hub.js): Penn Station unless the page set another.
 const IS_PENN = HUB.id === 'nyp';
 const $ = (id) => document.getElementById(id);
@@ -30,7 +30,16 @@ function countdown(epoch) {
 
 // (The flip board engine is in flip.js, shared with the Grand Central board.)
 // Masthead and clock. The pill switches to the Grand Central board (owner, Nov 25).
-const HUB_PILL = `<a class="hub-pill" href="${HUB.pill.href}" title="Switch to ${HUB.pill.label}">⇄ ${HUB.pill.label}</a>`;
+// With more than two hubs (owner, Nov 26) the pill opens a menu of the others.
+const OTHER_HUBS = Object.values(window.HUBS || {}).filter((h) => h.id !== HUB.id && h.page);
+const HUB_PILL = OTHER_HUBS.length > 1
+  ? `<span class="hub-switch"><button type="button" class="hub-pill" data-hubmenu aria-expanded="false">⇄ Stations</button><span class="hub-menu" hidden>${OTHER_HUBS.map((h) => `<a href="${h.page}">${esc(h.name)}</a>`).join('')}</span></span>`
+  : `<a class="hub-pill" href="${HUB.pill.href}" title="Switch to ${HUB.pill.label}">⇄ ${HUB.pill.label}</a>`;
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-hubmenu]');
+  document.querySelectorAll('.hub-menu').forEach((m) => { if (!b || !m.parentElement.contains(b)) { m.hidden = true; const x = m.parentElement.querySelector('[data-hubmenu]'); if (x) x.setAttribute('aria-expanded', 'false'); } });
+  if (b) { e.preventDefault(); const m = b.parentElement.querySelector('.hub-menu'); m.hidden = !m.hidden; b.setAttribute('aria-expanded', String(!m.hidden)); }
+});
 function renderMastFlip() {
   const h = document.querySelector('.mast h1');
   if (flipMode) {
@@ -253,6 +262,8 @@ function pennSuspension(carrier) {
 // The board's own words ("On time", "5 min late"), not a railroad's status text.
 const ownStatus = (r) => !fromNjt(r) || /^(on time|\d+ min late)$/i.test(String(r.status || '').trim());
 function shownStatus(r, kind) {
+  // Buses (the bus terminal) keep their own status: no train rules.
+  if (r.bus) return { status: r.status, tone: r.tone };
   if (kind === 'departures' && departedAt(r) !== null) return { status: 'Departed', tone: 'departed' };
   // An NJ Transit train past its expected time that hasn't reached New York.
   if (kind === 'arrivals' && r.awaiting && r.tone !== 'stop' && r.time < Date.now() / 1000 - 120) return { status: 'Delayed', tone: 'late', waiting: true };
@@ -371,7 +382,7 @@ function rowHtml(r) {
   if (r.sched && Math.abs(r.sched - r.time) >= 120) notes.push(`scheduled ${clock(r.sched).hm}`);
   if (view === 'arrivals' && r.continuesTo) notes.push(`continues to ${esc(r.continuesTo)}, leaves ${clock(r.departsAt).hm}`);
   const sched = notes.length ? `<small>${notes.join(', ')}</small>` : '';
-  const via = r.via && r.via.length ? viaHtml(r) : `<div class="meta">${r.where ? `${esc(r.where)}, ` : ''}${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
+  const via = r.meta ? `<div class="meta">${esc(r.meta)}${r.gateUsual ? ' · usual gate' : ''}</div>` : r.via && r.via.length ? viaHtml(r) : `<div class="meta">${r.where ? `${esc(r.where)}, ` : ''}${esc(r.line)}, train ${esc(r.train)}${fareTag(r)}</div>`;
   // Departures never fade by the clock: only a train its railroad reports
   // gone ("Departed") is dimmed. (Arrivals past their time still fade.)
   // A cancelled train keeps full colour until its last 30 s on the board.
@@ -814,7 +825,7 @@ function suspensionNote(stn, here, line, dir, svc, nowS) {
   if (g && g.phase === 'night') return null;
   if (lineSection(here, stn.id, line, dir) !== svc) return '';
   const label = lineName(line);
-  const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
+  const way = bothWaysOff(stn.id, line) || line === 'GS' ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
   // What to take instead: the advisory's own lines ("[2] makes [3] stops..."),
   // else the fastest way (suggestionHtml), on its own line.
   const how = suggestionHtml(stn, line, dir, here, nowS, s.n);
@@ -1402,7 +1413,7 @@ function renderSubway() {
       const lateLast = g && g.phase === 'night' && g.svc === svc
         ? liveLastOnly(here, line, dir, null, minsToEpoch(g.after - (nyNow().mins < 720 ? 1440 : 0)), nowS) : null;
       if (g && ((g.phase === 'countdown' && g.svc === svc) || lateLast)) {
-        const way = bothWaysOff(stn.id, line) ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
+        const way = bothWaysOff(stn.id, line) || line === 'GS' ? '' : (dir === 'N' ? 'uptown ' : 'downtown ');
         const t = lateLast ?? liveLast(here, line, dir, null, minsToEpoch(g.after), nowS);
         return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${lineName(line)} train leaves at ${clockText(t)}, ${inText(t, nowS)}.</b> No ${way}${lineName(line)} trains late nights.</span></p>`;
       }
@@ -1415,7 +1426,7 @@ function renderSubway() {
       // Short: "No C trains until 5:41 AM, use the A or E." A line not running
       // either way gets no direction; when only one direction stops (the 3
       // ends at Penn), say which.
-      const oneWay = !bothWaysOff(stn.id, line);
+      const oneWay = !bothWaysOff(stn.id, line) && line !== 'GS'; // (the shuttle has no uptown or downtown)
       const say = oneWay
         ? `No ${label} trains ${way} until ${fmtClock(g.until)}.${howHtml(how)}`
         : `No ${label} trains until ${fmtClock(g.until)}.${howHtml(how)}`;
@@ -1510,13 +1521,23 @@ function renderSubway() {
     }).join('');
     return parts ? `<div class="dir"><h3>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
   }).join('');
-  const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('');
+  // Each platform named by its line where the hub says (Times Square: they're far apart).
+  const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('') + (stn.platform ? `<span class="plat-name">${esc(stn.platform)}</span>` : '');
   // A platform in another station of the complex gets that station's name above
   // it, like PATH (owner, Nov 26: the A C E on the Times Square board, under
-  // "42 St–Port Authority Bus Terminal").
-  const head = stn.heading ? `<h2 class="path-h stn-head">${esc(stn.heading)}${stn.sub ? ` <span>${esc(stn.sub)}</span>` : ''}</h2>${stn.note ? `<p class="walk">${esc(stn.note)}</p>` : ''}` : '';
-  return `${head}<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
-  }).join('');
+  // "42 St–Port Authority Bus Terminal"), and how to get there: the tunnel.
+  const note = stn.note ? `<p class="walk">${esc(stn.note)}${stn.noteLink ? ` <a href="${esc(stn.noteLink.href)}">${esc(stn.noteLink.label)} →</a>` : ''}</p>` : '';
+  const head = stn.heading ? `<h2 class="path-h stn-head">${esc(stn.heading)}${stn.sub ? ` <span>${esc(stn.sub)}</span>` : ''}</h2>${note}` : '';
+  const sec = `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
+  return { head, sec, tail: stn.heading ? '' : note };
+  }).reduce((html, x, i, all) => {
+    // Subway hubs: the hub's own platforms side by side as cards; another
+    // station of the complex after them under its own heading.
+    if (HUB.layout !== 'subway') return html + x.head + x.sec + x.tail;
+    const open = !x.head && (i === 0 || all[i - 1].head);
+    const close = !x.head && (i === all.length - 1 || all[i + 1].head);
+    return html + (x.head ? `<div class="sep-station">${x.head}<div class="plats">${x.sec}</div></div>` : `${open ? '<div class="plats">' : ''}${x.sec}${close ? '</div>' : ''}`) + x.tail;
+  }, '');
   $('sub-toggles').innerHTML = subwayStyleHtml();
   renderSubwayTags(states);
 }
@@ -2835,16 +2856,32 @@ async function loadNjtLast() {
     const map = new Map();
     const byLine = new Map();
     for (const x of deps) { if (!byLine.has(x.line)) byLine.set(x.line, []); byLine.get(x.line).push(x); }
-    for (const list of byLine.values()) for (const o of lastBeforeBreak(list)) map.set(o.id, { ...(map.get(o.id) || {}), line: true, until: o.until });
-    for (const o of lastBeforeBreak(deps)) map.set(o.id, { ...(map.get(o.id) || {}), all: true, allUntil: o.until });
+    for (const [line, list] of byLine) for (const o of lastBeforeBreak(list)) map.set(o.id, { ...(map.get(o.id) || {}), line: true, until: o.until, t: o.t, lineName: line });
+    for (const o of lastBeforeBreak(deps)) map.set(o.id, { ...(map.get(o.id) || {}), all: true, allUntil: o.until, t: o.t });
     njtLast = map;
     renderRail();
   } catch (e) { console.warn('NJ Transit day schedule:', e); }
 }
 if (IS_PENN) { loadNjtLast(); setInterval(loadNjtLast, 30 * 60 * 1000); }
+// The schedule's last train may be cancelled or missing from the live list (a
+// storm, a holiday change: owner, Nov 26): then the latest train of that line
+// (or of NJ Transit) that is listed, leaving no more than an hour before it, is the last.
+const njtLineKey = (l) => String(l || '').toLowerCase().replace(/\s+line$/, '').replace(/[^a-z]+/g, '');
+function njtLastFallback(r) {
+  const listed = ((board && board.departures) || []).filter((x) => x.carrier === 'njt' && x.tone !== 'stop');
+  const has = new Set(listed.map((x) => String(x.train)));
+  const t = r.leaves ?? r.time;
+  const out = {};
+  for (const [id, e] of njtLast) {
+    if (has.has(id) || !e.t || t > e.t + 15 * 60 || t < e.t - 60 * 60) continue;
+    if (e.line && njtLineKey(e.lineName) === njtLineKey(r.line) && !listed.some((x) => njtLineKey(x.line) === njtLineKey(r.line) && (x.leaves ?? x.time) > t)) { out.line = true; out.until = e.until; }
+    if (e.all && !listed.some((x) => (x.leaves ?? x.time) > t)) { out.all = true; out.allUntil = e.allUntil; }
+  }
+  return out.line || out.all ? out : null;
+}
 function njtLastHtml(r) {
   if (r.carrier !== 'njt' || view !== 'departures' || r.tone === 'departed' || r.tone === 'stop') return '';
-  const x = njtLast.get(String(r.train));
+  const x = njtLast.get(String(r.train)) || njtLastFallback(r);
   if (!x) return '';
   const until = (t) => (t ? ` until ${clock(t).hm} ${clock(t).ap}` : ' tonight');
   const say = x.all ? `Last NJ Transit train from Penn${until(x.allUntil)}.` : `Last ${esc(r.line)} train from Penn${until(x.until)}.`;
@@ -3616,11 +3653,30 @@ function busAlertWhen(a, nowS = Date.now() / 1000) {
   return a.start <= nowS ? `Now, ${until}` : `${dayTime(a.start, nowS)} ${isFinite(a.end) ? `to ${dayTime(a.end, nowS)}` : 'on'}`;
 }
 function busAlertsHtml(cls = 'bus-al') {
-  return busAlerts.map((a) => `<details class="${cls}" data-k="bal-${esc(a.id)}"><summary><span class="bus-al-lines">${a.mine.map(busBadge).join(' ')}</span><span class="bus-al-h">${esc(a.head)}<small>${esc(busAlertWhen(a))}</small></span></summary>${a.desc ? `<p>${esc(a.desc).replace(/\n+/g, '<br>')}</p>` : ''}</details>`).join('');
+  return busAlerts.map((a) => `<details class="${cls}" data-k="bal-${esc(a.id)}" data-nid="bus-${esc(a.id)}"><summary><span class="bus-al-lines">${a.mine.map(busBadge).join(' ')}</span><span class="bus-al-h">${esc(a.head)}<small>${esc(busAlertWhen(a))}</small></span></summary>${a.desc ? `<p>${esc(a.desc).replace(/\n+/g, '<br>')}</p>` : ''}</details>`).join('');
 }
 const busChanged = (ln, nowS = Date.now() / 1000) => busAlerts.some((a) => a.start <= nowS && a.mine.includes(ln));
 loadBusAlerts();
 setInterval(loadBusAlerts, 5 * 60000);
+
+// ---------- every bus company at the terminal (owner, Nov 26: "I want them all to be listed") ----------
+// docs/pabt-carriers.json: the Port Authority's own list, and where the board's
+// times for each come from (live, a published schedule, or none found).
+const CARRIER_TAG = { live: ['Live', 'tag-live'], scheduled: ['Scheduled', 'tag-sched'], none: ['Check with the company', 'tag-none'] };
+function renderCarriers() {
+  const box = $('pabt-carriers');
+  if (!box) return;
+  fetch('pabt-carriers.json').then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+    if (!d) { box.innerHTML = '<p class="empty">The list of companies didn’t load.</p>'; return; }
+    box.innerHTML = `<ul class="carriers">${d.carriers.map((c) => {
+      const [t, cls] = CARRIER_TAG[c.data] || CARRIER_TAG.none;
+      const web = c.web ? `<a href="https://${esc(c.web)}" target="_blank" rel="noopener">${esc(c.web.replace(/^www\./, '').split('/')[0])} ↗&#xFE0E;</a>` : '';
+      const tel = c.phone ? `<a href="tel:${esc(c.phone.replace(/[^0-9+]/g, ''))}">${esc(c.phone)}</a>` : '';
+      return `<li><div class="c-top"><b>${esc(c.name)}</b><span class="tagx ${cls}">${t}</span></div>${c.gates ? `<span class="c-note">${esc(c.gates)}</span>` : ''}<span class="c-links">${[web, tel].filter(Boolean).join(' · ')}</span></li>`;
+    }).join('')}</ul><p class="cm-live">From the <a href="${esc(d.source)}" target="_blank" rel="noopener">Port Authority’s list of carriers</a>. “Scheduled” times are each company’s published timetable.</p>`;
+  });
+}
+renderCarriers();
 // Redraws keep folded sections the reader opened (data-k) open.
 function setKeepOpen(el, html) {
   const open = new Set([...el.querySelectorAll('details[open][data-k]')].map((d) => d.dataset.k));
@@ -3671,6 +3727,8 @@ function renderNotices() {
   else if (s.njt.staleSince) out.push(`NJ Transit times are from ${Math.max(1, Math.round((Date.now() / 1000 - s.njt.staleSince) / 60))} min ago and may not be real time. Confirm on the station screens.`);
   for (const k of ['lirr', 'amtrak', 'mnr']) if (s[k] && s[k].error) out.push(`${CARRIERS[k]} data didn’t load${plainError(s[k].error)}. Showing the last trains received.`);
   if (s.subway.error) out.push('Subway times didn’t load. Showing the last times received.');
+  if (s.njtbus && s.njtbus.error) out.push('NJ Transit bus times didn’t load. Showing other companies’ schedules.');
+  if (s.buses && s.buses.error) out.push('Other bus companies’ schedules didn’t load.');
   $('notices').innerHTML = out.map((m) => `<p>${m}</p>`).join('');
 }
 
@@ -3687,9 +3745,10 @@ function renderStamp() {
 // The bus panel is showing: the Buses tab (phones), or the side panel switched to Buses (computers).
 let side = 'subway';
 try { side = localStorage.getItem('sidePanel') === 'buses' ? 'buses' : 'subway'; } catch {}
+if (HUB.layout === 'subway') side = 'buses';
 document.body.dataset.side = side;
 const WIDE = matchMedia('(min-width: 961px)');
-const busesShown = () => view === 'buses' || (WIDE.matches && side === 'buses');
+const busesShown = () => view === 'buses' || (WIDE.matches && side === 'buses') || (WIDE.matches && HUB.layout === 'subway');
 function setSide(x) {
   side = x; document.body.dataset.side = side;
   try { localStorage.setItem('sidePanel', side); } catch {}
@@ -3818,7 +3877,7 @@ document.addEventListener('click', (e) => {
     e.preventDefault(); e.stopPropagation();
     const k = d.dataset.drop;
     if (openDrops.has(k)) openDrops.delete(k); else openDrops.add(k);
-    renderRail(); slideStarted = -Infinity; renderSubway(); renderPath();
+    renderRail(); slideStarted = -Infinity; renderSubway(); renderPath(); renderHubBuses();
     return;
   }
   const g = e.target.closest('[data-goto]');
@@ -3832,6 +3891,11 @@ document.addEventListener('click', (e) => {
   if (!el || !el.offsetParent) {
     el = document.querySelector(`.al-strip ${sel}`);
     if (el) el.closest('details').open = true;
+  }
+  // A bus alert (computers): the one in the bus panel, opened.
+  if (!el || !el.offsetParent) {
+    el = document.querySelector(`#hub-buses ${sel}`);
+    if (el) { el.open = true; const all = el.closest('.bus-al-all'); if (all) all.open = true; }
   }
   if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('flash'); setTimeout(() => el.classList.remove('flash'), 1600); }
 }, true);
@@ -3874,7 +3938,11 @@ document.querySelector('.seg').addEventListener('click', (e) => {
 });
 
 // The masthead names the view: Penn Station departures, arrivals, or subway and PATH.
-const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: HUB.subwayTab, alerts: 'service alerts', buses: 'buses' };
+const HEADINGS = { departures: HUB.mainLabel || 'departures', arrivals: 'arrivals', subway: HUB.subwayTab, alerts: 'service alerts', buses: 'buses' };
+// No airport routes from this hub yet (Port Authority, Times Square): no button.
+if (HUB.airport === false) { const b = document.getElementById('to-airport'); if (b) { b.hidden = true; b.style.display = 'none'; } }
+// A subway hub (Times Square): the subway is the main view and the side panel holds only buses.
+if (HUB.layout === 'subway') document.body.classList.add('layout-subway');
 function setHeading() {
   $('h1-sub').textContent = HEADINGS[view];
   document.title = `${HUB.title} ${HEADINGS[view]}`;
@@ -3969,7 +4037,10 @@ function renderHubBuses() {
     const times = (hubBuses.get(b.stop) || []).filter((x) => String(x.line).toUpperCase() === ln && x.at && Date.parse(x.at) >= t - 30000 && Date.parse(x.at) <= t + 90 * 60000)
       .map((x) => Date.parse(x.at) / 1000).sort((a, c) => a - c).slice(0, 3);
     const when = times.length ? mins(times) : `<span class="sb-dim">${hubBuses.has(b.stop) ? 'none due soon' : 'no live times'}</span>`;
-    const chg = busChanged(ln) ? '<span class="bus-chg">Service change</span>' : '';
+    // The MTA's alerts for this route in effect now: a pill that opens to them, like the subway's (owner, Nov 26).
+    const nowS = t / 1000;
+    const ns = busAlerts.filter((a) => a.start <= nowS && a.mine.includes(ln)).map((a) => ({ id: `bus-${a.id}`, text: a.head, desc: a.desc, periods: [[a.start, a.end]] }));
+    const chg = ns.length ? pills(dropPill(`bus|${b.stop}|${ln}`, 'Service change', 'warn', ns)) : '';
     return `<div class="sline">${busBadge(ln)}<span class="sdest"><span class="dname">${esc(b.label)}</span> <small>${esc(b.where)}</small>${chg}</span><span class="smins">${when}</span></div>`;
   }));
   // The MTA's alerts for these routes, folded under one line; the rows they touch say "Service change".
@@ -4405,6 +4476,8 @@ function portAuthorityFromGct(nowS) {
 }
 function renderBuses() {
   const box = $('buses');
+  // Only where NJ Transit's buses leave nearby (Penn, Port Authority); not Grand Central (owner, Nov 26).
+  if (!box) return;
   loadBusFinder();
   loadBusLive();
   if (busFinder === undefined) { box.innerHTML = '<p class="empty">Loading buses…</p>'; return; }
@@ -4416,11 +4489,12 @@ function renderBuses() {
   if (open) return;  // don't redraw under an open picker
   // NJ Transit's own word that rail tickets are good on its buses (a storm, a rail outage).
   const xh = ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'njt' && /cross[- ]?honou?r/i.test(n.text) && /bus/i.test(n.text));
-  $('njt-bus-note').innerHTML = xh.length ? `<div class="njt-xh"><b>Cross-honoring:</b> ${noticeText(xh[0].text)}</div>` : '';
+  if ($('njt-bus-note')) $('njt-bus-note').innerHTML = xh.length ? `<div class="njt-xh"><b>Cross-honoring:</b> ${noticeText(xh[0].text)}</div>` : '';
   let html = `<p class="bf-intro">Pick your NJ Transit station to see the buses from Port Authority Bus Terminal that stop near it: for when trains aren’t running, or rail tickets are good on buses.</p>
     <select id="bf-station" class="bf-select" aria-label="Your station"><option value="">Choose your station</option>${stations.map(([c, x]) => `<option value="${esc(c)}"${c === busStation ? ' selected' : ''}>${esc(x.name)}${x.lines.length ? ` (${esc([...new Set(x.lines.map((l) => NJT_LINE_NAMES[l] || l))].join(', '))})` : ''}</option>`).join('')}</select>`;
   if (st) {
-    html += `<p class="bf-h">1 · Get to Port Authority</p>${portAuthorityHtml(nowS)}<p class="bf-h">2 · Bus to ${esc(st.name)}</p>`;
+    // (At the bus terminal itself there's nothing to get to.)
+    html += HUB.busTerminal ? `<p class="bf-h">Buses to ${esc(st.name)}</p>` : `<p class="bf-h">1 · Get to Port Authority</p>${portAuthorityHtml(nowS)}<p class="bf-h">2 · Bus to ${esc(st.name)}</p>`;
     if (!st.buses.length) {
       html += `<div class="opt-card">No bus from Port Authority goes near ${esc(st.name)}. See NJ Transit’s <a href="https://www.njtransit.com/abc" target="_blank" rel="noopener">alternate service plans&nbsp;↗&#xFE0E;</a>.</div>`;
     }

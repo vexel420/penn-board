@@ -1,0 +1,167 @@
+{
+ "note": "Companies at the Port Authority Bus Terminal, as the Port Authority lists them (panynj.gov/bus-terminals/en/carriers-routes.html, Nov 26 2026), and where the board's times for each come from: live (NJ Transit's own feed), scheduled (the company's published timetable, scripts/build-pabt-departures.py) or none found.",
+ "source": "https://www.panynj.gov/bus-terminals/en/carriers-routes.html",
+ "carriers": [
+  {
+   "name": "Academy",
+   "web": "www.academybus.com",
+   "phone": "(201) 420-7000",
+   "data": "scheduled",
+   "gates": "Usual gate in its timetable for some trips"
+  },
+  {
+   "name": "Adirondack Trailways",
+   "web": "trailways.com",
+   "phone": "(800) 858-8555",
+   "data": "scheduled",
+   "gates": ""
+  },
+  {
+   "name": "Bonanza (Peter Pan)",
+   "web": "peterpanbus.com",
+   "phone": "(888) 751-8800",
+   "data": "none",
+   "gates": "Its published timetable expired in 2024"
+  },
+  {
+   "name": "C&J Bus Lines",
+   "web": "www.ridecj.com",
+   "phone": "(603) 430-1100",
+   "data": "none",
+   "gates": ""
+  },
+  {
+   "name": "Coach Company",
+   "web": "www.coachco.com",
+   "phone": "(800) 874-3377",
+   "data": "none",
+   "gates": "Its published timetable expired in 2022"
+  },
+  {
+   "name": "Community (Coach USA)",
+   "web": "www.coachusa.com/community-coach",
+   "phone": "(800) 877-1888",
+   "data": "scheduled",
+   "gates": "Usual gates from Coach USA's timetable"
+  },
+  {
+   "name": "Community Lines",
+   "web": "",
+   "phone": "(201) 309-0006",
+   "data": "none",
+   "gates": ""
+  },
+  {
+   "name": "Express Bus Service (Spanish Transportation)",
+   "web": "",
+   "phone": "(973) 881-9133",
+   "data": "none",
+   "gates": ""
+  },
+  {
+   "name": "Fullington Trailways",
+   "web": "www.fullingtontours.com",
+   "phone": "(800) 858-8555",
+   "data": "scheduled",
+   "gates": ""
+  },
+  {
+   "name": "Greyhound",
+   "web": "www.greyhound.com",
+   "phone": "(800) 231-2222",
+   "data": "scheduled",
+   "gates": "Gates 60–68 and 79–85, lower level (Greyhound)"
+  },
+  {
+   "name": "Lakeland",
+   "web": "www.lakelandbus.com",
+   "phone": "(973) 366-0600",
+   "data": "scheduled",
+   "gates": ""
+  },
+  {
+   "name": "Martz Trailways",
+   "web": "www.martztrailways.com",
+   "phone": "(800) 233-8604",
+   "data": "none",
+   "gates": ""
+  },
+  {
+   "name": "Megabus",
+   "web": "us.megabus.com",
+   "phone": "(877) 462-6342",
+   "data": "none",
+   "gates": ""
+  },
+  {
+   "name": "Newark Airport Express (Coach USA)",
+   "web": "www.coachusa.com/olympia/ss.newarkairport.asp",
+   "phone": "(866) 912-6224",
+   "data": "scheduled",
+   "gates": "Usual gates from Coach USA's timetable"
+  },
+  {
+   "name": "New York Trailways",
+   "web": "trailways.com",
+   "phone": "(800) 858-8555",
+   "data": "scheduled",
+   "gates": ""
+  },
+  {
+   "name": "NJ TRANSIT",
+   "web": "www.njtransit.com",
+   "phone": "(973) 275-5555",
+   "data": "live",
+   "gates": "Live gates from NJ Transit"
+  },
+  {
+   "name": "Peter Pan",
+   "web": "www.peterpanbus.com",
+   "phone": "(800) 343-9999",
+   "data": "none",
+   "gates": "Its published timetable expired in 2024"
+  },
+  {
+   "name": "Pine Hill Trailways",
+   "web": "trailways.com",
+   "phone": "(800) 858-8555",
+   "data": "scheduled",
+   "gates": ""
+  },
+  {
+   "name": "Rockland Coaches (Coach USA)",
+   "web": "www.coachusa.com/rockland-coaches",
+   "phone": "(201) 263-1254",
+   "data": "scheduled",
+   "gates": "Usual gates from Coach USA's timetable"
+  },
+  {
+   "name": "ShortLine (Coach USA)",
+   "web": "www.coachusa.com/shortline",
+   "phone": "(800) 631-8405",
+   "data": "scheduled",
+   "gates": "Usual gates from Coach USA's timetable"
+  },
+  {
+   "name": "Stewart Airport Express (Megabus)",
+   "web": "us.megabus.com/stewart-airport-express",
+   "phone": "(877) 462-6342",
+   "data": "none",
+   "gates": ""
+  },
+  {
+   "name": "Suburban Transit (Coach USA)",
+   "web": "www.coachusa.com/suburban-transit",
+   "phone": "(800) 222-0492",
+   "data": "scheduled",
+   "gates": "Usual gates from Coach USA's timetable"
+  },
+  {
+   "name": "Trans-Bridge Lines",
+   "web": "www.transbridgelines.com",
+   "phone": "(610) 868-6001",
+   "data": "scheduled",
+   "gates": ""
+  }
+ ]
+}

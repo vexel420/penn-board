@@ -6,7 +6,7 @@
 (function () {
   const HUBS = {
     nyp: {
-      id: 'nyp', name: 'Penn Station', short: 'Penn', kicker: 'New York', title: 'Penn Station', subwayTab: 'subway and PATH',
+      id: 'nyp', page: 'index.html', name: 'Penn Station', short: 'Penn', kicker: 'New York', title: 'Penn Station', subwayTab: 'subway and PATH',
       pill: { href: 'gct.html', label: 'Grand Central' },
       ll: [40.7506, -73.9935],
       directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=34+St-Penn+Station,+New+York,+NY&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Penn+Station,+New+York,+NY&dirflg=r' },
@@ -31,7 +31,7 @@
       ],
     },
     gct: {
-      id: 'gct', name: 'Grand Central', short: 'Grand Central', kicker: 'New York', title: 'Grand Central', subwayTab: 'subway',
+      id: 'gct', page: 'gct.html', name: 'Grand Central', short: 'Grand Central', kicker: 'New York', title: 'Grand Central', subwayTab: 'subway',
       pill: { href: 'index.html', label: 'Penn Station' },
       ll: [40.7527, -73.9772],
       directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=Grand+Central+Terminal+New+York&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Grand+Central+Terminal+New+York&dirflg=r' },
@@ -51,6 +51,55 @@
         { stop: '402679', ll: [40.751085, -73.974122], lines: ['M101', 'M102', 'M103'], label: 'Uptown on 3 Av', where: '3 Av at E 42 St' },
         { stop: '400018', ll: [40.753349, -73.978759], lines: ['M1', 'M2'], label: 'Uptown on Madison Av', where: 'Madison Av at E 43 St' },
         { stop: '400561', ll: [40.753337, -73.978759], lines: ['M3', 'M4'], label: 'Uptown on Madison Av', where: 'Madison Av at E 42 St' },
+      ],
+    },
+    pabt: {
+      id: 'pabt', page: 'pabt.html', name: 'Port Authority Bus Terminal', short: 'Port Authority', kicker: 'New York', title: 'Port Authority Bus Terminal', subwayTab: 'subway',
+      pill: { href: 'tsq.html', label: 'Times Square' },
+      ll: [40.7572, -73.9903],
+      directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=Port+Authority+Bus+Terminal+New+York&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Port+Authority+Bus+Terminal+New+York&dirflg=r' },
+      // The bus terminal (owner, Nov 26): departures are buses (NJ Transit live,
+      // other companies from their timetables, docs/pabt-departures.json).
+      busTerminal: true, airport: false, mainLabel: 'bus departures',
+      stations: [{ id: 'A27', lines: ['A', 'C', 'E'], note: 'Connected by an underground tunnel to Times Sq–42 St for the 1 2 3, 7, N Q R W and shuttle: follow the signs for Times Sq. About 5 min.', noteLink: { href: 'tsq.html', label: 'Times Square board' } }],
+      subwayName: '42 St–Port Authority Bus Terminal', subwayWalk: 5,
+      dirs: { A27: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } },
+      subwayFeeds: ['gtfs-ace'], subwayAlerts: 'subway-lines?lines=A,C,E&stops=A27',
+      rails: [], path: false, buses: true,
+      elevatorStations: ['42St/Port Authority-Bus Terminal'],
+      eventVenues: /^$/,
+      busStops: [
+        { stop: '401851', ll: [40.757575, -73.990464], lines: ['M42'], label: '42 St crosstown, westbound', where: 'W 42 St at 8 Av' },
+        { stop: '403239', ll: [40.757191, -73.989904], lines: ['M42'], label: '42 St crosstown, eastbound', where: 'W 42 St at 8 Av' },
+        { stop: '404870', ll: [40.757537, -73.98947], lines: ['M104', 'M20'], label: 'Uptown on 8 Av', where: '8 Av at W 42 St' },
+        { stop: '401497', ll: [40.758584, -73.992665], lines: ['M11', 'M34A-SBS'], label: '9 Av, downtown and to Penn', where: '9 Av at W 42 St' },
+      ],
+    },
+    tsq: {
+      id: 'tsq', page: 'tsq.html', name: 'Times Square', short: 'Times Sq', kicker: 'New York', title: 'Times Square', subwayTab: 'subway',
+      pill: { href: 'pabt.html', label: 'Port Authority' },
+      ll: [40.7557, -73.9871],
+      directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=Times+Sq-42+St+New+York&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Times+Square+New+York&dirflg=r' },
+      // A subway station (owner, Nov 26): the subway is the main view, one card per
+      // platform (they're far apart), and the side panel has only buses.
+      layout: 'subway', airport: false, mainLabel: 'subway',
+      stations: [
+        { id: '127', lines: ['1', '2', '3'], platform: 'Broadway–7 Av line' },
+        { id: 'R16', lines: ['N', 'Q', 'R', 'W'], platform: 'Broadway line' },
+        { id: '725', lines: ['7'], platform: 'Flushing line' },
+        { id: '902', lines: ['GS'], platform: '42 St Shuttle' },
+        { id: 'A27', lines: ['A', 'C', 'E'], platform: '8 Av line', heading: '42 St–Port Authority Bus Terminal', sub: 'A separate station at the bus terminal', note: 'Connected by an underground tunnel: follow the signs for the A C E / Port Authority Bus Terminal. About 5 min.', noteLink: { href: 'pabt.html', label: 'Port Authority board' } }],
+      subwayName: 'Times Sq–42 St', subwayWalk: 5,
+      dirs: { 127: { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, R16: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' }, 725: { N: 'Grand Central and Queens', S: '34 St-Hudson Yards' }, 902: { N: 'Grand Central', S: 'Grand Central' }, A27: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } },
+      subwayFeeds: ['gtfs', 'gtfs-nqrw', 'gtfs-ace'], subwayAlerts: 'subway-lines?lines=1,2,3,7,N,Q,R,W,GS,S,A,C,E&stops=127,R16,725,902,A27',
+      rails: [], path: false, buses: true,
+      elevatorStations: ['Times Sq-42 St'],
+      eventVenues: /^$/,
+      busStops: [
+        { stop: '405549', ll: [40.756311, -73.987403], lines: ['M42'], label: '42 St crosstown, westbound', where: 'W 42 St at 7 Av' },
+        { stop: '403240', ll: [40.756259, -73.987735], lines: ['M42'], label: '42 St crosstown, eastbound', where: 'W 42 St at 7 Av' },
+        { stop: '404153', ll: [40.755694, -73.987208], lines: ['M104'], label: 'Downtown on 7 Av', where: '7 Av at W 42 St' },
+        { stop: '450045', ll: [40.755498, -73.987324], lines: ['M7', 'M20'], label: 'Downtown on 7 Av', where: '7 Av at W 41 St' },
       ],
     },
   };

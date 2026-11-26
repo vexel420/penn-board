@@ -54,6 +54,20 @@ jobs:
           python3 scripts/build-airport-buses.py "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_busco.zip "$RUNNER_TEMP"/gtfs_m.zip
           python3 scripts/build-airport-buses.py --from gct "$RUNNER_TEMP/gtfs_subway.zip" "$RUNNER_TEMP"/gtfs_q.zip "$RUNNER_TEMP"/gtfs_b.zip "$RUNNER_TEMP"/gtfs_busco.zip "$RUNNER_TEMP"/gtfs_m.zip
 
+      - name: Port Authority Bus Terminal departures (every company that publishes a timetable)
+        continue-on-error: true
+        run: |
+          T="$RUNNER_TEMP/pabt"; mkdir -p "$T"
+          get() { curl -fsSL --retry 3 -A "Mozilla/5.0 (penn-board data build)" -o "$T/$1" "$2" || echo "could not download $1"; }
+          get coachusa.zip https://data.trilliumtransit.com/gtfs/megabus-us/megabus-us.zip
+          get greyhound.zip https://gtfs.gis.flix.tech/gtfs_generic_us.zip
+          get trailways.zip https://s3.amazonaws.com/datatools-511ny/public/Adirondack_Trailways-ADT.zip
+          get fullington.zip https://s3.amazonaws.com/datatools-511ny/public/Adirondack_Trailways-FAB.zip
+          get academy.zip https://www.njtransit.com/Academy_bus_data.zip
+          get lakeland.zip https://www.njtransit.com/LakelandBusLines_bus_data.zip
+          get transbridge.zip https://www.njtransit.com/Trans-Bridge_bus_data.zip
+          python3 scripts/build-pabt-departures.py coachusa="$T/coachusa.zip" greyhound="$T/greyhound.zip" trailways="$T/trailways.zip" fullington="$T/fullington.zip" academy="$T/academy.zip" lakeland="$T/lakeland.zip" transbridge="$T/transbridge.zip"
+
       - name: Bus to Islip airport (Suffolk County Transit route 6)
         continue-on-error: true
         run: |

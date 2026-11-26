@@ -158,7 +158,10 @@ const subway = source('subway', 20, async () => {
     if (at < 0 || at === trip.stops.length - 1) continue;
     const stop = trip.stops[at];
     if (!stop.time || stop.time < t - 30 || stop.time > t + 3600) continue;
-    const dir = route0(trip.route) === 'GS' ? 'S' : stop.id.slice(-1); // N = uptown, S = downtown (the shuttle: one way, to Times Sq)
+    // N = uptown, S = downtown. The shuttle runs one way from each end; its
+    // direction is the timetable's (from Grand Central N, from Times Sq S), so
+    // the timetable's late-night and on-time data match it (owner, Nov 26).
+    const dir = stop.id.slice(-1);
     const route = trip.route.replace(/X$/, '');
     const stops = trip.stops.slice(at).map((s) => s.id.slice(0, -1));
     const svc = serviceAt(stops[0], dir, route, stops);
@@ -485,7 +488,7 @@ function reachableFromPenn(n, groups) {
 const IN_BROWSER = typeof window !== 'undefined';
 const relayBase = () => (IN_BROWSER && window.PENN_RELAY ? window.PENN_RELAY.replace(/\/$/, '') : '');
 const FAST_ALERTS = !IN_BROWSER || !!relayBase();
-const alertUrl = (feed) => (relayBase() ? `${relayBase()}/alerts/${feed}` : ALERT_FEEDS[feed === 'subway-gct' ? 'subway' : feed]);
+const alertUrl = (feed) => (relayBase() ? `${relayBase()}/alerts/${feed}` : ALERT_FEEDS[/^subway/.test(feed) ? 'subway' : feed]);
 const subwayAlerts = source('subway-alerts', FAST_ALERTS ? 20 : 180, async () =>
   parseAlerts(await (await get(alertUrl(HUBX.subwayAlerts || 'subway'))).json(), (lines, stops, text, type) => {
     if (stops.some((s) => HUB_STOP.test(s))) return true; // about the hub's own stations
@@ -643,9 +646,64 @@ const relayNjt = source('relay-njt', 20, async () => {
 // Combine the sources into the document the page renders. `njt` and `path`
 // are optional { data, error } results that only the server can supply.
 // A hub without NJ Transit, Amtrak or PATH (Grand Central): Metro-North and the LIRR.
+// ---------- the Port Authority Bus Terminal (owner, Nov 26) ----------
+// NJ Transit's buses live from NJ Transit (relay /njt-bus-pabt: its departure
+// screens, with gates); every other company that publishes a timetable from
+// docs/pabt-departures.json (scripts/build-pabt-departures.py), with the
+// usual gate where its timetable gives one.
+const BUS_KIND_PLATE = { commuter: 'p-commuter', intercity: 'p-intercity', airport: 'p-airportbus' };
+const GREYHOUND_GATES = 'Gates 60–68, 79–85, lower level';
+const njtBusLive = source('njt-bus-pabt', 30, async () => (await (await get(`${relayBase()}/njt-bus-pabt`)).json()).DVTrip || []);
+const busTimetable = source('pabt-timetable', 3600, async () => (await get('pabt-departures.json')).json());
+const nyYmd = (epoch) => { const p = {}; new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(epoch * 1000)).forEach((x) => { p[x.type] = x.value; }); return [+p.year, +p.month, +p.day]; };
+function busTerminalRows(live, tt) {
+  const t = now(), until = t + 8 * 3600, rows = [];
+  const tc = (x) => String(x || '').toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase()).replace(/\bVia\b/g, 'via');
+  for (const x of live || []) {
+    const m = /^(\d+)\/(\d+)\/(\d+) (\d+):(\d+):\d+ (AM|PM)$/.exec(x.sched_dep_time || '');
+    if (!m) continue;
+    const sched = nyToEpoch(+m[3], +m[1], +m[2], (+m[4] % 12) + (m[6] === 'PM' ? 12 : 0), +m[5], 0);
+    const inMin = /in (\d+) min/i.exec(x.departurestatus || '');
+    const tracked = x.vehicle_id && x.vehicle_id !== 'EMPTY';
+    const at = inMin ? t + +inMin[1] * 60 : sched;
+    if (at < t - 60 || at > until) continue;
+    // NJ Transit's screens count down to the bus's own time; more than half an
+    // hour behind is another trip's number, not a delay.
+    const late = Math.round((at - sched) / 60), isLate = late >= 2 && late <= 30;
+    const cancelled = /cancel/i.test(`${x.departurestatus} ${x.remarks}`);
+    const [dest, via] = String(x.header || '').replace(/^\S+\s+/, '').split(/\s+VIA\s+/i);
+    rows.push({ id: `njtbus-${x.internal_trip_number}`, carrier: 'njtbus', bus: true, group: 'njtbus', plate: x.public_route, plateClass: 'p-njt',
+      time: at, leaves: at, sched, place: tc(dest), meta: `NJ Transit${via ? ` via ${tc(via)}` : ''}`,
+      track: x.lanegate && x.lanegate !== 'EMPTY' ? String(x.lanegate).replace(/_\d+$/, '') : '', live: true,
+      status: cancelled ? 'Cancelled' : !tracked ? 'Scheduled' : isLate ? `${late} min late` : 'On time', tone: cancelled ? 'stop' : isLate ? 'late' : 'ok', lateMin: isLate ? late : 0 });
+  }
+  if (tt && tt.days) {
+    for (const k of [-1, 0, 1]) {
+      const [y, mo, d] = nyYmd(t + k * 86400);
+      const day = `${y}${String(mo).padStart(2, '0')}${String(d).padStart(2, '0')}`;
+      const midnight = nyToEpoch(y, mo, d, 0, 0, 0);
+      for (const i of tt.days[day] || []) {
+        const [who, route, dest, gate, mins] = tt.trips[i];
+        const at = midnight + mins * 60;
+        if (at < t - 60 || at > until) continue;
+        const kind = (tt.kinds && tt.kinds[who]) || 'commuter';
+        rows.push({ id: `bus-${who}-${route}-${at}-${dest}`, carrier: 'bus', bus: true, group: kind, plate: route ? `${route}` : who.replace(/ \(.*\)$/, '').replace(/ (Transit|Coaches|Lines)$/, ''),
+          plateClass: BUS_KIND_PLATE[kind], time: at, leaves: at, place: dest,
+          meta: `${who}${route ? `, route ${route}` : ''}${!gate && who === 'Greyhound' ? ` · ${GREYHOUND_GATES}` : ''}`,
+          track: gate, gateUsual: !!gate, status: 'Scheduled', tone: 'ok' });
+      }
+    }
+  }
+  return rows.sort((a, b) => a.time - b.time);
+}
+
 async function hubBoard(force) {
   const fastAlerts = force && FAST_ALERTS;
-  const [l, m, s, sa, la, ma] = await Promise.all([lirr(force), mnr(force), subway(force), subwayAlerts(fastAlerts), lirrAlerts(fastAlerts), mnrAlerts(fastAlerts)]);
+  const has = (c) => (HUBX.rails || []).includes(c);
+  const none = async () => ({ data: null, error: null });
+  const [l, m, s, sa, la, ma, nb, tt] = await Promise.all([has('lirr') ? lirr(force) : none(), has('mnr') ? mnr(force) : none(), subway(force), subwayAlerts(fastAlerts),
+    has('lirr') ? lirrAlerts(fastAlerts) : none(), has('mnr') ? mnrAlerts(fastAlerts) : none(),
+    HUBX.busTerminal && relayBase() ? njtBusLive(force) : none(), HUBX.busTerminal ? busTimetable() : none()]);
   const t = now();
   const live = (r) => r.time > t - 20 * 60;
   const byTime = (x, y) => (x.leaves ?? x.time) - (y.leaves ?? y.time);
@@ -657,15 +715,16 @@ async function hubBoard(force) {
   const off = { ok: true, error: null, hidden: true };
   return {
     at: t,
-    departures: pick('departures').filter(live).sort(byTime),
+    departures: HUBX.busTerminal ? busTerminalRows(nb.data, tt.data) : pick('departures').filter(live).sort(byTime),
     arrivals: pick('arrivals').filter(live).sort(byTime),
     subway: s.data || [],
     path: [],
     notices: { rail, subway: (sa.data || []).filter((x) => reachableFromPenn(x, s.data)).map((x) => ({ ...x, carrier: 'subway' })), path: [] },
     sources: {
-      lirr: { ok: !!l.data && !l.error, error: l.error },
-      mnr: { ok: !!m.data && !m.error, error: m.error },
+      lirr: has('lirr') ? { ok: !!l.data && !l.error, error: l.error } : off,
+      mnr: has('mnr') ? { ok: !!m.data && !m.error, error: m.error } : off,
       subway: { ok: !!s.data && !s.error, error: s.error },
+      ...(HUBX.busTerminal ? { njtbus: { ok: !!nb.data && !nb.error, error: nb.error }, buses: { ok: !!tt.data && !tt.error, error: tt.error } } : {}),
       njt: off, amtrak: off, path: off,
     },
   };

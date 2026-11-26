@@ -8,6 +8,7 @@
 //   GET /alerts/lirr    LIRR service notices in effect now or within the hour
 //   GET /alerts/mnr     Metro-North service notices (Grand Central page)
 //   GET /alerts/subway-gct  subway notices for the lines at Grand Central (4 5 6 7 S)
+//   GET /alerts/subway-lines?lines=A,C,E&stops=A27  subway notices for any hub's lines and stations
 //   GET /path-alerts    PATH's alerts from the last 8 hours (Port Authority)
 //   GET /njt            NJ Transit's departures from Penn (station NY), with
 //                       tracks and status, plus its station messages. Uses the
@@ -53,8 +54,10 @@ async function upstream(url, seconds) {
 // Keep plain-English text only (drop the HTML copies) to shrink the response.
 const plain = (t) => (t && t.translation ? { translation: t.translation.filter((x) => x.language === 'en') } : t);
 
-async function alerts(feed, aheadHours = 1) {
-  const data = await (await upstream(MTA_ALERTS[feed === 'subway-gct' ? 'subway' : feed], 20)).json();
+// /alerts/subway-lines?lines=A,C,E&stops=A27,127 (owner, Nov 26: any hub):
+// subway notices about these lines or stations.
+async function alerts(feed, aheadHours = 1, want = null) {
+  const data = await (await upstream(MTA_ALERTS[feed === 'subway-gct' || feed === 'subway-lines' ? 'subway' : feed], 20)).json();
   const soon = Date.now() / 1000 + aheadHours * 3600;
   const now = Date.now() / 1000;
   const entity = (data.entity || []).filter((e) => {
@@ -65,6 +68,7 @@ async function alerts(feed, aheadHours = 1) {
     const live = !periods.length || periods.some((p) => (+p.start || 0) - early <= soon && now <= (+p.end || Infinity));
     if (!live) return false;
     if (feed === 'subway-gct') return (a.informed_entity || []).some((x) => GCT_LINES.has(x.route_id) || GCT_STOP.test(x.stop_id || ''));
+    if (feed === 'subway-lines') return (a.informed_entity || []).some((x) => want.lines.has(String(x.route_id || '').replace(/X$/, '')) || want.stops.has(String(x.stop_id || '').replace(/[NS]$/, '')));
     if (feed !== 'subway') return true;
     return (a.informed_entity || []).some((x) => PENN_LINES.has(x.route_id) || PENN_STOP.test(x.stop_id || ''));
   // The full text is kept: for the subway it holds the MTA's alternatives
@@ -459,7 +463,7 @@ export default {
           return json(JSON.stringify(d), 15);
         }
       }
-      const m = pathname.match(/^\/alerts\/(subway|lirr|mnr|subway-gct)$/);
+      const m = pathname.match(/^\/alerts\/(subway|lirr|mnr|subway-gct|subway-lines)$/);
       if (m) {
         // Filter once per 20 s per Cloudflare location, not once per visitor.
         const cache = caches.default;
@@ -468,7 +472,10 @@ export default {
         if (hit) return hit;
         // ?ahead=168: notices starting within a week (the board's map preview).
         const ahead = Math.min(168, Math.max(1, +new URL(request.url).searchParams.get('ahead') || 1));
-        const res = json(await alerts(m[1], ahead), 20);
+        const q = new URL(request.url).searchParams;
+        const list = (k) => new Set(String(q.get(k) || '').split(',').map((x) => x.trim()).filter((x) => /^[A-Z0-9]{1,4}$/.test(x)).slice(0, 40));
+        if (m[1] === 'subway-lines' && !list('lines').size && !list('stops').size) return fail(400, 'lines or stops needed');
+        const res = json(await alerts(m[1], ahead, { lines: list('lines'), stops: list('stops') }), 20);
         ctx.waitUntil(cache.put(key, res.clone()));
         return res;
       }

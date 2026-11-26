@@ -814,3 +814,60 @@ a.bus-pl:hover, a.bus-pl:focus-visible { outline: 2px solid var(--gold); outline
   body[data-view="buses"][data-side] .sub-part { display: none; }
   body[data-view="buses"][data-side] .bus-part { display: block; }
 }
+
+/* ---------- More hubs (owner, Nov 26): station menu, bus terminal, subway hubs ---------- */
+.hub-switch { position: relative; display: inline-block; }
+.hub-switch button.hub-pill { font: inherit; cursor: pointer; background: none; }
+.hub-menu { position: absolute; z-index: 30; top: calc(100% + .35rem); left: 0; min-width: 14rem; display: grid; padding: .35rem; border-radius: 10px; background: #fbfaf6; box-shadow: 0 8px 24px rgba(0, 0, 0, .35); }
+.hub-menu[hidden] { display: none; }
+.hub-menu a { padding: .55rem .7rem; border-radius: 7px; color: #121815; text-decoration: none; font: 700 .95rem Archivo, sans-serif; letter-spacing: 0; text-transform: none; }
+.hub-menu a:hover, .hub-menu a:focus-visible { background: #ece7dc; }
+/* Bus plates on the bus terminal board, by kind of company. */
+.plate.p-njt { background: #8a3db5; color: #fff; }
+.plate.p-commuter { background: #2f6f4e; color: #fff; }
+.plate.p-intercity { background: #2b4c7e; color: #fff; }
+.plate.p-airportbus { background: #555; color: #fff; }
+/* Platform cards (subway hubs) and a station of the complex under its own heading. */
+.plat-name { margin-left: .5rem; font-weight: 800; font-size: .92rem; vertical-align: middle; }
+.plats { display: grid; gap: 1rem; align-items: start; }
+.plats > .stn { margin: 0; }
+.sep-station { margin-top: 1.4rem; }
+.walk a { color: var(--gold); font-weight: 700; white-space: nowrap; }
+body.layout-subway .rail .cols, body.layout-subway #rows, body.layout-subway .chips, body.layout-subway .style-bar { display: none !important; }
+body.layout-subway .side-switch, body.layout-subway .sub-part { display: none !important; }
+
+@media (min-width: 961px) {
+  body.layout-subway .plats { grid-template-columns: 1fr 1fr; }
+  body.layout-subway .bus-part { display: block; }
+}
+/* Port Authority Bus Terminal: transit blue and signal yellow. */
+body.hub-pabt { --gold: #ffd24a; }
+.hub-pabt .mast { background: linear-gradient(180deg, #1d3f86, #163370); }
+.hub-pabt .mast h1, .hub-pabt .mast-flip { color: #ffd24a; font-family: "Archivo", sans-serif; font-stretch: 112%; font-weight: 900; }
+.hub-pabt .mast-kicker { color: #ffe9a3; }
+/* Times Square: the subway's own signage, white with the lines' colors. */
+body.hub-tsq { --gold: #fccc0a; }
+.hub-tsq .mast { background: #fbfaf6; border-bottom: 0; position: relative; }
+.hub-tsq .mast::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 10px; background: linear-gradient(90deg, #ee352e 0 22%, #b933ad 22% 34%, #fccc0a 34% 66%, #808183 66% 74%, #0039a6 74% 100%); }
+.hub-tsq .mast h1, .hub-tsq .mast-flip, .hub-tsq .mast .clock { color: #111; text-shadow: none; font-family: "Archivo", sans-serif; font-weight: 900; }
+.hub-tsq .mast-kicker { color: #555; }
+.hub-tsq .mast .hub-pill { color: #111; border-color: #111; }
+/* Bus companies at the terminal. */
+.carriers { list-style: none; margin: 0; padding: 0; display: grid; gap: .45rem; }
+.carriers li { padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 10px; background: var(--enamel-2); display: grid; gap: .2rem; }
+.carriers .c-top { display: flex; justify-content: space-between; gap: .5rem; align-items: center; }
+.carriers .c-note { color: var(--dim); font-size: .85rem; }
+.carriers .c-links { font-size: .85rem; }
+.carriers .c-links a { color: var(--gold); }
+.tagx.tag-none { background: rgba(163, 176, 164, .16); color: var(--dim); }
+/* The subway heading in the main section (subway hubs) looks as it does in the side panel. */
+.main-sub h2#sub-h { margin: 0 0 .6rem; font-size: 1.3rem; font-weight: 750; font-stretch: 112%; }
+.main-sub h2#sub-h > span:not(.tag) { display: block; font-size: .95rem; font-weight: 400; font-stretch: 100%; color: var(--dim); }
+.main-sub h2 .tag { display: inline-flex; align-items: center; gap: .3rem; margin: 0 0 0 .45rem; padding: .1rem .5rem; vertical-align: 4px; border-radius: 99px; font-size: .75rem; font-weight: 700; font-stretch: 100%; color: inherit; }
+.main-sub h2 .tag.night { background: #1b2440; color: #c9d3ff; }
+.main-sub h2 .tag.wknd { background: #2a2333; color: #e3c6f0; }
+.main-sub h2 .tag.hol { background: #332a17; color: var(--gold); }
+.main-sub h2 .tag.wx { background: #3a1f1a; color: var(--late); }
+.main-sub .stn-head { margin: 0 0 .3rem; font-size: 1.15rem; }
+.main-sub .stn-head span { display: block; font-size: .9rem; font-weight: 400; color: var(--dim); }
+#hub-buses .late-pill { white-space: nowrap; }

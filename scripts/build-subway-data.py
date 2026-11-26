@@ -310,7 +310,8 @@ def main(zip_path):
         if not day:
             continue
         for i, c in enumerate(cs):
-            if c[1] in HUB_STATIONS and i + 2 < len(cs):
+            # (Any trip with a stop left: the shuttle makes just one more.)
+            if c[1] in HUB_STATIONS and i + 1 < len(cs):
                 ln = local_next.get(f'{c[1]}|{c[2]}', set())
                 express = bool(ln) and not any(n in ln for n in names[i + 1:i + 4])
                 # The trip's id in the MTA's live feed starts with its scheduled

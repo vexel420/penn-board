@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1d3f86">
+<!-- Installable as an app (home screen, full screen). -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/icon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Port Board">
+<title>Port Authority Bus Terminal departures</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=202611260715">
+</head>
+<body class="hub-pabt" data-view="departures">
+
+<header class="mast">
+    <div class="mast-in">
+    <h1><span class="mast-kicker">New York <a class="hub-pill" href="index.html">⇄ Stations</a></span>Port Authority Bus Terminal<span class="h1-sub" id="h1-sub">departures</span></h1>
+    <p class="clock" aria-live="off"><span id="clock">--:--</span><span id="clock-s" class="secs"></span><span id="clock-ap" class="ap"></span></p>
+  </div>
+</header>
+
+<main class="wrap">
+  <nav class="controls" aria-label="Board controls">
+    <div class="seg" role="group" aria-label="Show">
+      <button type="button" data-view="departures" aria-pressed="true">Departures</button>
+      <button type="button" data-view="subway" aria-pressed="false" class="only-narrow">Subway</button>
+      <button type="button" data-view="buses" aria-pressed="false" class="only-narrow">Buses</button>
+      <button type="button" data-view="alerts" aria-pressed="false" class="only-narrow">Alerts<span class="tab-count" id="alerts-count"></span></button>
+    </div>
+    <div class="chips" role="group" aria-label="Bus company">
+      <button type="button" data-carrier="all" aria-pressed="true">All buses</button>
+      <button type="button" data-carrier="njtbus" aria-pressed="false">NJ Transit</button>
+      <button type="button" data-carrier="commuter" aria-pressed="false">Commuter</button>
+      <button type="button" data-carrier="intercity" aria-pressed="false">Long distance</button>
+      <button type="button" data-carrier="airport" aria-pressed="false">Airport</button>
+    </div>
+    <div class="trip-bar"><button type="button" id="to-airport"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15.5v-2l-8-5V3.5a1.5 1.5 0 0 0-3 0V8.5l-8 5v2l8-2.5V18l-2 1.5V21l3.5-1 3.5 1v-1.5L13 18v-5z" fill="currentColor"/></svg>To the airport</button><a class="split-btn" href="split.html" title="Stations side by side">Side by side</a></div>
+  </nav>
+
+  <div class="layout">
+    <section class="rail" aria-labelledby="rail-h">
+      <h2 id="rail-h" class="sr">Trains</h2>
+      <!-- Notices sit in the train column, so the subway panel starts at the top beside them. -->
+      <div id="notices" class="notices"></div>
+      <div id="njt-alt"></div>
+      <div id="events-note"></div>
+      <div id="rail-notices"></div>
+      <div class="cols" aria-hidden="true">
+        <span>Time</span><span></span><span id="col-place">To</span><span>Status</span><span class="col-track">Gate</span>
+      </div>
+      <ol id="rows" class="rows"><li class="empty">Loading the board…</li></ol>
+    </section>
+
+    <aside class="subway" aria-labelledby="sub-h">
+      <!-- Computers: the panel shows the subway or the buses (owner, Nov 26); phones have a tab for each. -->
+      <div class="side-switch" role="group" aria-label="Show in this panel"><button type="button" data-side="subway" aria-pressed="true">Subway</button><button type="button" data-side="buses" aria-pressed="false">Buses</button></div>
+      <div class="sub-part">
+      <h2 id="sub-h">Subway <span>42 St–Port Authority Bus Terminal</span></h2>
+      <div id="subway-notices"></div>
+      <div id="elevators"></div>
+      <div id="subway"><p class="empty">Loading subway times…</p></div>
+
+      <div hidden><h2 id="path-h" class="path-h">PATH</h2>
+            <div id="path-notices"></div>
+      <div id="path"></div></div>
+      <!-- Display choices for the subway and PATH lists. -->
+      <div id="sub-toggles"></div>
+      </div>
+      <div class="bus-part" id="bus-panel">
+        <h2 class="path-h bus-h">Buses <span>at Port Authority, live from MTA Bus Time</span></h2>
+        <div id="hub-buses"><p class="empty">Loading buses…</p></div>
+        <h2 class="path-h bus-h">NJ Transit buses <span>by station, from this terminal</span></h2>
+        <div id="njt-bus-note"></div>
+        <section id="buses" class="buses-tab" aria-label="Buses to New Jersey"></section>
+        <h2 class="path-h bus-h">Bus companies <span>every one at this terminal, per the Port Authority</span></h2>
+        <div id="pabt-carriers"><p class="empty">Loading…</p></div>
+      </div>
+    </aside>
+  </div>
+
+  <section id="alerts" class="alerts-tab" aria-label="Service alerts"></section>
+
+  <div class="style-bar">
+    <span>Board style</span>
+    <div class="style-seg" role="group" aria-label="Board style">
+      <button type="button" data-style="standard" aria-pressed="true"><span class="ic-lines" aria-hidden="true"><i></i><i></i><i></i></span>Standard</button>
+      <button type="button" data-style="flip" aria-pressed="false"><span class="ic-tiles" aria-hidden="true"><i></i><i></i><i></i></span>Flip board</button>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <p id="njt-note" class="njt-note"></p>
+    <p id="updated">Connecting…</p>
+    <p>NJ Transit bus times and gates are from NJ Transit and may not be real-time data. Other companies’ times are their published schedules, and gates marked “usual gate” are from their timetables; both can change. Subway and MTA bus data was obtained from the MTA. Confirm on the terminal screens.</p>
+    <p>An independent project, not affiliated with or licensed by the MTA, NJ Transit or the Port Authority.</p>
+  </footer>
+</main>
+
+<dialog id="reroute" aria-labelledby="reroute-h">
+  <div class="rr-head">
+    <h2 id="reroute-h">Temporary route</h2>
+    <button type="button" class="rr-close" id="reroute-close">Close</button>
+  </div>
+  <p id="reroute-note" class="rr-note"></p>
+  <div id="reroute-map" class="rr-map" role="img" aria-label="Map of the train’s temporary route"></div>
+  <p class="rr-small">The line joins the stations in order; it doesn’t trace the exact tracks. Check MTA service notices before you travel.</p>
+  <h3 class="rr-list-h">Stops from Grand Central</h3>
+  <ol id="reroute-stops" class="rr-stops"></ol>
+</dialog>
+
+<dialog id="change" aria-labelledby="chg-h">
+  <div class="cm-body">
+    <div class="cm-head">
+      <div><p class="cm-kind" id="chg-kind"></p><h2 id="chg-h"></h2></div>
+      <button type="button" class="rr-close" id="chg-close">Close</button>
+    </div>
+    <div id="chg-top" class="cm-top"></div>
+    <div id="chg-map" class="cm-map" role="img" aria-label="Map of the line and the service change"></div>
+    <div id="chg-below" class="cm-below"></div>
+  </div>
+</dialog>
+
+<script src="config.js?v=202611260715"></script>
+<script>window.HUB_ID = 'pabt';</script>
+<script src="hub.js?v=202611260715"></script>
+<script src="feeds.js?v=202611260715"></script>
+<script src="flip.js?v=202611260715"></script>
+<script src="app.js?v=202611260715"></script>
+<script src="airport.js?v=202611260715"></script>
+</body>
+</html>
