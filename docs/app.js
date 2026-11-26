@@ -30,27 +30,64 @@ function countdown(epoch) {
 
 // (The flip board engine is in flip.js, shared with the Grand Central board.)
 // Masthead and clock.
-// Stations: a bar at the bottom of the screen, every hub one tap away (owner,
-// Nov 26: "bottom bar for now"), in place of the pill in the masthead. Not
-// inside the side-by-side page's frames.
-(function stationBar() {
-  const hubs = Object.values(window.HUBS || {}).filter((h) => h.page && h.tab);
-  if (hubs.length < 2 || window.self !== window.top) return;
+// Switching stations (owner, Nov 26: "bottom bar for mobile and B for
+// desktop"). Phones get a bar at the bottom of the screen with every hub; on a
+// computer the bar is hidden by CSS and a ▾ next to the station name opens a
+// menu of the stations instead. Neither inside the side-by-side page's frames.
+const SWITCH_HUBS = Object.values(window.HUBS || {}).filter((h) => h.page && h.tab);
+const CAN_SWITCH = SWITCH_HUBS.length > 1 && window.self === window.top;
+const hubTile = (h) => `<i style="background:${h.tab.bg};color:${h.tab.ink}${h.tab.stripe ? `;box-shadow:inset 0 -4px 0 ${h.tab.stripe}` : ''}">${esc(h.tab.code)}</i>`;
+const HUB_DD = CAN_SWITCH ? '<button type="button" class="hub-dd" aria-haspopup="true" aria-expanded="false" aria-controls="hub-menu" title="Change station" aria-label="Change station">▾</button>' : '';
+if (CAN_SWITCH) {
   const bar = document.createElement('nav');
   bar.className = 'station-bar';
   bar.setAttribute('aria-label', 'Stations');
-  bar.style.setProperty('--n', hubs.length);
-  bar.innerHTML = hubs.map((h) => `<a href="${h.page}"${h.id === HUB.id ? ' class="on" aria-current="page"' : ''}><i style="background:${h.tab.bg};color:${h.tab.ink}${h.tab.stripe ? `;box-shadow:inset 0 -4px 0 ${h.tab.stripe}` : ''}">${esc(h.tab.code)}</i><span>${esc(h.tab.label)}</span></a>`).join('');
+  bar.style.setProperty('--n', SWITCH_HUBS.length);
+  bar.innerHTML = SWITCH_HUBS.map((h) => `<a href="${h.page}"${h.id === HUB.id ? ' class="on" aria-current="page"' : ''}>${hubTile(h)}<span>${esc(h.tab.label)}</span></a>`).join('');
   document.body.appendChild(bar);
   document.body.classList.add('has-station-bar');
-})();
+  const menu = document.createElement('div');
+  menu.className = 'hub-menu';
+  menu.id = 'hub-menu';
+  menu.hidden = true;
+  menu.setAttribute('role', 'menu');
+  menu.setAttribute('aria-label', 'Stations');
+  menu.innerHTML = `<div class="hub-menu-head">Stations</div>` + SWITCH_HUBS.map((h) => `<a role="menuitem" href="${h.page}"${h.id === HUB.id ? ' class="on" aria-current="page"' : ''}>${hubTile(h)}<span><b>${esc(h.name)}</b><small>${esc(h.tab.serves || '')}</small></span>${h.id === HUB.id ? '<em aria-hidden="true">✓</em>' : ''}</a>`).join('');
+  document.body.appendChild(menu);
+  const btn = () => document.querySelector('.hub-dd');
+  const close = (focus) => { if (menu.hidden) return; menu.hidden = true; btn()?.setAttribute('aria-expanded', 'false'); if (focus) btn()?.focus(); };
+  const open = () => {
+    const b = btn(); if (!b) return;
+    const r = b.getBoundingClientRect();
+    menu.hidden = false;
+    menu.style.top = `${Math.round(r.bottom + window.scrollY + 8)}px`;
+    menu.style.left = `${Math.round(Math.max(12, Math.min(r.left + window.scrollX - 12, document.documentElement.clientWidth - menu.offsetWidth - 12)))}px`;
+    b.setAttribute('aria-expanded', 'true');
+    (menu.querySelector('a.on') || menu.querySelector('a'))?.focus();
+  };
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.hub-dd')) { e.preventDefault(); e.stopPropagation(); if (menu.hidden) open(); else close(); return; }
+    if (!e.target.closest('.hub-menu')) close();
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (menu.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); close(true); return; }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      const items = [...menu.querySelectorAll('a')];
+      const i = items.indexOf(document.activeElement);
+      items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length].focus();
+    }
+  });
+  window.addEventListener('resize', () => close());
+}
 function renderMastFlip() {
   const h = document.querySelector('.mast h1');
   if (flipMode) {
-    h.innerHTML = `<span class="mast-kicker">${HUB.kicker}</span><span class="mast-flip">${flipText('mast', HUB.name)}</span><span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">${HUB.kicker}</span><span class="mast-flip">${flipText('mast', HUB.name)}</span>${HUB_DD}<span class="h1-sub" id="h1-sub"></span>`;
     runFlips(h);
   } else {
-    h.innerHTML = `<span class="mast-kicker">${HUB.kicker}</span>${HUB.name}<span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">${HUB.kicker}</span>${HUB.name}${HUB_DD}<span class="h1-sub" id="h1-sub"></span>`;
     flipShown.delete('mast');
   }
   setHeading();
@@ -4012,8 +4049,8 @@ const mastTitle = document.querySelector('.mast h1');
 mastTitle.setAttribute('role', 'button');
 mastTitle.tabIndex = 0;
 mastTitle.title = 'Reload the board';
-mastTitle.addEventListener('click', (e) => { if (!e.target.closest('.hub-pill')) location.reload(); });
-mastTitle.addEventListener('keydown', (e) => { if (e.target.closest('.hub-pill')) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.reload(); } });
+mastTitle.addEventListener('click', (e) => { if (!e.target.closest('.hub-dd')) location.reload(); });
+mastTitle.addEventListener('keydown', (e) => { if (e.target.closest('.hub-dd')) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.reload(); } });
 // Inside the side-by-side view (split.html) the page knows it's framed.
 if (window.self !== window.top) document.body.classList.add('in-split');
 document.querySelector('.style-seg').addEventListener('click', (e) => {

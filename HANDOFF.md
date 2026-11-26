@@ -938,6 +938,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 ## Station bar (Nov 26)
 - Owner: "Let's do bottom bar for now". The "⇄ Stations" pill and its menu are gone from the masthead.
 - app.js `stationBar()` builds a `<nav class="station-bar">` from every hub in hub.js that has `page` and `tab` ({code, label, bg, ink, stripe?}). A new hub only needs a `tab` entry.
-- Phones: fixed to the bottom edge (safe-area aware), body gets `has-station-bar` padding. Computers (≥961px): smaller floating bar, centered.
+- Phones: fixed to the bottom edge (safe-area aware), body gets `has-station-bar` padding.
+- Computers (≥961px), owner: "bottom bar for mobile and B for desktop": the bar is hidden and a ▾ button (`.hub-dd`, in the masthead h1 via `HUB_DD`) opens `#hub-menu`: color tile, full name, `tab.serves`, ✓ on the current one. Closes on Esc (focus back to ▾), outside click, resize; arrow keys move through it. Clicking ▾ doesn't trigger the name's reload.
 - Not drawn inside split.html's frames (window.top check). Hidden when printing.
 - Mockups A (strip), B (tap-name sheet), D (arrows) were the alternatives if the owner revisits.
