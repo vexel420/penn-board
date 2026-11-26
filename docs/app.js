@@ -622,6 +622,27 @@ function morningArrived(key, here, line, dir, svc, nowS) {
   if (seen == null && times.length) morningWatch.set(key, Math.min(...times));
   return false;
 }
+// A line whose late-night pattern is only fewer trains (the 3 uptown at Penn:
+// no express/local switch, no overnight gap) also says when daytime service
+// has started (owner, Nov 26: "the banner is missing the 3"): from the first
+// daytime trip listed until it arrives, within 20 min of when the timetable's
+// late-night pattern ends (subway-data.json "night" .to).
+function windowMorning(stn, line, dir, svc, here, nowS) {
+  const today = nyNow();
+  if (today.mins >= 12 * 60 || switchState(stn.id, line, dir) || nightGapState(stn.id, line, dir)) return false;
+  const w = (((subwayData && subwayData.night && subwayData.night[stn.id]) || {})[line] || {})[dir];
+  const T = w && w[subSched(today)];
+  if (!T || T.to == null || today.mins > T.to + 20 || today.mins < T.to - 90) return false;
+  const key = `${today.date}|${stn.id}|${line}|${dir}|win`;
+  if (morningReached.has(key)) return false;
+  const day = here.filter((g) => g.route === line && g.dir === dir && (g.svc || 'local') === svc)
+    .flatMap((g) => g.trains).filter((t) => t.time >= nowS - 30 && !lateNightTrain(stn.id, line, dir, t.time, t.code));
+  if (!day.length) return false;
+  const first = Math.min(...day.map((t) => t.time));
+  if (first - nowS < 30 || (morningWatch.has(key) && nowS > morningWatch.get(key) + 30)) { morningReached.add(key); return false; }
+  if (!morningWatch.has(key)) morningWatch.set(key, first);
+  return true;
+}
 function firstMorningGone(here, line, dir, svc, untilMins, nowS) {
   if (untilMins == null) return false;
   const due = minsToEpoch(untilMins);
@@ -964,6 +985,16 @@ const clockText = (t) => { const c = clock(t); return `${c.hm} ${c.ap}`; };
 const inText = (t, nowS) => { const m = Math.max(0, Math.round((t - nowS) / 60)); return m < 1 ? 'now' : `in ${m} min`; };
 // Two or more late-night banners in one section become one box, each still
 // counting down on its own line.
+// Several lines starting daytime service in one section: one banner ("on the 2 and 3").
+function mergeDayBanners(html) {
+  const re = /<p class="svc-line">(<svg[^]*?<\/svg>)<span><b>Daytime service has started on the (.*?)\.<\/b><\/span><\/p>/g;
+  const items = [...html.matchAll(re)];
+  if (items.length < 2) return html;
+  const names = [...new Set(items.map((m) => m[2]))];
+  const list = names.length > 2 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names.join(' and ');
+  let done = false;
+  return html.replace(re, () => (done ? '' : ((done = true), `<p class="svc-line">${items[0][1]}<span><b>Daytime service has started on the ${list}.</b></span></p>`)));
+}
 function mergeNightBanners(html) {
   const re = new RegExp(`<p class="svc-line night">${ICON.moon.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}<span>(.*?)</span></p>`, 'g');
   const items = [...html.matchAll(re)].map((m) => m[1]);
@@ -1515,6 +1546,7 @@ function renderSubway() {
         g = nightGapState(stn.id, line, dir);
       }
       if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${lineName(line)}.</b></span></p>`;
+      if (!g && windowMorning(stn, line, dir, svc, here, nowS)) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${lineName(line)}.</b></span></p>`;
       // "The last C train leaves at 10:34 PM, in 25 min." / "The last downtown 3 train..."
       // The last train running late: keep counting down until it has left.
       const lateLast = g && g.phase === 'night' && g.svc === svc
@@ -1571,7 +1603,7 @@ function renderSubway() {
       }).join('');
     }
     notes += gaps;
-    notes = mergeNightBanners(notes);
+    notes = mergeDayBanners(mergeNightBanners(notes));
     // Express trains skipping local stops, with no local trains of that line listed.
     if (svc === 'local') for (const line of stn.lines) {
       if (!here.some((g) => g.route === line && g.dir === dir && g.svc === 'local')) notes += switchNoteHtml(line, dir);
