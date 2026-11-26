@@ -961,12 +961,19 @@ const subHolidayTrip = (t) => !!(t && t.code && t.code >= '144000' && !subwayHol
 // pill instead. Weather: while the MTA's severe-weather service notice is up.
 const WX_PILL = `<span class="late-pill wx-pill">${'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M11 2h2v4.2l3-1.7 1 1.7-4 2.3v2.3l2-1.2V7.3h2V11l2 1.1-1 1.8-2-1.2-2 1.2v2.3l4 2.3-1 1.7-3-1.7V22h-2v-4.2l-3 1.7-1-1.7 4-2.3v-2.3l-2 1.2V17H7v-3.7l-2-1.1 1-1.8 2 1.2 2-1.2V7.9L6 5.6l1-1.7 3 1.7z" fill="currentColor"/></svg>'}Severe weather schedule</span>`;
 const holidayOn = (epoch) => subwayHoliday(nyDayAt(epoch).date) || (holidayNotice() && subwayHoliday(nyNow().date));
+// Weekend service, the same way as a holiday (owner, Nov 26): Saturday and
+// Sunday daytime trains, when the day isn't a holiday.
+const WKND_PILL = `<span class="late-pill wknd-pill">${ICON.cal}Weekend schedule</span>`;
 function specialPills(epoch, late) {
-  if (late) return '';
-  const html = (holidayOn(epoch) ? HOLIDAY_PILL : '') + (weatherNotice() ? WX_PILL : '');
-  // (Wrapped: shown only while the hub is changing over to or from late
-  // nights; see renderSubway.)
-  return html ? `<span class="sp-pills">${html}</span>` : '';
+  // Severe weather: on every train, late-night ones too, all the time it's in
+  // effect, to call out last-minute changes (owner, Nov 26).
+  const wx = weatherNotice() ? WX_PILL : '';
+  if (late) return wx;
+  const day = nyDayAt(epoch).day;
+  const sched = holidayOn(epoch) ? HOLIDAY_PILL : (day === 'saturday' || day === 'sunday') ? WKND_PILL : '';
+  // (The holiday/weekend pill is wrapped: shown only while the hub is changing
+  // over to or from late nights; see renderSubway.)
+  return (sched ? `<span class="sp-pills">${sched}</span>` : '') + wx;
 }
 const SUB_LATE_PILL = `<a class="late-pill" href="${MTA_NIGHT_MAP}" target="_blank" rel="noopener" title="MTA late-night subway map (opens in a new tab)">${ICON.moon}Late night<span class="ext" aria-hidden="true">↗&#xFE0E;</span><span class="sr">, MTA late-night map, opens in a new tab</span></a>`;
 // Trouble on a line (delays, skipped stops, reroutes): a pill on its rows.
@@ -1641,7 +1648,7 @@ function renderSubway() {
   // starting or ending at this hub (some train or line still on late nights);
   // once it's all daytime service, only the tag by the Subway heading says so,
   // until the next change-over tonight (owner, Nov 26).
-  const changing = !!$('subway').querySelector('.late-pill:not(.hol-pill):not(.wx-pill):not(.warn-pill)')
+  const changing = !!$('subway').querySelector('.late-pill:not(.hol-pill):not(.wx-pill):not(.wknd-pill):not(.warn-pill)')
     || states.some((st) => st.phase === 'night' || st.phase === 'morning');
   $('subway').classList.toggle('no-sp', !changing);
 }
@@ -1663,12 +1670,14 @@ function renderSubwayTags(states) {
   // has started … show both pills until late nite has concluded").
   const started = !states.length || states.some((st) => st.phase !== 'night');
   const holiday = (holidayNotice() || subwayHoliday(nyNow().date)) && started;
-  if (allNight || (holiday && someNight)) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
+  // Weekend service works the same way (owner, Nov 26: "this same logic … on
+  // other transitions like weekend service"): its tag once daytime service has
+  // started, both tags while some lines are still on late nights.
   const day = nyNow().day;
-  // Late night or weekend, not both (owner: keep the two patterns distinct).
-  const night = tags.length > 0;
+  const weekend = !holiday && (day === 'saturday' || day === 'sunday') && !subwayHoliday(nyNow().date) && started;
+  if (allNight || ((holiday || weekend) && someNight)) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
   if (holiday) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
-  else if (!night && (day === 'saturday' || day === 'sunday') && !subwayHoliday(nyNow().date)) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
+  else if (weekend) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
   if (weatherNotice()) tags.push(`<span class="tag wx">${ICON.snow}Severe weather service</span>`);
   $('sub-h').innerHTML = `Subway${tags.join('')}<span>${esc(HUB.subwayName || HUB.name)}</span>`;
 }

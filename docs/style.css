@@ -866,6 +866,7 @@ body.hub-tsq { --gold: #fccc0a; }
 #hub-buses .late-pill { white-space: nowrap; }
 .late-pill.hol-pill { background: #332a17; color: var(--gold); }
 .late-pill.wx-pill { background: #3a1f1a; color: var(--late); }
+.late-pill.wknd-pill { background: #2a2333; color: #e3c6f0; }
 
 /* ---------- stations: the bar at the bottom (owner, Nov 26: "bottom bar for now") ---------- */
 .station-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; display: grid; grid-template-columns: repeat(var(--n), 1fr);
