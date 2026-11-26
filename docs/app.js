@@ -12,7 +12,14 @@ let view = 'departures';
 let carrier = 'all';
 const seenTracks = new Map(); // row id -> track last shown, to animate a newly posted track
 const openRows = new Set();
-try { carrier = localStorage.getItem('carrier') || 'all'; } catch {}
+// Each board keeps its own filter, and only one of its own chips (owner, Nov 26:
+// a Port Authority bus filter, shared with Penn, made Penn's rail list show
+// Port Authority's "NJ Transit buses" and nothing else).
+try {
+  localStorage.removeItem('carrier');
+  carrier = localStorage.getItem(`carrier:${(window.HUB && HUB.id) || 'nyp'}`) || 'all';
+  if (carrier !== 'all' && !document.querySelector(`.chips button[data-carrier="${carrier}"]`)) carrier = 'all';
+} catch {}
 
 const nyTime = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' });
 const nySecs = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', second: '2-digit' });
@@ -4365,7 +4372,7 @@ function setHeading() {
 document.querySelector('.chips').addEventListener('click', (e) => {
   const b = e.target.closest('button'); if (!b) return;
   carrier = b.dataset.carrier;
-  try { localStorage.setItem('carrier', carrier); } catch {}
+  try { localStorage.setItem(`carrier:${HUB.id}`, carrier); } catch {}
   setPressed('.chips', 'carrier', carrier); renderRail(); $('njt-alt').innerHTML = railAltHtml();
 });
 $('rows').addEventListener('toggle', (e) => {
