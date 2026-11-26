@@ -1592,7 +1592,8 @@ function renderSubway() {
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
-    return parts ? `<div class="dir"><h3>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
+    // (Each direction also carries its station's bullets, shown when the directions stand as their own columns.)
+    return parts ? `<div class="dir"><h3><span class="dir-lines">${stn.lines.map((l) => bulletHtml(l, 'small')).join('')}</span>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
   }).join('');
   // Each platform named by its line where the hub says (Times Square: they're far apart).
   const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('') + (stn.platform ? `<span class="plat-name">${esc(stn.platform)}</span>` : '');
@@ -1606,13 +1607,23 @@ function renderSubway() {
   // the tunnel note took a whole row; the station has signs for the A C E).
   const where = HUB.layout === 'subway' && stn.heading
     ? `<p class="plat-where">At ${esc(stn.heading)}, through the tunnel${stn.noteLink ? ` · <a href="${esc(stn.noteLink.href)}">${esc(stn.noteLink.label)} →</a>` : ''}</p>` : '';
-  const sec = `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${where}${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
-  return { head, sec, tail: stn.heading ? '' : note };
+  // (--dirs: how many directions this card holds; side by side in it when the subway is the full-screen board.)
+  const sec = `<section class="stn" style="--dirs:${Math.max(1, (dirs.match(/<div class="dir">/g) || []).length)}" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${where}${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
+  return { head, sec, tail: stn.heading ? '' : note, id: stn.id };
   }).reduce((html, x, i, all) => {
-    // Subway hubs: every platform a card, flowing in columns so a short card
-    // (the shuttle) leaves no gap and the next one moves up under it.
     if (HUB.layout !== 'subway') return html + x.head + x.sec + x.tail;
-    return html + (i === 0 ? '<div class="plats">' : '') + x.sec + (i === all.length - 1 ? '</div>' : '');
+    // Subway hubs: every platform a card. With fixed columns (hub.js platCols)
+    // each card keeps its column, so a refresh never moves one; phones show
+    // them in station order (CSS order).
+    if (i < all.length - 1) return html;
+    const card = (y) => y.sec.replace('<section class="stn" style="', `<section class="stn" style="order:${all.indexOf(y)};`);
+    if (HUB.platCols) {
+      const placed = new Set(HUB.platCols.flat());
+      const cols = HUB.platCols.map((ids) => `<div class="pcol">${ids.map((id) => all.find((y) => y.id === id)).filter(Boolean).map(card).join('')}</div>`);
+      const rest = all.filter((y) => !placed.has(y.id)).map(card).join('');
+      return `<div class="plats fixed-cols" style="--pcols:${HUB.platCols.length}">${cols.join('')}${rest}</div>`;
+    }
+    return `<div class="plats">${all.map(card).join('')}</div>`;
   }, '');
   $('sub-toggles').innerHTML = subwayStyleHtml();
   renderSubwayTags(states);
@@ -3918,13 +3929,19 @@ function applyDeskLayout() {
   // The bus map and lists size themselves to their box.
   setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
 }
-// How many side-panel-width columns of subway fit (each 18rem, 1rem apart).
+// Subway as the full-screen board: each station one card, its directions side
+// by side in it (owner, Nov 26: don't split a line across columns), then PATH;
+// a fixed order, so a refresh never moves anything (owner: Penn "moving around
+// and flashing when it refreshes"). --sub-cols is the number of 18rem tracks
+// (a card takes one per direction); with the trains showing, as many as fit.
 function fitSubCols() {
   const box = document.querySelector('aside.subway');
-  if (!box || !document.body.classList.contains('side-main')) return;
+  const b = document.body;
+  if (!box || !b.classList.contains('side-main') || b.classList.contains('merge-side')) return;
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const room = box.clientWidth - 2.2 * rem;
-  document.body.style.setProperty('--sub-cols', Math.max(1, Math.floor((room + rem) / (19 * rem))));
+  const n = [...box.querySelectorAll('#subway > .stn')].reduce((t, x) => t + (parseInt(x.style.getPropertyValue('--dirs'), 10) || 1), 0) + (box.querySelector('.path-part') ? 1 : 0);
+  const fit = Math.max(1, Math.floor((box.clientWidth - 2.2 * rem + rem) / (19 * rem)));
+  b.style.setProperty('--sub-cols', b.classList.contains('panel-off') ? Math.max(1, n) : Math.min(fit, Math.max(1, n)));
 }
 addEventListener('resize', fitSubCols);
 // Full screen (trains hidden): every line on the screen without scrolling
@@ -3934,18 +3951,41 @@ addEventListener('resize', fitSubCols);
 // Port Authority: the subway part only (the bus list beside it can scroll).
 function fitSubZoom() {
   const b = document.body, merge = b.classList.contains('merge-side');
+  // A subway hub (Times Square): the subway is always the main board on a
+  // computer, so it always fits its platforms on the screen (owner, Nov 26: in
+  // the 2-board view the 7 sat below the screen), in its fixed columns, down to 80%.
+  if (HUB.layout === 'subway') {
+    const plats = document.querySelector('.main-sub .plats');
+    if (!plats) return;
+    if (!WIDE.matches || b.classList.contains('side-main')) { plats.style.zoom = ''; plats.dataset.sized = ''; return; }
+    // (Sized once per window size and layout; a data refresh changes nothing
+    // unless the platforms stop fitting, then one step smaller. No flashing.)
+    const key = `${innerWidth}x${innerHeight}|${b.className}`;
+    const fits = () => Math.max(...[...plats.querySelectorAll('.stn')].map((x) => x.getBoundingClientRect().bottom), 0) + window.scrollY <= innerHeight - 12;
+    let z = parseFloat(plats.style.zoom) || 1;
+    if (plats.dataset.sized !== key) { plats.dataset.sized = key; z = 1; plats.style.zoom = '1'; }
+    while (!fits() && z > 0.81) { z -= 0.05; plats.style.zoom = z.toFixed(2); }
+    return;
+  }
   const el = document.querySelector('aside.subway .sub-part'), box = document.querySelector('aside.subway');
   if (!el || !box) return;
-  if (!(WIDE.matches && b.classList.contains('side-main') && b.classList.contains('panel-off'))) { if (el.style.zoom) { el.style.zoom = ''; fitSubCols(); } return; }
+  if (!(WIDE.matches && b.classList.contains('side-main') && b.classList.contains('panel-off'))) { if (el.style.zoom) el.style.zoom = ''; fitSubCols(); return; }
+  fitSubCols();
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const room = box.clientWidth - 2.2 * rem;
-  for (let z = 1; z > 0.74; z -= 0.05) {
+  const lines = () => Math.max(...[...el.querySelectorAll('#subway > .stn, #path')].map((x) => x.getBoundingClientRect().bottom), 0) + window.scrollY;
+  const fits = () => lines() <= innerHeight - 12;
+  // A data refresh: keep the size unless the lines no longer fit (then step down).
+  // A new layout or window size: the largest size that fits, from the top.
+  let z = parseFloat(el.style.zoom) || 1;
+  if (!el.dataset.sized || el.dataset.sized !== `${innerWidth}x${innerHeight}|${b.className}`) {
+    el.dataset.sized = `${innerWidth}x${innerHeight}|${b.className}`;
+    // Start no larger than lets every column fit across.
+    const n = parseInt(getComputedStyle(b).getPropertyValue('--sub-cols'), 10) || 1;
+    z = merge ? 1 : Math.min(1, (box.clientWidth - 2.2 * rem + rem) / (n * 19 * rem));
+    z = Math.max(merge ? 0.75 : 0.6, Math.floor(z * 20) / 20);
     el.style.zoom = z.toFixed(2);
-    if (!merge) b.style.setProperty('--sub-cols', Math.max(1, Math.floor((room / z + rem) / (19 * rem))));
-    // (Down to the last line; the display choices under them may run below the screen.)
-    const last = Math.max(...[...el.querySelectorAll('#subway .stn, #path')].map((x) => x.getBoundingClientRect().bottom), 0);
-    if (last + window.scrollY <= innerHeight - 12) return;
   }
+  while (!fits() && z > (merge ? 0.76 : 0.61)) { z -= 0.05; el.style.zoom = z.toFixed(2); }
 }
 addEventListener('resize', () => fitSubZoom());
 function setDesk(k, v) {

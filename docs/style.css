@@ -969,14 +969,18 @@ button.ene-note.ev-min b { color: var(--late); }
      the S leave room; each direction stays whole. */
   /* Columns stay the side panel's width (owner: "not stretched wide"): as many
      as fit (--sub-cols, set by app.js from the room there is), and no wider. */
-  /* The whole subway part flows in the columns, PATH included (Penn); the heading,
-     notices and display choices span them all. */
-  body.side-main:not(.merge-side) aside.subway .sub-part { columns: var(--sub-cols, 3); column-gap: 1rem; width: calc(var(--sub-cols, 3) * 18rem + (var(--sub-cols, 3) - 1) * 1rem); }
-  body.side-main:not(.merge-side):not(.panel-off) aside.subway .sub-part { max-width: 100%; }
-  body.side-main:not(.merge-side) aside.subway .sub-part > #sub-h, body.side-main:not(.merge-side) aside.subway .sub-part > #subway-notices,
-  body.side-main:not(.merge-side) aside.subway .sub-part > #elevators, body.side-main:not(.merge-side) aside.subway .sub-part > #sub-toggles { column-span: all; }
-  body.side-main:not(.merge-side) aside.subway .sub-part > .path-h { margin-top: 0; break-after: avoid; }
-  body.side-main:not(.merge-side) aside.subway .sub-part > .walk, body.side-main:not(.merge-side) aside.subway #path { break-inside: avoid; }
+  /* The subway part as a grid: the heading, notices and display choices across
+     the top/bottom; then one column per direction (each carrying its station's
+     bullets), and PATH (Penn), in a fixed order. */
+  body.side-main:not(.merge-side):not([data-side="buses"]) aside.subway .sub-part { display: grid; grid-template-columns: repeat(var(--sub-cols, 3), minmax(0, 18rem)); column-gap: 1rem; align-items: start; justify-content: start; }
+  body.side-main:not(.merge-side) aside.subway .sub-part > :not(#subway):not(.path-part) { grid-column: 1 / -1; }
+  body.side-main:not(.merge-side) aside.subway #subway { display: contents; }
+  /* A station: one card, as many tracks wide as it has directions, directions side by side. */
+  body.side-main:not(.merge-side) aside.subway #subway > .stn { grid-column: span var(--dirs, 1); display: grid; grid-template-columns: repeat(var(--dirs, 1), minmax(0, 1fr)); column-gap: 1rem; align-items: start; margin: 0 0 1rem; }
+  body.side-main:not(.merge-side) aside.subway #subway > .stn > :not(.dir) { grid-column: 1 / -1; }
+  body.side-main:not(.merge-side) aside.subway #subway > :not(.stn) { grid-column: 1 / -1; }
+  body.side-main:not(.merge-side) aside.subway .path-part > .path-h { margin-top: 0; padding-top: 0; border-top: 0; }
+  .dir-lines { display: none; }
   body.side-main:not(.merge-side) aside.subway #subway > .stn { margin: 0 0 1rem; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   body.side-main:not(.merge-side) aside.subway #subway .dir, body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-inside: avoid; }
   body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-after: avoid; }
@@ -1021,3 +1025,14 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 /* A platform in another station of the complex (the A C E at Times Square): one line under its bullets. */
 .plat-where { margin: -.2rem 0 .5rem; font-size: .85rem; color: var(--dim); }
 .plat-where a { color: var(--gold); font-weight: 700; white-space: nowrap; }
+
+/* Subway hubs with fixed platform columns (Times Square): one column per list in
+   hub.js platCols on computers; on phones, and when buses are the main board,
+   one column in station order. */
+.plats.fixed-cols { display: flex; flex-direction: column; columns: auto; }
+.plats.fixed-cols .pcol { display: contents; }
+.plats.fixed-cols .stn { margin: 0 0 1rem; }
+@media (min-width: 961px) {
+  body.layout-subway:not(.side-main) .plats.fixed-cols { display: grid; grid-template-columns: repeat(var(--pcols, 3), minmax(0, 1fr)); column-gap: 1rem; align-items: start; }
+  body.layout-subway:not(.side-main) .plats.fixed-cols .pcol { display: block; }
+}

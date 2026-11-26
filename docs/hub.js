@@ -82,6 +82,8 @@
     },
     tsq: {
       tab: { code: 'TSQ', serves: 'Subway, A C E across the tunnel', label: 'Times Sq–42 St', bg: '#fbfaf6', ink: '#111111', stripe: '#fccc0a' }, // the station bar (phones) and the station menu (computers), owner Nov 26
+      // Computers: the platform cards in three fixed columns (owner, Nov 26: three columns; the 7 near the top).
+      platCols: [['127', '902'], ['725', 'R16'], ['A27']],
       id: 'tsq', page: 'tsq.html', name: 'Times Square–42 St', short: 'Times Sq–42 St', kicker: 'New York', title: 'Times Square–42 St', subwayTab: 'subway',
       pill: { href: 'pabt.html', label: 'Port Authority' },
       ll: [40.7557, -73.9871],
