@@ -29,24 +29,28 @@ function countdown(epoch) {
 }
 
 // (The flip board engine is in flip.js, shared with the Grand Central board.)
-// Masthead and clock. The pill switches to the Grand Central board (owner, Nov 25).
-// With more than two hubs (owner, Nov 26) the pill opens a menu of the others.
-const OTHER_HUBS = Object.values(window.HUBS || {}).filter((h) => h.id !== HUB.id && h.page);
-const HUB_PILL = OTHER_HUBS.length > 1
-  ? `<span class="hub-switch"><button type="button" class="hub-pill" data-hubmenu aria-expanded="false">⇄ Stations</button><span class="hub-menu" hidden>${OTHER_HUBS.map((h) => `<a href="${h.page}">${esc(h.name)}</a>`).join('')}</span></span>`
-  : `<a class="hub-pill" href="${HUB.pill.href}" title="Switch to ${HUB.pill.label}">⇄ ${HUB.pill.label}</a>`;
-document.addEventListener('click', (e) => {
-  const b = e.target.closest('[data-hubmenu]');
-  document.querySelectorAll('.hub-menu').forEach((m) => { if (!b || !m.parentElement.contains(b)) { m.hidden = true; const x = m.parentElement.querySelector('[data-hubmenu]'); if (x) x.setAttribute('aria-expanded', 'false'); } });
-  if (b) { e.preventDefault(); const m = b.parentElement.querySelector('.hub-menu'); m.hidden = !m.hidden; b.setAttribute('aria-expanded', String(!m.hidden)); }
-});
+// Masthead and clock.
+// Stations: a bar at the bottom of the screen, every hub one tap away (owner,
+// Nov 26: "bottom bar for now"), in place of the pill in the masthead. Not
+// inside the side-by-side page's frames.
+(function stationBar() {
+  const hubs = Object.values(window.HUBS || {}).filter((h) => h.page && h.tab);
+  if (hubs.length < 2 || window.self !== window.top) return;
+  const bar = document.createElement('nav');
+  bar.className = 'station-bar';
+  bar.setAttribute('aria-label', 'Stations');
+  bar.style.setProperty('--n', hubs.length);
+  bar.innerHTML = hubs.map((h) => `<a href="${h.page}"${h.id === HUB.id ? ' class="on" aria-current="page"' : ''}><i style="background:${h.tab.bg};color:${h.tab.ink}${h.tab.stripe ? `;box-shadow:inset 0 -4px 0 ${h.tab.stripe}` : ''}">${esc(h.tab.code)}</i><span>${esc(h.tab.label)}</span></a>`).join('');
+  document.body.appendChild(bar);
+  document.body.classList.add('has-station-bar');
+})();
 function renderMastFlip() {
   const h = document.querySelector('.mast h1');
   if (flipMode) {
-    h.innerHTML = `<span class="mast-kicker">${HUB.kicker} ${HUB_PILL}</span><span class="mast-flip">${flipText('mast', HUB.name)}</span><span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">${HUB.kicker}</span><span class="mast-flip">${flipText('mast', HUB.name)}</span><span class="h1-sub" id="h1-sub"></span>`;
     runFlips(h);
   } else {
-    h.innerHTML = `<span class="mast-kicker">${HUB.kicker} ${HUB_PILL}</span>${HUB.name}<span class="h1-sub" id="h1-sub"></span>`;
+    h.innerHTML = `<span class="mast-kicker">${HUB.kicker}</span>${HUB.name}<span class="h1-sub" id="h1-sub"></span>`;
     flipShown.delete('mast');
   }
   setHeading();

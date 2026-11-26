@@ -6,6 +6,7 @@
 (function () {
   const HUBS = {
     nyp: {
+      tab: { code: 'NYP', label: 'Penn', bg: '#7d2f26', ink: '#e6b751' }, // the station bar at the bottom (owner, Nov 26)
       id: 'nyp', page: 'index.html', name: 'Penn Station', short: 'Penn', kicker: 'New York', title: 'Penn Station', subwayTab: 'subway and PATH',
       pill: { href: 'gct.html', label: 'Grand Central' },
       ll: [40.7506, -73.9935],
@@ -31,6 +32,7 @@
       ],
     },
     gct: {
+      tab: { code: 'GCT', label: 'Grand Central', bg: '#1d5c66', ink: '#f3d88f' }, // the station bar at the bottom (owner, Nov 26)
       id: 'gct', page: 'gct.html', name: 'Grand Central', short: 'Grand Central', kicker: 'New York', title: 'Grand Central', subwayTab: 'subway',
       pill: { href: 'index.html', label: 'Penn Station' },
       ll: [40.7527, -73.9772],
@@ -54,6 +56,7 @@
       ],
     },
     pabt: {
+      tab: { code: 'PABT', label: 'Port Authority', bg: '#1d3f86', ink: '#ffd24a' }, // the station bar at the bottom (owner, Nov 26)
       id: 'pabt', page: 'pabt.html', name: 'Port Authority Bus Terminal', short: 'Port Authority', kicker: 'New York', title: 'Port Authority Bus Terminal', subwayTab: 'subway',
       pill: { href: 'tsq.html', label: 'Times Square' },
       ll: [40.7572, -73.9903],
@@ -76,6 +79,7 @@
       ],
     },
     tsq: {
+      tab: { code: 'TSQ', label: 'Times Sq', bg: '#fbfaf6', ink: '#111111', stripe: '#fccc0a' }, // the station bar at the bottom (owner, Nov 26)
       id: 'tsq', page: 'tsq.html', name: 'Times Square', short: 'Times Sq', kicker: 'New York', title: 'Times Square', subwayTab: 'subway',
       pill: { href: 'pabt.html', label: 'Port Authority' },
       ll: [40.7557, -73.9871],
