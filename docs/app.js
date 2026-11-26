@@ -4071,21 +4071,12 @@ function fitSubZoom() {
   // A subway hub (Times Square): the subway is always the main board on a
   // computer, so it always fits its platforms on the screen (owner, Nov 26: in
   // the 2-board view the 7 sat below the screen), in its fixed columns, down to 80%.
+  // A subway hub (Times Square): no shrink-to-fit at all. Re-applying a size
+  // on every refresh made Safari on the iPad scroll the page around (owner,
+  // Nov 26: only Times Square did it). The board scrolls instead.
   if (HUB.layout === 'subway') {
-    // (The grid is rebuilt on every refresh: the size found for this window and
-    // layout is kept here and put straight back on the new grid, so it isn't
-    // re-measured from 100% each time. The size stays on the grid itself; on
-    // #subway, Safari scrolled the page to the top when it was refilled.)
     const plats = document.querySelector('.main-sub .plats');
-    if (!plats) return;
-    if (!WIDE.matches || b.classList.contains('side-main')) { plats.style.zoom = ''; tsqFit.key = ''; return; }
-    const key = `${innerWidth}|${b.className}`;
-    const fits = () => Math.max(...[...plats.querySelectorAll('.stn')].map((x) => x.getBoundingClientRect().bottom), 0) + window.scrollY <= innerHeight - 12;
-    if (tsqFit.key !== key) { tsqFit.key = key; tsqFit.z = 1; }
-    let z = tsqFit.z;
-    plats.style.zoom = z.toFixed(2);
-    while (!fits() && z > 0.81) { z -= 0.05; plats.style.zoom = z.toFixed(2); }
-    tsqFit.z = z;
+    if (plats && plats.style.zoom) plats.style.zoom = '';
     return;
   }
   const el = document.querySelector('aside.subway .sub-part'), box = document.querySelector('aside.subway');
