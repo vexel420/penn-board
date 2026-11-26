@@ -270,7 +270,7 @@ function trainTimeRows(json, railroad, here) {
       time: expected,
       sched: a.time,
       lateMin,
-      fare: mnr ? '' : a.peak_code === 'P' ? 'peak' : a.peak_code === 'O' ? 'offpeak' : '', // LIRR peak or off-peak fare
+      fare: a.peak_code === 'P' ? 'peak' : a.peak_code === 'O' ? 'offpeak' : '', // LIRR and Metro-North peak or off-peak fare
       place: name(leaving ? stops[stops.length - 1] : stops[0]),
       line: mnr ? `${mline[0]} Line` : a.branch ? `${LIRR_BRANCHES[a.branch] || a.branch} Branch` : 'LIRR', // (LIRR sometimes sends no branch)
       // Metro-North's plate is its line, in the line's color; the chips filter by line (New Haven with its branches).

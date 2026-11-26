@@ -789,3 +789,9 @@ a.bus-pl:hover, a.bus-pl:focus-visible { outline: 2px solid var(--gold); outline
 
 .bus-dot { transform: translate(-50%, -50%); display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #0b5fa5; color: #fff; font: 800 13px Archivo, sans-serif; box-shadow: 0 0 0 2px #fff, 0 2px 6px rgba(0,0,0,.4); cursor: pointer; }
 .hub-star { transform: translate(-50%, -50%); display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #fff; color: #b8892d; font-size: 18px; box-shadow: 0 0 0 2px #b8892d, 0 2px 6px rgba(0,0,0,.4); }
+
+/* Airport: sort by fastest or cheapest. */
+.air-sort { display: flex; align-items: center; gap: .4rem; margin: .6rem 0 0; font-size: .9rem; }
+.air-sort span { color: var(--dim); margin-right: .2rem; }
+.air-sort button { font: inherit; font-weight: 700; padding: .3rem .8rem; border-radius: 99px; border: 1px solid var(--line, #2c4034); background: none; color: var(--ivory); cursor: pointer; }
+.air-sort button[aria-pressed="true"] { background: var(--ivory); color: #121815; border-color: var(--ivory); }

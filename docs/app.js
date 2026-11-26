@@ -4159,6 +4159,14 @@ function loadAmtrakEwr() {
 const WALK_33ST_MIN = 18; // Grand Central (42 St & Park Av) to the 33 St PATH station (6 Av & 32 St)
 const FULTON_TO_WTC_PATH_MIN = 6; // through the Fulton Center and the Oculus
 const PATH_WTC_NEWARK_MIN = 22;
+// The M60-SBS eastbound at E 125 St/Lexington Av (MTA stop 405421), and its
+// usual ride from there to LaGuardia by hour of the day (MTA Manhattan bus
+// timetable, Nov 2026: about 21 min overnight, 33 min at 4 PM to Terminal C).
+const M60_125 = '405421';
+const M60_RIDE = {
+  C: [22, 22, 22, 21, 21, 24, 25, 27, 27, 27, 27, 27, 27, 27, 29, 29, 33, 31, 28, 28, 26, 26, 25, 23],
+  B: [24, 24, 24, 23, 23, 26, 27, 30, 30, 30, 30, 30, 30, 30, 32, 32, 36, 34, 31, 31, 29, 28, 27, 25],
+};
 function gctAirportLoad() { loadLirrTT(); loadNjtPenn(); loadPathFeed(); loadAmtrakEwr(); loadNjtStop(NEWARK_PENN_62_STOP); }
 function gctAirportOptions(code, nowS) {
   const o = [];
@@ -4197,6 +4205,37 @@ function gctAirportOptions(code, nowS) {
       const bus = arr + (AIR_MIN.change + AIR_MIN.q70Wait) * 60;
       o.push({ at: bus + AIR_MIN.q70FromWoodside * 60, fare: lirrFare(l),
         legs: [[l.leaves ?? l.time, lirrLeg(l, 'Woodside')], [bus, `${airPl('Q70 LaGuardia Link', 'p-sbs')} (free), about every 10 min`]] });
+    }
+    // To 125 St, then the M60-SBS from E 125 St/Lexington Av (owner, Nov 26:
+    // "Metro-North to Harlem-125th St to the M60" can beat the rest at some hours).
+    // The bus is live from MTA Bus Time; its ride is the timetable's for that hour.
+    const m60 = (ready) => {
+      loadMtaBusStop(M60_125);
+      const lb = mtaBusLive.get(M60_125);
+      const next = lb && lb.buses ? lb.buses.filter((b) => /^M60/i.test(String(b.line)) && b.at && Date.parse(b.at) / 1000 >= ready).sort((a, b) => Date.parse(a.at) - Date.parse(b.at))[0] : null;
+      const at = next ? Date.parse(next.at) / 1000 : ready + 5 * 60;
+      const b = lgaTerminal === 'B';
+      const ride = (b ? M60_RIDE.B : M60_RIDE.C)[Math.floor(nyDayAt(at).mins / 60) % 24];
+      return { at, arrive: at + ride * 60, term: b ? 'Terminal B' : 'Terminal C',
+        leg: [at, `${airPl('M60-SBS', 'p-mtabus')} from E 125 St/Lexington Av to LaGuardia ${b ? 'Terminal B' : 'Terminal C'}${next ? ' · <span class="sb-live">live</span>' : ', about every 10 min'}`] };
+    };
+    const mn = railTo(['mnr'], 'Harlem-125 St', nowS)[0];
+    if (mn) {
+      const dep = mn.leaves ?? mn.time;
+      const bus = m60(dep + (AIR_MIN.mnrHarlem + AIR_MIN.walkHarlemLex) * 60);
+      const f = railFare(HUB.mnrCode, '0HL'), pk = mn.fare === 'peak';
+      const rail = railCost(f, pk) ?? (pk ? FARES.cityPeak : FARES.cityOff);
+      o.push({ at: bus.arrive, fare: rail + FARES.subway, term: bus.term, live: true,
+        fareText: `${money(rail)} Metro-North${f && f.city ? ' CityTicket' : ''}${pk ? ' (peak)' : ''}, plus ${money(FARES.subway)} for the bus (no free transfer)`,
+        legs: [[dep, `<span class="plate ${esc(mn.plateClass || 'mnr')}">${esc(mn.plate || 'Metro-North')}</span> train ${esc(mn.train)} to Harlem-125 St${mn.track ? `, track ${esc(mn.track)}` : ''}`],
+          [dep + AIR_MIN.mnrHarlem * 60, 'Walk east on 125 St to Lexington Av, about 3 min'], bus.leg] });
+    }
+    const lex = ['4', '5'].map((r) => { const t = subwayFromTo(r, '631', '621', nowS); return t && { ...t, route: r }; }).filter(Boolean).sort((x, y) => x.time - y.time)[0];
+    if (lex) {
+      const bus = m60(lex.time + (AIR_MIN.lexTo125 + 2) * 60);
+      o.push({ at: bus.arrive, fare: FARES.subway, term: bus.term, live: true,
+        fareText: `${money(FARES.subway)} one way (subway, free transfer to the bus)`,
+        legs: [[lex.time, `${lineName(lex.route)} to 125 St`], bus.leg] });
     }
     // The 7 to 74 St-Broadway, then the Q70 LaGuardia Link (free).
     const seven = subwayFromTo('7', '723', '710', nowS);

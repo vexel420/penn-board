@@ -19,6 +19,31 @@
 // (NJ Transit Northern Intrastate fare chart). Update here when fares change.
 // Newark Airport Express $23.50 one way (newarkairport.com, Nov 2026).
 const FARES = { subway: 3.00, cityOff: 5.25, cityPeak: 7.25, airtrainJfk: 8.75, njtEwr: 17.25, njtNewarkEwr: 12.30, path: 3.00, njtBus1: 1.90, ewrExpress: 23.50 };
+// LIRR and Metro-North fares: the railroads' own, from the MTA's TrainTime
+// (the same source as the board's trains), one-way adult, CityTicket where it
+// applies (within the city). Cached for the visit. null while loading.
+const railFares = new Map(); // "from|to" -> { peak, off, city } | 'loading' | null
+function railFare(from, to) {
+  if (!from || !to) return null;
+  const k = `${from}|${to}`;
+  const c = railFares.get(k);
+  if (c !== undefined) return c === 'loading' ? null : c;
+  railFares.set(k, 'loading');
+  fetch(`https://backend-unified.mylirr.org/fares?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&time=${Math.floor(Date.now() / 1000)}`, { headers: { 'accept-version': '3.0' } })
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+      const f = ((d && d.fares) || []).filter((x) => x.ticket_type === 'ONE_WAY' && x.rider_category !== 'REDUCED');
+      const pick = (re) => f.find((x) => re.test(x.ticket_name));
+      const peak = pick(/^CityTicket Peak$/i) || pick(/^Peak$/i), off = pick(/^CityTicket Off-Peak$/i) || pick(/^Off-Peak$/i);
+      railFares.set(k, peak || off ? { peak: (peak || off).cost / 100, off: (off || peak).cost / 100, city: /City/i.test((peak || off).ticket_name) } : null);
+      if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport();
+    });
+  return null;
+}
+// Outbound peak (leaving the city 4-8 PM on weekdays), when a train's own flag isn't known.
+const peakOut = (t) => { const d = nyDayAt(t); return d.day === 'weekday' && d.mins >= 16 * 60 && d.mins < 20 * 60; };
+const railCost = (f, peak) => (f ? (peak ? f.peak : f.off) : null);
+const railFareText = (f, peak, rr, to) => (f ? `${money(railCost(f, peak))} ${rr}${f.city ? ' CityTicket' : ''}${peak ? ' (peak)' : ''}` : `${rr} fare to ${to}`);
+
 // Usual minutes for the parts that aren't live (connections, rail rides).
 const AIR_MIN = {
   lirrJamaica: 20, lirrWoodside: 11, njtEwr: 24, amtrakEwr: 18,
@@ -29,6 +54,9 @@ const AIR_MIN = {
   // Transit train (one stop) or the 62 bus from Newark Penn.
   walkToPath: 5, pathJsq: 17, pathJsqViaHob: 26, pathNewark: 11, pathNewarkWait: 5, pathNewarkWaitNight: 15,
   njtNewarkWait: 8, njtNewarkWaitNight: 20, njtNewarkEwr: 6, bus62Wait: 8, bus62Ride: 20,
+  // Grand Central to Harlem-125 St by Metro-North (timetable: 10-11 min), the
+  // walk from its Park Av station to the M60 at Lexington Av, and the 4/5 to 125 St.
+  mnrHarlem: 11, walkHarlemLex: 3, lexTo125: 9,
 };
 const AIRPORTS = [['JFK', 'Queens'], ['LGA', 'LaGuardia'], ['EWR', 'Newark'], ['ISP', 'Islip'], ['SWF', 'Stewart']];
 let airportPick = 'JFK';
@@ -224,6 +252,7 @@ function ispBusAfter(station, t) {
   const x = list.find(([dep]) => midnight + dep * 60 >= t);
   return x ? { leave: midnight + x[0] * 60, arrive: midnight + x[1] * 60 } : null;
 }
+const ISP_CODES = { Ronkonkoma: 'RON', 'Central Islip': 'CI', Patchogue: 'PGE' }; // TrainTime's station codes
 function ispOptions(nowS) {
   loadIspBus();
   const out = [];
@@ -232,7 +261,8 @@ function ispOptions(nowS) {
   if (l) {
     const dep = l.leaves ?? l.time;
     const arr = lirrArrivalAt(l, 'Ronkonkoma') || dep + 80 * 60;
-    out.push({ at: arr + 8 * 60, fare: null, fareText: 'LIRR fare to Ronkonkoma, plus the taxi', live: true,
+    const f = railFare(HUB.lirrCode, 'RON'), pk = l.fare ? l.fare === 'peak' : peakOut(dep);
+    out.push({ at: arr + 8 * 60, fare: null, fareText: `${railFareText(f, pk, 'LIRR', 'Ronkonkoma')}, plus the taxi`, live: true,
       legs: [[dep, `${airPl('LIRR', 'p-lirr')} to Ronkonkoma${HUB_AIR.lirrFrom || ''}${l.track ? `, track ${esc(l.track)}` : ''}`], [arr + 3 * 60, 'Taxi or ride-hail to the terminal, about 5 min']] });
   }
   // LIRR to Central Islip or Patchogue, then Suffolk County Transit's route 6 to the terminal.
@@ -243,7 +273,9 @@ function ispOptions(nowS) {
     const arr = lirrArrivalAt(t, station);
     const bus = arr && ispBusAfter(station, arr + 3 * 60);
     if (!bus || bus.leave - arr > 50 * 60) continue; // no bus soon enough after the train
-    out.push({ at: bus.arrive, fare: null, fareText: `LIRR fare to ${station}, plus ${money(ispBus.fare || 2.25)} for the bus`, live: true,
+    const f = railFare(HUB.lirrCode, ISP_CODES[station]), pk = t.fare ? t.fare === 'peak' : peakOut(dep);
+    const busFare = ispBus.fare || 2.25;
+    out.push({ at: bus.arrive, fare: f ? railCost(f, pk) + busFare : null, fareText: `${railFareText(f, pk, 'LIRR', station)}, plus ${money(busFare)} for the bus`, live: true,
       legs: [[dep, `${airPl('LIRR', 'p-lirr')} to ${station}${HUB_AIR.lirrFrom || ''}${t.track ? `, track ${esc(t.track)}` : ''}`], [bus.leave, `${airPl('Suffolk 6', 'p-partner')} bus from ${station} station to the terminal (scheduled)`]] });
   }
   // Nothing on the live board (late at night, or the board's list is short):
@@ -273,13 +305,15 @@ function ispScheduled(nowS) {
     const ride = [[p.leave, `${airPl('LIRR', 'p-lirr')} train ${esc(p.first.train)} to ${esc(p.change ? ttStopName('lirr', p.change.at) : station)}${HUB_AIR.lirrFrom || ''}${onTime && r.track ? `, track ${esc(r.track)}` : ''}`]];
     if (p.change) ride.push([p.change.time, `Change at ${esc(ttStopName('lirr', p.change.at))} for train ${esc(p.change.second.train)} to ${esc(station)}`]);
     const only = nyDayAt(p.leave).date !== today ? 'Tomorrow' : '';
+    const f = railFare(HUB.lirrCode, ISP_CODES[station]), pk = onTime && r.fare ? r.fare === 'peak' : peakOut(p.leave);
     if (station === 'Ronkonkoma') {
-      out.push({ at: p.arrive + 8 * 60, fare: null, fareText: 'LIRR fare to Ronkonkoma, plus the taxi', live: !!onTime, tag: 'Scheduled', only,
+      out.push({ at: p.arrive + 8 * 60, fare: null, fareText: `${railFareText(f, pk, 'LIRR', 'Ronkonkoma')}, plus the taxi`, live: !!onTime, tag: 'Scheduled', only,
         legs: [...ride, [p.arrive + 3 * 60, 'Taxi or ride-hail to the terminal, about 5 min']] });
     } else {
       const bus = ispBusAfter(station, p.arrive + 3 * 60);
       if (!bus || bus.leave - p.arrive > 50 * 60) continue;
-      out.push({ at: bus.arrive, fare: null, fareText: `LIRR fare to ${station}, plus ${money((ispBus && ispBus.fare) || 2.25)} for the bus`, live: !!onTime, tag: 'Scheduled', only,
+      const busFare = (ispBus && ispBus.fare) || 2.25;
+      out.push({ at: bus.arrive, fare: f ? railCost(f, pk) + busFare : null, fareText: `${railFareText(f, pk, 'LIRR', station)}, plus ${money(busFare)} for the bus`, live: !!onTime, tag: 'Scheduled', only,
         legs: [...ride, [bus.leave, `${airPl('Suffolk 6', 'p-partner')} bus from ${station} station to the terminal (scheduled)`]] });
     }
   }
@@ -352,8 +386,10 @@ function swfOptions(nowS) {
       const sh = swfShuttleAfter(0, tr.arr + 3 * 60, nowS);
       if (!sh || sh.leave - tr.arr > MAX_WAIT) continue;
       const subAt = tr.dep - ((HUB_AIR.toGct || 0) + 2) * 60; // leave for Grand Central by
-      out.push({ at: sh.arrive, fare: null, live: tr.live, tag: 'Scheduled',
-        fareText: HUB_AIR.toGct ? `Metro-North fare to Beacon, plus ${money(FARES.subway)} for the subway; the shuttle is free in 2026` : 'Metro-North fare to Beacon; the shuttle is free in 2026',
+      const f = railFare('0NY', '0BC'), lv = live.get(String(tr.num)), pk = lv && lv.peak_code ? lv.peak_code === 'P' : peakOut(tr.dep);
+      const sub = HUB_AIR.toGct ? FARES.subway : 0;
+      out.push({ at: sh.arrive, fare: f ? railCost(f, pk) + sub : null, live: tr.live, tag: 'Scheduled',
+        fareText: `${railFareText(f, pk, 'Metro-North', 'Beacon')}${sub ? `, plus ${money(sub)} for the subway` : ''}; the shuttle is free in 2026`,
         note: 'The shuttle stops at the terminal only on some runs; these times are for those. Check Leprechaun Lines’ schedule before you travel, especially on holidays.',
         legs: [...(HUB_AIR.toGct ? [[subAt, HUB_AIR.toGctText()]] : []),
           [tr.dep, `${airPl('Metro-North', 'p-mnr')} Hudson Line to Beacon, train ${esc(tr.num)}${tr.track ? `, track ${esc(tr.track)}` : ''}${tr.live ? ` · <span class="sb-live">live</span>${tr.late >= 2 ? ` <span class="bus-late">${tr.late} min late</span>` : ''}` : ' (scheduled)'}`],
@@ -392,19 +428,31 @@ function airportOptions(code, nowS) {
   o.push(...airportBusOptions(code, nowS));
   return o;
 }
+// Sort by fastest (earliest arrival) or cheapest (owner, Nov 26); remembered.
+let airportSort = 'fast';
+try { airportSort = localStorage.getItem('airportSort') === 'cheap' ? 'cheap' : 'fast'; } catch {}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-airsort]');
+  if (!b) return;
+  airportSort = b.dataset.airsort;
+  try { localStorage.setItem('airportSort', airportSort); } catch {}
+  renderAirport();
+});
 function renderAirport() {
   const nowS = Date.now() / 1000;
   const opts = airportOptions(airportPick, nowS).sort((a, b) => a.at - b.at);
-  const fastest = opts[0];
+  // Cheapest first: by fare (unknown fares last), then by arrival.
+  if (airportSort === 'cheap') opts.sort((a, b) => (a.fare ?? Infinity) - (b.fare ?? Infinity) || a.at - b.at);
+  const fastest = opts.reduce((a, b) => (!a || b.at < a.at ? b : a), null);
   const priced = opts.filter((x) => x.fare != null);
   const cheapest = priced.length ? priced.reduce((a, b) => (b.fare < a.fare || (b.fare === a.fare && b.at < a.at) ? b : a)) : null;
-  $('chg-top').innerHTML = `<div class="sheet-air five">${AIRPORTS.map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}`;
+  $('chg-top').innerHTML = `<div class="sheet-air five">${AIRPORTS.map(([c, s]) => `<button type="button" data-airport="${c}" aria-pressed="${c === airportPick}">${c}<small>${s}</small></button>`).join('')}</div>${airportPick === 'LGA' ? lgaPickerHtml() : ''}<div class="air-sort" role="group" aria-label="Sort"><span>Sort by</span><button type="button" data-airsort="fast" aria-pressed="${airportSort === 'fast'}">Fastest</button><button type="button" data-airsort="cheap" aria-pressed="${airportSort === 'cheap'}">Cheapest</button></div>`;
   const lgaT = airportPick === 'LGA' && lgaTerminal !== 'any' ? `Terminal ${lgaTerminal}` : '';
   $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}${x.live === false ? `<span class="tagx tag-sched">${x.tag || 'Estimated'}</span>` : '<span class="tagx tag-live">Live</span>'}${x.only ? `<span class="am-tag">${esc(x.only)}</span>` : ''}</span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
     <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at ${lgaT || x.term || 'the airport'} (estimated)</span></li></ul>
     <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
     : `<p class="cm-live">${airportPick === 'SWF' ? 'No connection to Stewart in the next day: the shuttle to the terminal runs only at certain times.' : (airportPick === 'ISP' && (typeof lirrTT === 'undefined' || lirrTT === undefined) ? 'Looking up the next trains in the LIRR timetable…' : `No trains to there are listed from ${HUB_AIR.from} right now.`)}</p>`)
-    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; Newark Airport Express and Coach USA times are Coach USA’s schedule; Metro-North is live from TrainTime; the Stewart shuttle is Leprechaun Lines’ schedule; the Islip bus is Suffolk County Transit’s. Check before you travel.</p>';
+    + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA (LIRR and Metro-North from TrainTime), the Port Authority, PATH and NJ Transit; Newark Airport Express and Coach USA times are Coach USA’s schedule; Metro-North is live from TrainTime; the Stewart shuttle is Leprechaun Lines’ schedule; the Islip bus is Suffolk County Transit’s. Check before you travel.</p>';
 }
 function openAirport() {
   changeOpen = { id: 'airport', view: 1 };
