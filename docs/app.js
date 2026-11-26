@@ -1689,8 +1689,7 @@ function renderSubway() {
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
-    // (Each direction also carries its station's bullets, shown when the directions stand as their own columns.)
-    return parts ? `<div class="dir" data-k="${stn.id}|${dir}"><h3><span class="dir-lines">${stn.lines.map((l) => bulletHtml(l, 'small')).join('')}</span>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
+    return parts ? `<div class="dir" data-k="${stn.id}|${dir}"><h3>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
   }).join('');
   // Each platform named by its line where the hub says (Times Square: they're far apart).
   const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('') + (stn.platform ? `<span class="plat-name">${esc(stn.platform)}</span>` : '');

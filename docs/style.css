@@ -987,7 +987,6 @@ button.ene-note.ev-min b { color: var(--late); }
   body.side-main:not(.merge-side) aside.subway #subway > .stn { margin: 0 0 1rem; }
   body.side-main:not(.merge-side) aside.subway #subway > :not(.stn) { grid-column: 1 / -1; }
   body.side-main:not(.merge-side) aside.subway .path-part > .path-h { margin-top: 0; padding-top: 0; border-top: 0; }
-  .dir-lines { display: none; }
   body.side-main:not(.merge-side) aside.subway #subway > .stn { margin: 0 0 1rem; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   body.side-main:not(.merge-side) aside.subway #subway .dir, body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-inside: avoid; }
   body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-after: avoid; }
