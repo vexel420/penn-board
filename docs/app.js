@@ -4051,6 +4051,8 @@ mastTitle.tabIndex = 0;
 mastTitle.title = 'Reload the board';
 mastTitle.addEventListener('click', (e) => { if (!e.target.closest('.hub-dd')) location.reload(); });
 mastTitle.addEventListener('keydown', (e) => { if (e.target.closest('.hub-dd')) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); location.reload(); } });
+// The side-by-side page opens with this board on the left, and its Back link returns here.
+document.querySelectorAll('.split-btn').forEach((a) => { a.href = `split.html?from=${HUB.id}`; });
 // Inside the side-by-side view (split.html) the page knows it's framed.
 if (window.self !== window.top) document.body.classList.add('in-split');
 document.querySelector('.style-seg').addEventListener('click', (e) => {

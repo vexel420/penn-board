@@ -943,3 +943,12 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Not drawn inside split.html's frames (window.top check). Hidden when printing.
 - Mockups A (strip), B (tap-name sheet), D (arrows) were the alternatives if the owner revisits.
 - Times Square board is named "Times Square–42 St" everywhere (owner, Nov 26). MTA data has no in-station link from Times Sq to 42 St–Bryant Park (only Bryant Park ↔ 5 Av on the 7).
+
+## Side by side: any board, and 4 at once (Nov 26)
+- Owner: "build it and also make sure the two desktop Split View can be swapped to any board".
+- split.html now loads hub.js and builds its frames from every hub with a `page` (a new hub shows up by itself).
+- "2 boards": Left/Right pickers (picking the board already on the other side swaps them), ⇄ swap, Desktop/Phone size. "4 boards": the first four hubs, each at phone width (390 px) scaled to its column, as tall as the screen allows. Choices are kept in localStorage (splitCount, splitPair, splitSize).
+- Frames already open are kept when switching layouts (only frames that move reload).
+- Each board's "Side by side" button links to split.html?from=<hub>: that board starts on the left, and the toolbar's back link returns to it.
+- Toolbar fits from 1100 px (title and Left/Right words hide under 1350 px).
+- Port Authority rows: wider company column (long names like "Newark Airport Express" wrap inside it instead of running into the destination).

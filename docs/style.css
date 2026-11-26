@@ -898,3 +898,10 @@ body.has-station-bar { padding-bottom: calc(4.6rem + env(safe-area-inset-bottom)
 .hub-menu small { display: block; font-size: .82rem; color: #5d635a; margin-top: .1rem; }
 .hub-menu em { font-style: normal; font-weight: 900; color: #1d7a3e; font-size: 1.1rem; }
 @media print { .station-bar { display: none; } }
+
+/* Port Authority: long company names ("Newark Airport Express") wrap inside their column instead of running into the destination. */
+@media (min-width: 641px) {
+  .hub-pabt .cols, .hub-pabt .row { grid-template-columns: 6.25rem 7.25rem minmax(0, 1fr) 9.5rem 4.75rem; }
+  html.split-big .hub-pabt .cols, html.split-big .hub-pabt .row { grid-template-columns: 5.4rem 6.4rem minmax(0, 1fr) 6.5rem 3.9rem; }
+  .hub-pabt .row .plate { white-space: normal; max-width: 100%; line-height: 1.15; }
+}
