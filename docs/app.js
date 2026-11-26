@@ -466,7 +466,7 @@ function loadSubwayData() {
       subwayDataLoading = null;
       if (!d) { setTimeout(loadSubwayData, 20000); return; }
       for (const r of Object.values(d.routes)) r.normalSet = new Set(r.normal);
-      subwayData = d; renderSubway(); renderServiceNotices();
+      subwayData = d; renderSubway(); renderServiceNotices(); if (typeof renderEvents === "function") renderEvents();
     });
 }
 const lineInfo = (route) => (subwayData && subwayData.routes[route]) || { label: route, color: '#6b7a70', text: '#ffffff' };
@@ -3410,7 +3410,29 @@ function kmToRoute(ll, route) {
   }
   return best;
 }
+// The daily check of every agency's notices before an event (service-check.json,
+// scripts/check-service.py): when it last ran, and the notices about the event.
+let serviceCheck = null;
+const AGENCY_FOR = { 'MTA subway': 'subway', 'MTA bus': 'bus', LIRR: 'lirr', 'Metro-North': 'mnr', 'NJ Transit': 'njt', PATH: 'path' };
+function checkHtml(e, nowS) {
+  const c = serviceCheck;
+  if (!c || !c.events || !c.events[e.id]) return '';
+  const lineName = (r) => r.replace(/\+$/, '-SBS');
+  // Only what concerns this hub: its bus routes, its subway lines, its railroads.
+  const mine = c.events[e.id].filter((a) => {
+    const k = AGENCY_FOR[a.agency];
+    if (k === 'bus') return (a.routes || []).some((r) => HUB_BUS_LINES.includes(lineName(r)));
+    if (k === 'subway') return (a.routes || []).some((r) => HUB_SUB_LINES.includes(r));
+    if (k === 'path') return !!HUB.path;
+    return !k || HUB.rails.includes(k);
+  });
+  const ok = Object.entries(c.sources || {}).filter(([, v]) => v.ok).map(([n]) => n.replace(/ \(.*\)$/, ''));
+  const names = [...new Set(ok)];
+  const list = mine.length ? `<ul class="ev-list">${mine.map((a) => `<li><b>${esc(a.agency)}:</b> ${noticeText(a.head)}</li>`).join('')}</ul>` : '';
+  return `<span class="ev-sub">${list}<span class="ev-checked">Checked every morning with ${esc(names.join(', '))}; last ${esc(dayTime(c.checked, nowS))}.</span></span>`;
+}
 function loadCityEvents() {
+  fetch('service-check.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => { serviceCheck = d; renderEvents(); });
   fetch('city-events.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
     cityEvents = ((d && d.events) || []).map((e) => {
       const near = e.route && e.route.length > 1 ? kmToRoute(HUB.ll, e.route) : Infinity;
@@ -3439,7 +3461,7 @@ function cityEventsHtml(nowS) {
     const more = `<span class="ev-sub"><button type="button" class="al-map" data-cityevent="${esc(e.id)}">Route map</button>${e.source ? ` <a class="alt-map" href="${esc(e.source.url)}" target="_blank" rel="noopener">${esc(e.source.label)}&nbsp;↗&#xFE0E;</a>` : ''}</span>`;
     // One short line, the rest folded (it sits above the trains on a phone).
     const which = [e.buses.length ? 'buses' : '', e.lines.length ? 'subway' : ''].filter(Boolean).join(', ');
-    return `<div class="ev-note city">${EVENT_ICON}<div><p><b>${esc(e.title)}</b>, ${when}. ${here}</p><details class="ev-more" data-k="ev-${esc(e.id)}"><summary>Details${which ? `, ${which}` : ''} and route map</summary><p>${e.note ? `${esc(e.note)} ` : ''}${e.routeText ? `Route: ${esc(e.routeText)}. ` : ''}${esc(e.closures || '')}${buses}${lines}${more}</p></details></div></div>`;
+    return `<div class="ev-note city">${EVENT_ICON}<div><p><b>${esc(e.title)}</b>, ${when}. ${here}</p><details class="ev-more" data-k="ev-${esc(e.id)}"><summary>Details${which ? `, ${which}` : ''} and route map</summary><p>${e.note ? `${esc(e.note)} ` : ''}${e.routeText ? `Route: ${esc(e.routeText)}. ` : ''}${esc(e.closures || '')}${buses}${lines}${checkHtml(e, nowS)}${more}</p></details></div></div>`;
   }).join('');
 }
 async function openCityEvent(id) {

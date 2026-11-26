@@ -1,0 +1,44 @@
+# Daily check of every transit agency's notices before a big event in
+# docs/city-events.json (owner, Nov 26: the postponed Macy's parade). Adds
+# routes and lines the MTA ties to the event, writes docs/service-check.json,
+# and, while an event is coming up, also refreshes the timetables (the
+# rebuild-data workflow) so holiday schedule changes are picked up daily.
+# With no event coming up it does nothing.
+name: Service check before events
+
+on:
+  schedule:
+    - cron: '7 10 * * *'   # daily 10:07 UTC (about 5:07 AM in New York)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [docs/city-events.json]
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check every agency's notices
+        id: check
+        run: python3 scripts/check-service.py
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/service-check.json docs/city-events.json
+          if git diff --cached --quiet; then echo "No changes"; exit 0; fi
+          git commit -m "Service check before events"
+          git pull --rebase origin main && git push
+      - name: Refresh the timetables too
+        if: steps.check.outputs.watching == 'true' && github.event_name != 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run rebuild-data.yml --ref main

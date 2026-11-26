@@ -675,6 +675,9 @@ body { padding-bottom: env(safe-area-inset-bottom); }
 .ev-note > div { flex: 1; min-width: 0; }
 .ev-more summary { cursor: pointer; margin-top: .3rem; color: var(--gold); font-size: .92rem; font-weight: 700; }
 .ev-more p { margin-top: .4rem; font-size: .95rem; }
+.ev-list { margin: .2rem 0 .3rem; padding-left: 1.1rem; font-size: .9rem; }
+.ev-list li { margin: .2rem 0; }
+.ev-checked { display: block; color: var(--dim); font-size: .82rem; }
 .bus-al-all { margin: 0 0 .6rem; }
 .bus-al-all > summary { cursor: pointer; padding: .45rem .7rem; border: 1px solid rgba(230, 183, 81, .55); border-radius: 8px; background: rgba(230, 183, 81, .07); font-weight: 700; font-size: .92rem; }
 .bus-al-all[open] > summary { margin-bottom: .5rem; }
