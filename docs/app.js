@@ -1477,14 +1477,17 @@ let rowMaxKey = '', rowMaxAt = 0;
 function holdHeights(root) {
   if (!root) return;
   const key = `${innerWidth}|${document.body.className}|${subwayStyle}|${flipMode}`; // (not the height: Safari's toolbar changes it all the time)
-  if (key !== rowMaxKey || Date.now() - rowMaxAt > 15 * 60000) { rowMax.clear(); rowMaxKey = key; rowMaxAt = Date.now(); }
-  const els = [...root.querySelectorAll('[data-k]')];
+  if (key !== rowMaxKey || Date.now() - rowMaxAt > 15 * 60000) { rowMax.clear(); rowMaxKey = key; rowMaxAt = Date.now(); document.querySelectorAll('#subway, #path').forEach((x) => { x.style.minHeight = ''; }); }
+  // (The whole section too, under its own key, so a refresh can't make the page short.)
+  if (!root.dataset.k) root.dataset.k = `root|${root.id}`;
+  const els = [root, ...root.querySelectorAll('[data-k]')];
   for (const el of els) { const m = rowMax.get(el.dataset.k); if (m) el.style.minHeight = `${m}px`; }
   for (const el of els) {
     const h = el.offsetHeight, m = rowMax.get(el.dataset.k) || 0;
     if (h > m) { rowMax.set(el.dataset.k, h); el.style.minHeight = `${h}px`; }
   }
 }
+let subwayEmptySince = 0;
 function renderSubway() {
   if (!board) return;
   const busy = SLIDE_MS - (performance.now() - slideStarted);
@@ -1496,11 +1499,18 @@ function renderSubway() {
   loadSubwayTimes();
   loadSubwayGuide();
   if (!board.subway.length) {
+    // One refresh with no subway trains (a feed hiccup) keeps the trains on the
+    // screen; only after 2 minutes with none does the message replace them.
+    // Emptying the board for a moment made the page short, and Safari sent
+    // the reader to the top (owner, Nov 26: "every 20 seconds it force goes to the top").
+    subwayEmptySince = subwayEmptySince || Date.now();
+    if ($('subway').querySelector('.stn') && Date.now() - subwayEmptySince < 120000) return;
     $('subway').innerHTML = `<p class="empty">${board.sources.subway.error ? 'Subway times didn’t load. Trying again shortly.' : 'No subway trains reported right now.'}</p>`;
     // The heading's tags still say which service is running.
     renderSubwayTags(HUB.stations.flatMap((stn) => stn.lines.flatMap((line) => ['N', 'S'].map((dir) => switchState(stn.id, line, dir)))).filter(Boolean));
     return;
   }
+  subwayEmptySince = 0;
   const nowS = Date.now() / 1000;
   subwayShown = [];
   subwayTurning = false;
@@ -4437,17 +4447,19 @@ renderSubway = ((f) => function () { const out = f.apply(this, arguments); fitSu
   if (tab && saved.view !== view && getComputedStyle(tab).display !== 'none') tab.click();
   if (saved.side && saved.side !== side && typeof setSide === 'function') setSide(saved.side);
   if (!(saved.y > 0)) return;
-  let stop = false, reached = 0;
+  // Put the reader back once, as soon as the page is tall enough, then let go:
+  // never pull against them (owner, Nov 26: on the iPad it kept "trying to go
+  // back up" while they scrolled). Any scroll of theirs before that cancels it.
+  let stop = false, ours = false;
   const quit = () => { stop = true; };
-  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach((t) => addEventListener(t, quit, { once: true, passive: true }));
+  ['wheel', 'touchstart', 'touchmove', 'pointerdown', 'keydown', 'mousedown'].forEach((t) => addEventListener(t, quit, { once: true, passive: true, capture: true }));
+  addEventListener('scroll', () => { if (!ours) stop = true; }, { passive: true });
   const started = Date.now();
   (function again() {
-    if (stop || Date.now() - started > 15000) return;
+    if (stop || Date.now() - started > 8000) return;
     if (document.documentElement.scrollHeight >= saved.y + innerHeight - 4) {
-      if (Math.abs(scrollY - saved.y) > 4) scrollTo(0, saved.y);
-      reached = reached || Date.now();
-      // Keep it there while the rest of the board fills in above it.
-      if (Date.now() - reached > 5000) return;
+      ours = true; scrollTo(0, saved.y); setTimeout(() => { ours = false; }, 50);
+      return; // once
     }
     setTimeout(again, 150);
   })();
