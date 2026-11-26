@@ -1601,15 +1601,18 @@ function renderSubway() {
   // "42 St–Port Authority Bus Terminal"), and how to get there: the tunnel.
   const note = stn.note ? `<p class="walk">${esc(stn.note)}${stn.noteLink ? ` <a href="${esc(stn.noteLink.href)}">${esc(stn.noteLink.label)} →</a>` : ''}</p>` : '';
   const head = stn.heading ? `<h2 class="path-h stn-head">${esc(stn.heading)}${stn.sub ? ` <span>${esc(stn.sub)}</span>` : ''}</h2>${note}` : '';
-  const sec = `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
+  // Subway hubs: a platform in another station of the complex says so in one
+  // short line under its bullets, linking that station's board (owner, Nov 26:
+  // the tunnel note took a whole row; the station has signs for the A C E).
+  const where = HUB.layout === 'subway' && stn.heading
+    ? `<p class="plat-where">At ${esc(stn.heading)}, through the tunnel${stn.noteLink ? ` · <a href="${esc(stn.noteLink.href)}">${esc(stn.noteLink.label)} →</a>` : ''}</p>` : '';
+  const sec = `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${where}${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
   return { head, sec, tail: stn.heading ? '' : note };
   }).reduce((html, x, i, all) => {
-    // Subway hubs: the hub's own platforms side by side as cards; another
-    // station of the complex after them under its own heading.
+    // Subway hubs: every platform a card, flowing in columns so a short card
+    // (the shuttle) leaves no gap and the next one moves up under it.
     if (HUB.layout !== 'subway') return html + x.head + x.sec + x.tail;
-    const open = !x.head && (i === 0 || all[i - 1].head);
-    const close = !x.head && (i === all.length - 1 || all[i + 1].head);
-    return html + (x.head ? `<div class="sep-station">${x.head}<div class="plats">${x.sec}</div></div>` : `${open ? '<div class="plats">' : ''}${x.sec}${close ? '</div>' : ''}`) + x.tail;
+    return html + (i === 0 ? '<div class="plats">' : '') + x.sec + (i === all.length - 1 ? '</div>' : '');
   }, '');
   $('sub-toggles').innerHTML = subwayStyleHtml();
   renderSubwayTags(states);

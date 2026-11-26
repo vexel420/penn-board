@@ -827,7 +827,8 @@ body.layout-subway .rail .cols, body.layout-subway #rows, body.layout-subway .ch
 body.layout-subway .side-switch, body.layout-subway .sub-part { display: none !important; }
 
 @media (min-width: 961px) {
-  body.layout-subway .plats { grid-template-columns: 1fr 1fr; }
+  body.layout-subway .plats { display: block; columns: 2; column-gap: 1rem; }
+  body.layout-subway .plats > .stn { break-inside: avoid; margin: 0 0 1rem; }
   body.layout-subway .bus-part { display: block; }
 }
 /* Port Authority Bus Terminal: transit blue and signal yellow. */
@@ -1005,7 +1006,7 @@ button.ene-note.ev-min b { color: var(--late); }
 /* Inside the side-by-side page a board's scroll never carries over to the page around it. */
 body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 /* Times Square with buses as the main board: the subway's platforms stack in the narrow column. */
-@media (min-width: 961px) { body.side-main.layout-subway .rail .plats { grid-template-columns: 1fr; } }
+@media (min-width: 961px) { body.side-main.layout-subway .rail .plats { columns: 1; } }
 /* Subway as the main board: the Subway/Buses switch and the tools share one row (room for every line on screen). */
 @media (min-width: 961px) {
   body.side-main aside.subway { position: relative; }
@@ -1016,3 +1017,7 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 /* Side-by-side view (larger text): hiding a side must still free its column
    (the rule above for that view was keeping an empty 22rem column; owner's iPad, Nov 26). */
 @media (min-width: 961px) { html.split-big body.panel-off .layout { grid-template-columns: minmax(0, 1fr); } }
+
+/* A platform in another station of the complex (the A C E at Times Square): one line under its bullets. */
+.plat-where { margin: -.2rem 0 .5rem; font-size: .85rem; color: var(--dim); }
+.plat-where a { color: var(--gold); font-weight: 700; white-space: nowrap; }
