@@ -3509,7 +3509,16 @@ function eneWhen(x) {
 }
 const ENE_ICON = '<svg class="ic ene-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4" r="2" fill="currentColor"/><path d="M19 13v-2c-1.5 0-3-.6-4-1.6l-1.3-1.4c-.4-.4-1-.7-1.6-.7-1.1 0-2 .9-2 2v5.7c0 1.1.9 2 2 2h5v5h2v-5.5c0-1.1-.9-2-2-2h-3v-3.5c1.3 1.1 3 1.9 4.9 2zM12.1 19a3 3 0 0 1-5.8-1 3 3 0 0 1 2.3-2.9v-2.1A5 5 0 1 0 14.1 19z" fill="currentColor"/></svg>';
 // Alerts minimized to one line (event and elevator alerts), remembered on this device.
-const evMin = new Set((() => { try { return JSON.parse(localStorage.getItem('eventsMin') || '[]'); } catch { return []; } })());
+const readMin = () => { try { return JSON.parse(localStorage.getItem('eventsMin') || '[]'); } catch { return []; } };
+const evMin = new Set(readMin());
+// Every open board shares the list (side by side, other tabs): take the others'
+// changes as they happen, and never save over them with an old copy (owner,
+// Nov 26: "it says it's minimized but is still showing").
+addEventListener('storage', (e) => {
+  if (e.key !== 'eventsMin') return;
+  evMin.clear(); readMin().forEach((x) => evMin.add(x));
+  renderElevators(); renderEvents();
+});
 function elevatorsHtml() {
   return eneOut.map((x) => {
     const info = eneInfo[x.equipment] || {};
@@ -3657,7 +3666,9 @@ const cityEventsNow = (nowS) => cityEvents.filter((e) => nowS >= e.fromS && nowS
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-evmin]'); if (!b) return;
   const id = b.dataset.evmin;
-  evMin.has(id) ? evMin.delete(id) : evMin.add(id);
+  const open = evMin.has(id);
+  evMin.clear(); readMin().forEach((x) => evMin.add(x)); // the latest, from every board
+  open ? evMin.delete(id) : evMin.add(id);
   try { localStorage.setItem('eventsMin', JSON.stringify([...evMin])); } catch {}
   if (id.startsWith('ene-')) renderElevators(); else renderEvents();
   document.querySelector(`[data-evmin="${CSS.escape(id)}"]`)?.focus();

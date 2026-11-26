@@ -99,7 +99,7 @@
       dirs: { 127: { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, R16: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' }, 725: { N: 'Grand Central and Queens', S: '34 St-Hudson Yards' }, 902: { N: 'Grand Central', S: 'Grand Central' }, A27: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } },
       subwayFeeds: ['gtfs', 'gtfs-nqrw', 'gtfs-ace'], subwayAlerts: 'subway-lines?lines=1,2,3,7,N,Q,R,W,GS,S,A,C,E&stops=127,R16,725,902,A27',
       rails: [], path: false, buses: true,
-      elevatorStations: ['Times Sq-42 St'],
+      elevatorStations: ['Times Sq-42 St', '42St/Port Authority-Bus Terminal'], // (the A C E at the bus terminal is on this board too)
       eventVenues: /^$/,
       busStops: [
         { stop: '405549', ll: [40.756311, -73.987403], lines: ['M42'], label: '42 St crosstown, westbound', where: 'W 42 St at 7 Av' },

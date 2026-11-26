@@ -985,7 +985,8 @@ button.ene-note.ev-min b { color: var(--late); }
   body.merge-side.side-main aside.subway > .sub-part, body.merge-side.side-main aside.subway > .bus-part { display: block !important; }
   body.merge-side.side-main aside.subway .sub-part { font-size: 1.12em; }
   body.merge-side.side-main aside.subway .bus-part > .bus-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-  body.merge-side.side-main.panel-off aside.subway { grid-template-columns: 37rem minmax(0, 32rem); justify-content: start; }
+  /* (Both may shrink: inside the side-by-side view's larger text, fixed widths squeezed the buses to a sliver.) */
+  body.merge-side.side-main.panel-off aside.subway { grid-template-columns: minmax(0, 37rem) minmax(0, 32rem); justify-content: start; }
   body.merge-side.side-main.panel-off aside.subway #subway { columns: 2; column-gap: 1rem; }
   body.merge-side.side-main aside.subway #subway > .stn { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   body.merge-side.side-main aside.subway #subway .dir, body.merge-side.side-main aside.subway #subway .stn-lines { break-inside: avoid; }
