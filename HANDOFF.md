@@ -972,3 +972,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - `pathKey(d)`: on subwayHoliday() days PATH's weekend ('sunday') timetable is used for late measurement, on-time checks, the late-night pill/banner and the scheduled fallback. Approximate: Thanksgiving's direct Journal Square trains start 9:40 AM vs the weekend's 10:10 AM.
 - `pathLateBy` returns 0 when the train is within 2 min of a scheduled time (a train leaving 2 min before its slot was counted late from the slot before).
 - PATH's own overnight advisory ("Overnight trains may leave up to 10 minutes late") is real and daily, but it's in a Closed state in the feed, so the board doesn't show it.
+
+## Keep your place on reload (Nov 26)
+- Owner: boards "jumping back to the top on each refresh". The 30-second data refresh keeps position (tested 70 s on all 4 boards with scroll anchoring off, like iOS Safari). A reload (tapping the station name, or the browser's refresh) lost it: the board fills in after load, so the browser's restore found a short page.
+- `keepPlace()` in app.js: saves scroll, phone tab (`view`) and side panel to sessionStorage (`place:<hub>`) on pagehide/hidden; on a reload within 30 min it restores the tab/side, then scrolls back once the page is tall enough, holding the spot 5 s while content fills in above, and stops at the first wheel/touch/key/mouse input. A fresh visit still starts at the top, on Subway.

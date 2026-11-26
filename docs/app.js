@@ -4080,6 +4080,44 @@ function tick() {
 // Tick on the second, so the seconds never skip or stall.
 function everySecond() { setTimeout(() => { tick(); everySecond(); }, 1000 - (Date.now() % 1000) + 5); }
 setPressed('.chips', 'carrier', carrier);
+// A reload (tapping the station name, or the browser's refresh) comes back to
+// the same tab and the same place on the page (owner, Nov 26: "jumping back to
+// the top on each refresh"). The board fills in after the page loads, so the
+// browser's own scroll restore finds a short page and gives up; this waits
+// for the content, puts the reader back, and stops as soon as they scroll.
+(function keepPlace() {
+  const KEY = `place:${HUB.id}`;
+  try { history.scrollRestoration = 'manual'; } catch {}
+  const save = () => { try { sessionStorage.setItem(KEY, JSON.stringify({ y: Math.round(scrollY), view, side, t: Date.now() })); } catch {} };
+  addEventListener('pagehide', save);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') save(); });
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch {}
+  const nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
+  if (!saved || nav.type !== 'reload' || Date.now() - saved.t > 30 * 60000) return;
+  // (After the rest of this script has run: the tabs' code is set up further down.)
+  setTimeout(() => {
+  // The same tab (phones) and side panel (computers).
+  const tab = saved.view && document.querySelector(`.seg button[data-view="${saved.view}"]`);
+  if (tab && saved.view !== view && getComputedStyle(tab).display !== 'none') tab.click();
+  if (saved.side && saved.side !== side && typeof setSide === 'function') setSide(saved.side);
+  if (!(saved.y > 0)) return;
+  let stop = false, reached = 0;
+  const quit = () => { stop = true; };
+  ['wheel', 'touchstart', 'keydown', 'mousedown'].forEach((t) => addEventListener(t, quit, { once: true, passive: true }));
+  const started = Date.now();
+  (function again() {
+    if (stop || Date.now() - started > 15000) return;
+    if (document.documentElement.scrollHeight >= saved.y + innerHeight - 4) {
+      if (Math.abs(scrollY - saved.y) > 4) scrollTo(0, saved.y);
+      reached = reached || Date.now();
+      // Keep it there while the rest of the board fills in above it.
+      if (Date.now() - reached > 5000) return;
+    }
+    setTimeout(again, 150);
+  })();
+  }, 0);
+})();
 // Tapping "Penn Station" reloads the page (fresh data and the newest version).
 const mastTitle = document.querySelector('.mast h1');
 mastTitle.setAttribute('role', 'button');
