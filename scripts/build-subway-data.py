@@ -30,15 +30,13 @@ OUT = Path(__file__).resolve().parent.parent / 'docs' / 'subway-data.json'
 SHAPES_OUT = OUT.with_name('subway-shapes.json')
 SIMPLIFY = 0.00004  # degrees, about 4 m: drops points that don't change the drawn line
 
-# Penn's two subway stations, and the next stations that only local trains
-# call at (the same rule as serviceFromPenn in docs/feeds.js).
-PENN = {'128', 'A28'}
-# Grand Central-42 St's three stations (owner, Nov 25): their timetables too,
-# so the Grand Central board can tell on-time trains from late ones.
-GCT = {'631', '723', '901'}
-LOCAL_NEXT = {'129', '126', 'A30', 'A25', '630', '632'}  # Grand Central (Lexington Av): 51 St uptown, 33 St downtown
-# Lines checked for a break in service from Penn late at night.
-NIGHT_GAP_LINES = {'C', '3', '5'}  # the 5 doesn't run in Manhattan late at night (Grand Central)
+# Every hub's subway stations (docs/hub.js, via scripts/hubs.py): Penn, Grand
+# Central, and any hub added later get the same timetables and rules.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hubs import hub_stations  # noqa: E402
+HUB_STATIONS = set(hub_stations())
+# Every line is checked for a break in service late at night (the C, the 3
+# downtown from Penn, the 5 in Manhattan): a break longer than NIGHT_GAP_MIN.
 NIGHT_GAP_MIN = 90  # a longer break than this in a line's trains is its night off
 # Extra last stops that share the line's main row (owner's choice, Nov 2026):
 # the weekday rush-hour A to Rockaway Park. (Euclid Av A trips stay separate.)
@@ -92,6 +90,76 @@ def night_gap(trips_at_penn):
     # board says "Daytime service has started" from then until it reaches Penn.
     first = min((t for t in trips_at_penn if t[0] % 1440 == until), key=lambda t: t[1])
     return {'after': after, 'until': until, 'firstStart': first[1] % 1440}
+
+
+def service_rules(calls, trips, trip_line, day_of):
+    """Express or local, from the timetable alone, for any station (owner,
+    Nov 26: the subway rules must work for any hub).
+
+    localNext["<station>|<N or S>"]: the stations a train calls at within its
+    next three stops only if it runs local from there: some trains from the
+    station pass them by on the way to a stop the local reaches after them
+    (34 St-Penn Station on 7 Av downtown: 28 St, which the 2 and 3 skip on
+    the way to 14 St; Grand Central uptown: 51 St, which the 4 and 5 skip).
+    No entry: every train from there makes the same stops (the 7, the shuttle).
+
+    diamond["<line>"]: pairs "a|b" of stops the line's express variant (6X,
+    7X, FX in the timetable) runs between without stopping while its local
+    trains call in between. A live train going from a to b is a diamond train.
+    """
+    hubs = set(HUB_STATIONS)
+    seen = defaultdict(lambda: defaultdict(int))     # station|dir -> next-stop window -> trips
+    for tid, cs in calls.items():
+        if day_of.get(trips[tid]['service_id']) != 'weekday':
+            continue
+        names = [c[1] for c in cs]
+        for i, c in enumerate(cs):
+            if c[1] in hubs and i + 1 < len(cs):
+                seen[f'{c[1]}|{c[2]}'][tuple(names[i + 1:])] += 1
+    local_next = {}
+    for key, paths in seen.items():
+        found = set()
+        for p1, n1 in paths.items():
+            for x in p1[:3]:
+                after_x = set(p1[p1.index(x) + 1:])
+                # Trips (at least 3) that reach a stop beyond x within their next
+                # three stops without calling at x.
+                skipping = sum(n for p2, n in paths.items() if x not in p2 and any(y in after_x for y in p2[:3]))
+                if n1 >= 3 and skipping >= 3:
+                    found.add(x)
+        if found:
+            local_next[key] = sorted(found)
+    # Diamond pairs: consecutive stops of the express variant with local stops between.
+    # Judged against the line's usual daytime trips (the F runs local in
+    # Queens only overnight: its express run there is no diamond).
+    route_of = {tid: t['route_id'] for tid, t in trips.items()}
+    local_paths = defaultdict(list)  # line -> station sequences of its weekday daytime non-X trips
+    for tid, cs in calls.items():
+        r = route_of[tid]
+        if (len(r) == 1 or r == trip_line[tid]) and day_of.get(trips[tid]['service_id']) == 'weekday' and 6 * 60 <= minutes(cs[0][3]) < 21 * 60:
+            local_paths[trip_line[tid]].append([c[1] for c in cs])
+    diamond = defaultdict(set)
+    tried = set()
+    for tid, cs in calls.items():
+        r = route_of[tid]
+        if not (len(r) == 2 and r.endswith('X')):
+            continue
+        line = trip_line[tid]
+        names = [c[1] for c in cs]
+        for a, b in zip(names, names[1:]):
+            if (line, a, b) in tried:
+                continue
+            tried.add((line, a, b))
+            between = direct = 0
+            for lp in local_paths[line]:
+                if a in lp and b in lp and lp.index(b) > lp.index(a):
+                    if lp.index(b) - lp.index(a) > 1:
+                        between += 1
+                    else:
+                        direct += 1
+            if between > direct:
+                diamond[line].add(f'{a}|{b}')
+    return {'localNext': local_next, 'diamond': {k: sorted(v) for k, v in diamond.items() if v}}
 
 
 def simplify(p, eps):
@@ -228,6 +296,10 @@ def main(zip_path):
             normal[line].add(station)
             calls[st['trip_id']].append((int(st['stop_sequence']), station, st['stop_id'][-1], st['departure_time']))
 
+    for cs in calls.values():
+        cs.sort()
+    rules = service_rules(calls, trips, trip_line, day_of)
+    local_next = {k: set(v) for k, v in rules['localNext'].items()}
     # Late-night switches at Penn, per station, line, direction and day.
     at_penn = defaultdict(list)  # (station, line, dir, day) -> [(penn min, start min, express?)]
     ends = defaultdict(lambda: defaultdict(int))  # (line, dir) -> last stop -> trips from Penn
@@ -238,8 +310,9 @@ def main(zip_path):
         if not day:
             continue
         for i, c in enumerate(cs):
-            if c[1] in PENN | GCT and i + 2 < len(cs):
-                express = not any(n in LOCAL_NEXT for n in names[i + 1:i + 4])
+            if c[1] in HUB_STATIONS and i + 2 < len(cs):
+                ln = local_next.get(f'{c[1]}|{c[2]}', set())
+                express = bool(ln) and not any(n in ln for n in names[i + 1:i + 4])
                 # The trip's id in the MTA's live feed starts with its scheduled
                 # start in hundredths of a minute ("033750_1..N03R"); the
                 # timetable's trip id carries the same number.
@@ -248,13 +321,13 @@ def main(zip_path):
                 at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express, code.group(1) if code else ''))
     switches, gaps, nights = {}, {}, {}
     for (station, line, d, day), ts in at_penn.items():
-        w = night_window(ts) if not (line in NIGHT_GAP_LINES and night_gap(ts)) else None
+        w = night_window(ts) if not night_gap(ts) else None
         if w:
             nights.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = w
         sw = switch_times(ts)
         if sw:
             switches.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = sw
-        gap = night_gap(ts) if line in NIGHT_GAP_LINES else None
+        gap = night_gap(ts)
         if gap:
             # The section it's shown in: how the line usually runs from Penn.
             express = sum(t[2] for t in ts) * 2 > len(ts)
@@ -289,6 +362,18 @@ def main(zip_path):
     for (station, line, d, day), ts in at_penn.items():
         pairs = sorted({(t[3], t[0]) for t in ts if t[3]})
         times.setdefault(station, {}).setdefault(line, {}).setdefault(d, {})[day] = ','.join(f'{c}:{m}' for c, m in pairs)
+    # Each hub line's usual section (express or local), for when a live train
+    # has too few stops left to tell.
+    usual = defaultdict(lambda: [0, 0])
+    for (station, line, d, day), ts in at_penn.items():
+        if day == 'weekday':
+            u = usual[f'{station}|{line}|{d}']
+            u[0] += sum(1 for t in ts if t[2])
+            u[1] += len(ts)
+    rules['usual'] = {k: 'express' if e * 2 > n else 'local' for k, (e, n) in sorted(usual.items())}
+    RULES_OUT = OUT.with_name('subway-rules.json')
+    RULES_OUT.write_text(json.dumps(rules, separators=(',', ':')))
+    print(f'Wrote {RULES_OUT}: local-only next stops {rules["localNext"]}, diamond lines {sorted(rules["diamond"])}')
     TIMES_OUT = OUT.with_name('subway-times.json')
     TIMES_OUT.write_text(json.dumps({'version': info.get('feed_version', ''), 'penn': times}, separators=(',', ':')))
     print(f'Wrote {TIMES_OUT}: {TIMES_OUT.stat().st_size // 1024} KB')

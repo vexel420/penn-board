@@ -1,6 +1,7 @@
 // Hubs (owner, Nov 25: "port all of the same features to both"): every
 // station board runs the same engine (feeds.js + app.js + airport.js); this
-// file is what differs between them. A page picks its hub by setting
+// file is what differs between them. The data builds (scripts/hubs.py) read
+// each hub's subway stations from here too, so a new hub needs only an entry. A page picks its hub by setting
 // window.HUB_ID before loading this file ('nyp' if it doesn't).
 (function () {
   const HUBS = {
@@ -11,6 +12,8 @@
       directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=34+St-Penn+Station,+New+York,+NY&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Penn+Station,+New+York,+NY&dirflg=r' },
       // Subway stations at the hub, their lines, and how each direction is named.
       stations: [{ id: '128', lines: ['1', '2', '3'] }, { id: 'A28', lines: ['A', 'C', 'E'] }],
+      // The station's name over the subway panel, and minutes to walk between its subway stations.
+      subwayName: '34 St–Penn Station', subwayWalk: 8,
       dirs: { '128': { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, A28: { N: 'Uptown and Queens', S: 'Downtown and Brooklyn' } },
       subwayFeeds: ['gtfs', 'gtfs-ace', 'gtfs-bdfm'],
       subwayAlerts: 'subway',
@@ -33,6 +36,7 @@
       ll: [40.7527, -73.9772],
       directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=Grand+Central+Terminal+New+York&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Grand+Central+Terminal+New+York&dirflg=r' },
       stations: [{ id: '631', lines: ['4', '5', '6'] }, { id: '723', lines: ['7'] }, { id: '901', lines: ['GS'] }],
+      subwayName: 'Grand Central–42 St', subwayWalk: 5,
       dirs: { 631: { N: 'Uptown and the Bronx', S: 'Downtown and Brooklyn' }, 723: { N: 'Queens', S: 'Times Sq and Hudson Yards' }, 901: { N: 'Times Sq-42 St', S: 'Times Sq-42 St' } },
       subwayFeeds: ['gtfs'],
       subwayAlerts: 'subway-gct',

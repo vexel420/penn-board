@@ -110,30 +110,35 @@ const SUBWAY_FEEDS = HUBX.subwayFeeds.map((f) => `https://api-endpoint.mta.info/
 // The hub's subway stations (Penn: 34 St-Penn Station, 7 Av line and 8 Av line).
 const PENN_STOPS = new Set(HUBX.stations.map((x) => x.id));
 
-// Express or local from Penn, by the stops the train actually makes next:
-// a local calls at 28 St or 50 St (7 Av line) or 23 St or 50 St (8 Av line),
-// an express runs past them. Works for night service (the 2 and 3 go local)
-// and for rerouted trains. Too few stops to tell: the line's usual service.
-// Grand Central (Lexington Av): only locals call at 51 St (630) uptown and 33 St (632) downtown.
-const LOCAL_NEXT = new Set(['129', '126', 'A30', 'A25', '630', '632']);
-const USUALLY_EXPRESS = new Set(['2', '3', 'A', '4', '5']);
-// The diamond 6 and 7 run express only in the Bronx and Queens: express if
-// the stops ahead skip every local-only station there (owner, Nov 25: the
-// MTA's feed was labeling local 7s as "7X").
-const DIAMOND_LOCAL_ONLY = { 7: ['716', '715', '714', '713', '711', '709', '708', '706', '705'], 6: ['618', '617', '616', '615', '614', '612', '611', '610', '609'] };
-const DIAMOND_END = { 7: '702', 6: '608' };
-const diamondExpress = (route, stops) => !!DIAMOND_LOCAL_ONLY[route] && stops.includes(DIAMOND_END[route]) && !stops.some((id) => DIAMOND_LOCAL_ONLY[route].includes(id));
-// In Manhattan the diamond trains make every local stop (owner, Nov 26: "if
-// the diamond 6 is running on local tracks at Grand Central then it needs to
-// be listed as local"), so they're local here; each train carries `diamond`
-// and the row takes turns between the circle and the diamond.
-function serviceFromPenn(route, stops) {
-  if (route === '6' || route === '7') return 'local';
-  if (route === 'GS') return 'local';
+// Express or local, by the stops the train actually makes next, with rules
+// worked out from the MTA timetable for every hub station (docs/subway-rules.json,
+// scripts/build-subway-data.py; owner, Nov 26: the same rules at any hub).
+// A train calling within its next three stops at a station only locals stop
+// at (from Penn on 7 Av downtown: 28 St) is local; one that passes them by is
+// express. Where every train makes the same stops (the 7 and the shuttle at
+// Grand Central) all trains are local. Too few stops left to tell: the line's
+// usual section there. Works for night service (the 2 and 3 go local) and for
+// rerouted trains.
+let subwayRules = null;
+const loadSubwayRules = () => (subwayRules ? Promise.resolve() : get('subway-rules.json').then((r) => r.json())
+  .then((d) => { subwayRules = d; }).catch(() => { subwayRules = { localNext: {}, diamond: {}, usual: {} }; }));
+function serviceAt(station, dir, route, stops) {
+  const ln = subwayRules.localNext[`${station}|${dir}`];
+  if (!ln) return 'local';
   const next = stops.slice(1, 4);
-  if (next.some((s) => LOCAL_NEXT.has(s))) return 'local';
+  if (next.some((s) => ln.includes(s))) return 'local';
   if (next.length >= 2) return 'express';
-  return USUALLY_EXPRESS.has(route) ? 'express' : 'local';
+  return subwayRules.usual[`${station}|${route}|${dir}`] || 'local';
+}
+// The MTA's diamond trains (6X, 7X, FX in its timetable) run express on part of
+// the line: one going straight between two stops the line's locals call
+// between (subway-rules.json "diamond"). The live feed's own "6X"/"7X" labels
+// aren't trusted (owner, Nov 25: it was labeling local 7s as "7X").
+function diamondTrain(route, stops) {
+  const pairs = subwayRules.diamond[route];
+  if (!pairs) return false;
+  for (let i = 0; i + 1 < stops.length; i++) if (pairs.includes(`${stops[i]}|${stops[i + 1]}`)) return true;
+  return false;
 }
 
 // Each train keeps the stations it will call at from Penn onwards (station
@@ -141,6 +146,7 @@ function serviceFromPenn(route, stops) {
 // docs/subway-data.json.
 const route0 = (r) => String(r || '').replace(/X$/, '');
 const subway = source('subway', 20, async () => {
+  await loadSubwayRules();
   const feeds = await Promise.all(SUBWAY_FEEDS.map(async (u) =>
     parseTripUpdates(new Uint8Array(await (await get(u)).arrayBuffer()))));
   const t = now();
@@ -155,7 +161,7 @@ const subway = source('subway', 20, async () => {
     const dir = route0(trip.route) === 'GS' ? 'S' : stop.id.slice(-1); // N = uptown, S = downtown (the shuttle: one way, to Times Sq)
     const route = trip.route.replace(/X$/, '');
     const stops = trip.stops.slice(at).map((s) => s.id.slice(0, -1));
-    const svc = serviceFromPenn(route, stops);
+    const svc = serviceAt(stops[0], dir, route, stops);
     // One row per destination: during a service change trains of the same
     // line can end at different places (A to Far Rockaway, A to Chambers St),
     // and each needs its own row rather than one row that flips between them.
@@ -165,7 +171,7 @@ const subway = source('subway', 20, async () => {
     // `code`: the trip's scheduled start ("033750" of "033750_1..N03R"), which
     // says which timetable trip this is (the late-night pill uses it).
     const code = (/^(\d{6})_/.exec(trip.trip || '') || [])[1] || '';
-    groups.get(key).trains.push({ time: stop.time, stops, code, ...(dir === 'N' && diamondExpress(route, stops) ? { diamond: true } : {}) });
+    groups.get(key).trains.push({ time: stop.time, stops, code, ...(diamondTrain(route, stops) ? { diamond: true } : {}) });
   }
   return [...groups.values()].map((g) => {
     g.trains.sort((a, b) => a.time - b.time);
@@ -780,5 +786,5 @@ async function upcomingNotices(feed) {
 
 return { board, njtActiveNow, upcomingNotices, parsePathAlerts, relayPathAlerts, parseNjt, njtNotices, reachableFromPenn, source, get, now, nyToEpoch, parsePath, relayPath,
   // Shared with the Grand Central page (docs/gct.js).
-  parseTripUpdates, parseAlerts, alertUrl, lirrStationName: stationName, LIRR_BRANCHES, URGENT };
+  parseTripUpdates, parseAlerts, alertUrl, subwayRules: () => subwayRules, lirrStationName: stationName, LIRR_BRANCHES, URGENT };
 });

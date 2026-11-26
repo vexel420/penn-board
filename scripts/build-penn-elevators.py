@@ -8,12 +8,15 @@ MTA's "alternative route" text, which is only in the (large) equipment list.
 
     python3 scripts/build-penn-elevators.py
 """
-import json, urllib.request
+import json, sys, urllib.request
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hubs import hubs  # noqa: E402
 
 OUT = Path(__file__).resolve().parent.parent / 'docs' / 'penn-elevators.json'
 URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene_equipments.json'
-STATIONS = {'34 St-Penn Station', 'Grand Central-42 St'}
+# Every hub's stations (docs/hub.js elevatorStations).
+STATIONS = {n for h in hubs().values() for n in h['elevatorStations']}
 
 
 def main():

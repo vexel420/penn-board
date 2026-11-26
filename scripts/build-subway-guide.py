@@ -30,11 +30,18 @@ from collections import defaultdict
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / 'docs' / 'subway-guide.json'
-PENN = {'128': ['1', '2', '3'], 'A28': ['A', 'C', 'E']}
-OTHER = {'128': 'A28', 'A28': '128'}
-WALK_MIN = 8  # through Penn Station between the 7 Av and 8 Av stations
-# Where each line is heading from Penn, per direction: a main stop on its own
-# route (its last stop, or the hub of the area it serves).
+# Every hub's subway stations, from docs/hub.js (owner, Nov 26: the same
+# rules at every hub). OTHER: the hub's other subway stations, reached on
+# foot in the hub's subwayWalk minutes (Penn: 8, 7 Av to 8 Av).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from hubs import hubs as _hubs  # noqa: E402
+PENN = {s: ls for h in _hubs().values() for s, ls in h['stations'].items()}
+OTHER = {s: [o for o in h['stations'] if o != s] for h in _hubs().values() for s in h['stations']}
+WALK = {s: h['walk'] for h in _hubs().values() for s in h['stations']}
+# Where each line is heading, per direction: a main stop on its own route.
+# Chosen by hand for Penn's lines below; any other line uses the farthest stop
+# nearly all its trips from that station reach (ref_stop): its last stop, or
+# where it splits into branches.
 HUBS = {
     ('1', 'N'): '112',  # 168 St-Washington Hts
     ('1', 'S'): '142',  # South Ferry
@@ -108,6 +115,29 @@ def main(zip_path):
             gap[k] = statistics.median(g) if g else 60
         return out, gap
 
+    def ref_stop(stn, line, d):
+        """The farthest stop at least 80% of the line's trips from stn (direction d) reach."""
+        if (line, d) in HUBS:
+            return HUBS[(line, d)]
+        counts, rides, n = defaultdict(int), defaultdict(list), 0
+        for tid, cs in calls.items():
+            r = trips[tid]
+            r = r[:-1] if len(r) == 2 and r.endswith('X') else r
+            if r != line:
+                continue
+            at = next((i for i, c in enumerate(cs) if c[1] == stn and c[2] == d), None)
+            if at is None or at == len(cs) - 1:
+                continue
+            n += 1
+            for c in cs[at + 1:]:
+                counts[c[1]] += 1
+                rides[c[1]].append(c[3] - cs[at][3])
+        # ...and that another line serves too (or a transfer away): where the
+        # missing line's riders can be taken instead (the 4 uptown: 161 St-Yankee Stadium).
+        shared = lambda x: any(l != line for y in [x, *xfer.get(x, {})] for l in lines_at.get(y, ()))
+        common = [x for x, k in counts.items() if n and k >= 0.8 * n and shared(x)]
+        return max(common, key=lambda x: statistics.median(rides[x])) if common else None
+
     def search(net, gap, start, first_lines, missing, at_hub, max_legs=MAX_LEGS):
         """All plans (score, minutes, legs) from start to the hub; legs = [(route, dir, from, to)]."""
         found = []
@@ -130,7 +160,13 @@ def main(zip_path):
             frontier = [x for v in nxt.values() for x in sorted(v, key=lambda y: y[0])[:3]]
         return sorted(found, key=lambda x: x[0])
 
-    out, rides = {}, {}
+    lines_at = defaultdict(set)
+    for tid, cs in calls.items():
+        cs.sort()
+        r = trips[tid]
+        for c in cs:
+            lines_at[c[1]].add(r[:-1] if len(r) == 2 and r.endswith('X') else r)
+    out, rides, refs = {}, {}, {}
     for period in PERIODS:
         net, gap = network(period)
         for r, a, b in RIDES:
@@ -140,7 +176,10 @@ def main(zip_path):
         for stn, lines in PENN.items():
             for line in lines:
                 for d in 'NS':
-                    hub = HUBS[(line, d)]
+                    hub = ref_stop(stn, line, d)
+                    if not hub:
+                        continue
+                    refs[(line, d, stn)] = hub
                     at_hub = {hub, *xfer.get(hub, {})}
                     found = search(net, gap, stn, set(lines), line, at_hub)
                     # Merge plans that change at the same stations and differ only in
@@ -161,16 +200,22 @@ def main(zip_path):
                     plans = [{'mins': round(g['mins']), 'legs': g['legs']} for g in sorted(groups, key=lambda x: x['score'])]
                     # Walking through Penn Station to the other subway station: a
                     # second choice when one train from there goes straight there.
-                    other = OTHER[stn]
-                    walk = [(t, p) for _, t, p in search(net, gap, other, set(PENN[other]), line, at_hub, max_legs=1)]
+                    # A station with no other line (the 7 and the shuttle at Grand
+                    # Central): the walk may go on with a change (`then`).
+                    legs = 1 if plans else MAX_LEGS - 1
+                    walk = sorted(((sc, t, p) for other in OTHER[stn] for sc, t, p in search(net, gap, other, set(PENN[other]), line, at_hub, max_legs=legs)), key=lambda x: x[0])
                     entry = {'plans': plans}
                     if walk:
-                        walk_routes = sorted({p[0][0] for t, p in walk if t <= walk[0][0] + 2})
-                        walk_mins = round(WALK_MIN + walk[0][0] + 3)
+                        best = walk[0][2]
+                        same = [p for _, t, p in walk if len(p) == len(best) and all(a[1:] == b[1:] for a, b in zip(p, best)) and t <= walk[0][1] + 2]
+                        walk_mins = round(WALK[stn] + walk[0][1] + 3)
                         if not plans or walk_mins <= plans[0]['mins'] + 5:
-                            entry['walk'] = {'routes': walk_routes, 'dir': walk[0][1][0][1], 'mins': walk_mins}
+                            entry['walk'] = {'routes': sorted({p[0][0] for p in same}), 'dir': best[0][1], 'mins': walk_mins}
+                            if len(best) > 1:
+                                entry['walk']['to'] = best[0][3]
+                                entry['walk']['then'] = [{'routes': sorted({p[i][0] for p in same}), 'dir': l[1], 'to': l[3]} for i, l in enumerate(best) if i]
                     out.setdefault(stn, {}).setdefault(line, {}).setdefault(d, {})[period] = entry
-    used = set(HUBS.values())
+    used = set(refs.values())
     for ls in out.values():
         for ds in ls.values():
             for per in ds.values():
@@ -178,6 +223,9 @@ def main(zip_path):
                     for p in e['plans']:
                         for l in p['legs']:
                             used.update((l['from'], l['to']))
+                    w = e.get('walk', {})
+                    used.update([w['to']] if 'to' in w else [])
+                    used.update(l['to'] for l in w.get('then', []))
     doc = {'names': {k: names.get(k, k) for k in sorted(used)}, 'plans': out, 'rides': rides}
     OUT.write_text(json.dumps(doc, separators=(',', ':')))
     print(f'Wrote {OUT} ({OUT.stat().st_size // 1024} KB)')
@@ -187,7 +235,7 @@ def main(zip_path):
                 for period, e in per.items():
                     p = e['plans'][0] if e['plans'] else None
                     how = ' -> '.join(f"{'/'.join(l['routes'])} to {names.get(l['to'], l['to'])}" for l in p['legs']) if p else 'no plan'
-                    walk = f" | or walk to the {'/'.join(e['walk']['routes'])} ({e['walk']['mins']} min)" if 'walk' in e else ''
+                    walk = f" | or walk to the {'/'.join(e['walk']['routes'])}{''.join(' -> ' + '/'.join(t['routes']) + ' to ' + names.get(t['to'], t['to']) for t in e['walk'].get('then', []))} ({e['walk']['mins']} min)" if 'walk' in e else ''
                     print(f"{line} {d} {period}: {how}{f' ({p['mins']} min)' if p else ''}{walk}")
 
 

@@ -485,11 +485,11 @@ function unusualStops(route, train) {
 // A line named in a sentence ("Use the 2."): its badge, at text size.
 const lineName = (route) => bulletHtml(route, 'inl');
 // Express runs of the 6 and the 7 (Grand Central) get the MTA's diamond; the
-// feed decides express by the stops a train makes (feeds.js serviceFromPenn).
-const DIAMOND_NOTE = { 6: 'express in the Bronx', 7: 'express in Queens' };
+// feed decides express by the stops a train makes (feeds.js serviceAt, from subway-rules.json).
+const DIAMOND_NOTE = { 6: 'express in the Bronx', 7: 'express in Queens', F: 'express in Brooklyn' };
 // They run local in Manhattan, so they share the local row with the circle
 // trains: the bullet and note follow the train shown (t.diamond, feeds.js).
-const isDiamond = (g, t) => !!(t && t.diamond && DIAMOND_NOTE[g.route]);
+const isDiamond = (g, t) => !!(t && t.diamond);
 const bulletShown = new Map(); // row -> diamond shown last, to flip when it changes
 function rowBullet(g, t, key) {
   const d = isDiamond(g, t);
@@ -497,7 +497,7 @@ function rowBullet(g, t, key) {
   if (key) bulletShown.set(key, d);
   return bulletHtml(g.route, `${d ? 'diamond' : ''}${before !== undefined && before !== d ? ' bflip' : ''}`);
 }
-const diamondNote = (g, t) => (isDiamond(g, t) ? `<small class="dnote">${DIAMOND_NOTE[g.route]}</small>` : '');
+const diamondNote = (g, t) => (isDiamond(g, t) ? `<small class="dnote">${DIAMOND_NOTE[g.route] || 'express part of the way'}</small>` : '');
 function bulletHtml(route, extraClass = '') {
   const l = lineInfo(route);
   return `<span class="bullet ${extraClass}${l.label.length > 2 ? ' wide' : ''}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
@@ -693,7 +693,8 @@ function lineSection(here, stnId, line, dir) {
   if (g) return g.svc || 'local';
   const gap = subwayData && subwayData.nightGaps && ((subwayData.nightGaps[stnId] || {})[line] || {})[dir];
   const any = gap && Object.values(gap)[0];
-  return any ? any.svc : (['2', '3', 'A'].includes(line) ? 'express' : 'local');
+  const rules = PennFeeds.subwayRules && PennFeeds.subwayRules();
+  return any ? any.svc : ((rules && rules.usual[`${stnId}|${line}|${dir}`]) || 'local');
 }
 // Other lines at this station to use instead of `line` going this way,
 // judged by where the trains go on the map, not by stops in common (owner,
@@ -751,7 +752,9 @@ const shortStop = (id) => String((subwayGuide && subwayGuide.names[id]) || stati
 const linesText = (ls0) => { const ls = [...ls0].sort((a, b) => String(a).localeCompare(String(b), 'en', { numeric: true })); return `${ls.slice(0, -1).map(lineName).join(', ')}${ls.length > 1 ? ' or ' : ''}${lineName(ls[ls.length - 1])}`; };
 // The plan to show now: the fastest whose first train is running.
 function guidePlan(stn, line, dir, here, nowS) {
-  const per = (((subwayGuide && subwayGuide.plans[stn.id]) || {})[line] || {})[dir] || {};
+  const byDir = ((subwayGuide && subwayGuide.plans[stn.id]) || {})[line] || {};
+  // A shuttle runs one way from the hub; the board files it under one direction (feeds.js).
+  const per = byDir[dir] || (/^(GS|FS|H)$/.test(line) ? byDir.N || byDir.S : null) || {};
   const e = (nyNow().mins < 5 * 60 ? per.night : per.day) || {};
   for (const p of e.plans || []) {
     const l0 = p.legs[0];
@@ -770,7 +773,10 @@ function suggestionHtml(stn, line, dir, here, nowS, n) {
   const named = n ? noticeAlts(n, stn, line) : [];
   if (named.length) return `Use the ${linesText(named)}.`;
   const p = guidePlan(stn, line, dir, here, nowS);
-  const walk = p && p.walk ? `<span class="src">Or walk through Penn Station to the ${routesText(p.walk.routes)}.</span>` : '';
+  // (From a station with no other line, the walk can go on with a change:
+  // "walk through Grand Central to the 4, 5 or 6 to 59 St, then the N or W to Queensboro Plaza".)
+  const walkThen = (w) => (w.then ? ` to ${esc(shortStop(w.to))}, then ${w.then.map((l) => `the ${routesText(l.routes)} to ${esc(shortStop(l.to))}`).join(', then ')}` : '');
+  const walk = p && p.walk ? `<span class="src">Or walk through ${esc(HUB.name)} to the ${routesText(p.walk.routes)}${walkThen(p.walk)}.</span>` : '';
   if (p && p.legs.length === 1) return `Use the ${routesText(p.legs[0].routes)}${p.legs[0].dir !== dir ? (p.legs[0].dir === 'N' ? ' uptown' : ' downtown') : ''}.${walk}`;
   if (p && p.legs.length > 1) {
     const ls = p.legs;
@@ -1493,7 +1499,7 @@ function renderSubwayTags(states) {
   if (holidayNotice() || subwayHoliday(nyNow().date)) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
   else if (!night && (day === 'saturday' || day === 'sunday')) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
   if (weatherNotice()) tags.push(`<span class="tag wx">${ICON.snow}Severe weather service</span>`);
-  $('sub-h').innerHTML = `Subway${tags.join('')}<span>34 St–Penn Station</span>`;
+  $('sub-h').innerHTML = `Subway${tags.join('')}<span>${esc(HUB.subwayName || HUB.name)}</span>`;
 }
 
 // ---------- reroute map ----------
@@ -2696,14 +2702,18 @@ const njtHiddenDelay = (r) => hiddenDelayMin(r) !== null;
 const NJT_SYSTEMWIDE = /\bNJ ?TRANSIT (rail )?(service|trains)\b|\ball (NJ ?TRANSIT )?(rail )?(service|trains)\b|\b(into and out of|to and from|in and out of) (Penn Station New York|PSNY|New York Penn|Penn Station)\b/i;
 // The trains a railroad notice names ("The 9:11pm train from Babylon to Penn
 // Station is operating 30-35 minutes late"): [{ hm: '9:11', ap: 'PM', from, to }].
-const NAMED_TRAIN = /\b(\d{1,2}:\d{2})\s*([ap])\.?\s?m\.?\s+train\s+from\s+(.+?)\s+(?:to|due(?:\s+(?:in|at))?)\s+(.+?)(?=\s+(?:is|was|will|has|have|are|and|due|at|which)\b|[.,;:(<]|$)/gi;
+const NAMED_TRAIN = /\b(\d{1,2}:\d{2})\s*([ap])\.?\s?m\.?\s+train\s+from\s+(.+?)(?:\s+(?:to|due(?:\s+(?:in|at))?)\s+(.+?))?(?=\s+(?:is|was|will|has|have|are|and|due|at|which|departing|leaving|originat\w*|terminat\w*)\b|[.,;:(<]|$)/gi;
 function namedTrains(n) {
   const text = String(n.text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
-  return [...text.matchAll(NAMED_TRAIN)].map((m) => ({ hm: m[1], ap: m[2].toUpperCase() + 'M', from: m[3], to: m[4] }));
+  return [...text.matchAll(NAMED_TRAIN)].map((m) => ({ hm: m[1], ap: m[2].toUpperCase() + 'M', from: m[3], to: m[4] || '' }));
 }
 const HUB_NAME = IS_PENN ? /\bpenn\b/i : /grand central/i;
 // A notice naming trains belongs only on those trains leaving this hub (owner,
-// Nov 26: an inbound train running late shouldn't show on every train out).
+// Nov 26: an inbound train running late shouldn't show on every train out;
+// only on the outgoing train delayed by it). The railroads publish no link
+// between an inbound train and the train it turns into, so an outgoing train
+// gets the notice only when the notice itself names it ("...as a result, the
+// 10:07pm train from Penn Station to Babylon will depart 15 minutes late").
 // null: it names no train (then the branch rule decides).
 function namedTrainFits(n, r) {
   const refs = namedTrains(n);

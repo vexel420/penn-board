@@ -860,3 +860,15 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 
 ## Train-specific railroad notices (Nov 26)
 - Owner: an LIRR notice about an inbound train running late shouldn't show on every outgoing train. `namedTrains(n)` reads the trains a notice names ("The 9:11pm train from Babylon to Penn Station …", also "… from Grand Central due Poughkeepsie …"). If a notice names any train, `namedTrainFits` puts it only on the departure leaving this hub (Penn: /penn/, Grand Central: /grand central/) at that scheduled time; inbound-only notices go on no departure (they stay in the Alerts tab). Notices naming no train keep the branch rule. Applies to LIRR and Metro-North.
+
+## Subway rules are universal (Nov 26)
+- Owner: every subway rule must work for any future hub (Times Sq, WTC…). Adding a hub now needs only its entry in docs/hub.js (`stations`, `dirs`, `subwayFeeds`, `subwayName`, `subwayWalk`, `elevatorStations`); the data builds read the hub list from there via `scripts/hubs.py`.
+- `docs/subway-rules.json` (built by build-subway-data.py `service_rules`, from the MTA timetable):
+  - `localNext["<station>|<N/S>"]`: stations within the next three stops that only local trains call at (some trains pass them on the way to a later stop). feeds.js `serviceAt`: a train calling at one is local, one passing them is express; no entry means every train makes the same stops (all local: the 7, the shuttle); too few stops left: `usual`.
+  - `usual["<station>|<line>|<dir>"]`: the line's usual section there (also lineSection's fallback in app.js).
+  - `diamond["<line>"]`: "a|b" stop pairs the 6X/7X/FX run between while the line's daytime locals stop in between (6 in the Bronx, 7 in Queens, F in Brooklyn). A live train with such a pair is a diamond train, listed with its line's row (local in Manhattan) and taking turns with the circle.
+  - Replaces the hand lists LOCAL_NEXT, USUALLY_EXPRESS, DIAMOND_LOCAL_ONLY/END and NIGHT_GAP_LINES (every line is now checked for a night break). Penn's and Grand Central's generated data matched the old output exactly.
+- build-subway-guide.py covers every hub station: Penn's hand-picked targets stay; other lines head for the farthest stop ≥80% of their trips reach that another line also serves. A station with no other line (the 7, the shuttle) gets a walk to the hub's other stations, possibly with a change (`walk.to`/`walk.then`). Grand Central's lines now get skipped-stop advice (they had none).
+- Fixed: the subway heading said "34 St–Penn Station" on Grand Central whenever a weekend/late-night tag showed (now `HUB.subwayName`); "walk through Penn Station" now uses the hub's name.
+- Still per hub by nature: the airport routes (PENN_AIR / GCT_AIR) and the LIRR "other ways" guides.
+- Railroad notices: `NAMED_TRAIN` also reads "the 10:07pm train from Penn Station will depart…" (no "to"). An outgoing train gets a notice only when the notice names it; the LIRR/MNR feeds and timetables carry no link between an inbound train and the one it turns into (checked: no block_id, TrainTime has no such field).
