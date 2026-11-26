@@ -1466,9 +1466,14 @@ function renderSubway() {
         return `<p class="svc-line night">${ICON.moon}<span><b>The last ${way}${lineName(line)} train leaves at ${clockText(t)}, ${inText(t, nowS)}.</b> No ${way}${lineName(line)} trains late nights.</span></p>`;
       }
       if (g && g.phase === 'countdown') return '';
-      if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30))) return '';
+      // Still in the overnight gap while the only trains listed are the first
+      // morning ones (the shuttle's 6:04 AM shows up hours ahead).
+      const gapEnd = g && g.phase === 'night' ? minsToEpoch(g.until + (nyNow().mins >= 720 ? 1440 : 0)) : Infinity;
+      if (!g || g.svc !== svc || here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time >= nowS - 30 && t.time < gapEnd - 120))) return '';
       // The other lines at this station still running this way (C: A or E; 3: 1 or 2).
-      const how = suggestionHtml(stn, line, dir, here, nowS, null);
+      // The shuttle: the 7 makes the same trip, one stop between Times Sq and
+      // Grand Central (owner, Nov 26: "advise people to take the 7").
+      const how = line === 'GS' ? `Take the ${routesText(['7'])} to ${esc(shortStop((HUB.dirs[stn.id] || {})[dir] || 'Grand Central'))} until the first shuttle.` : suggestionHtml(stn, line, dir, here, nowS, null);
       const way = dir === 'N' ? 'uptown' : 'downtown';
       const label = lineName(line);
       // Short: "No C trains until 5:41 AM, use the A or E." A line not running

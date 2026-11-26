@@ -962,3 +962,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - City event alerts (the parade) have a – button: minimized to one slim line with "Show". Remembered per event in localStorage `eventsMin` (all boards share it); `renderEvents()` re-renders.
 - The side panel always opens on Subway (owner: "default view to be subway not busses"). The old remembered `sidePanel` choice is removed on load and no longer saved.
 - Elevator/escalator alerts minimize the same way (ids `ene-<equipment>` in the same `eventsMin` set; `renderElevators()` re-renders).
+
+## Shuttle overnight: take the 7 (Nov 26)
+- Overnight the S says "No S trains until 6:04 AM. Take the 7 to Grand Central (or Times Sq) until the first shuttle." (destination from HUB.dirs). Then "Daytime service has started on the S" (existing 'morning' phase) until the first shuttle shows "now".
+- Overnight notes now show while the only trains listed for that line are after the gap ends (the first morning trains appear in the feed hours early; before, that hid the note — Grand Central's S had none). This applies to every line, e.g. Penn's C now says "No C trains until 7:51 AM. Use the A." before 7:51 even with the first C listed.
