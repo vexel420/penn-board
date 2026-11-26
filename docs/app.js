@@ -1520,16 +1520,9 @@ function renderSubway() {
     const switching = stn.lines.map((line) => ({ line, st: switchState(stn.id, line, dir) })).filter((x) => x.st);
     for (const x of switching) {
       // The first daytime express showing "now" at Penn ends the morning.
-      // A line that runs all night: once its last late-night train has left
-      // (no train of it this way still carries the late-night pill), daytime
-      // service has started and the banner goes (owner, Nov 26), even before
-      // the first daytime express arrives.
-      const lastNightGone = () => {
-        const mine = here.filter((g) => g.route === x.line && g.dir === dir);
-        const ts = mine.flatMap((g) => g.trains.filter((t) => t.time >= nowS - 30).map((t) => [g, t]));
-        return ts.length > 0 && !ts.some(([g, t]) => lateNightTrain(stn.id, x.line, dir, t.time, t.code) || localNight(stn.id, g, dir, t.time) || cutbackNight(stn.id, x.line, dir, t.time));
-      };
-      if (x.st.phase === 'morning' && (lastNightGone() || morningArrived(x.st.key, here, x.line, dir, 'express', nowS) || firstMorningGone(here, x.line, dir, 'express', x.st.until, nowS))) {
+      // (Lines that change pattern at night, like the 2: the banner goes when the
+      // first daytime express arrives. Owner, Nov 26.)
+      if (x.st.phase === 'morning' && (morningArrived(x.st.key, here, x.line, dir, 'express', nowS) || firstMorningGone(here, x.line, dir, 'express', x.st.until, nowS))) {
         morningReached.add(x.st.key);
         x.st = switchState(stn.id, x.line, dir);
       }
