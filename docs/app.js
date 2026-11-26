@@ -1511,7 +1511,11 @@ function renderSubway() {
     return parts ? `<div class="dir"><h3>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
   }).join('');
   const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('');
-  return `<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
+  // A platform in another station of the complex gets that station's name above
+  // it, like PATH (owner, Nov 26: the A C E on the Times Square board, under
+  // "42 St–Port Authority Bus Terminal").
+  const head = stn.heading ? `<h2 class="path-h stn-head">${esc(stn.heading)}${stn.sub ? ` <span>${esc(stn.sub)}</span>` : ''}</h2>${stn.note ? `<p class="walk">${esc(stn.note)}</p>` : ''}` : '';
+  return `${head}<section class="stn" aria-label="${stn.lines.join(', ')} trains"><div class="stn-lines">${label}</div>${dirs || '<p class="empty">No trains reported right now.</p>'}</section>`;
   }).join('');
   $('sub-toggles').innerHTML = subwayStyleHtml();
   renderSubwayTags(states);

@@ -910,3 +910,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - The side panel has `.sub-part` (subway, PATH, toggles) and `.bus-part` (#bus-panel: the hub's MTA buses with alerts and stop map, then "NJ Transit buses from Port Authority": the bus finder, #buses, rendered when shown via `busesShown()`). Phone rules are last in style.css so the tab always decides, whatever a computer picked.
 - NJ Transit's own cross-honoring notice shows above the finder when there is one (Penn; Grand Central doesn't load NJ Transit). Grand Central now has the finder too, with directions to Port Authority by the shuttle or the 7 to Times Sq (`portAuthorityFromGct`).
 - Monitor for more hubs (decided): when there are 3-4 hubs, the side-by-side page gets a 4-across option using each board's phone layout (the compact mockup, docs/_mock-monitor.html locally).
+
+## Station headings in the subway panel; hub list reader (Nov 26)
+- A hub station entry may carry `heading`, `sub` and `note`: the subway panel then puts that station's name above its platforms, like PATH (for the A C E on a future Times Square board: "42 St–Port Authority Bus Terminal", "Through the underground passage…").
+- scripts/hubs.py reads station lists that span lines or carry extra fields (it silently skipped them before).
+- Owner, Nov 26: Port Authority Bus Terminal and Times Square are different places: two boards, each linking the other, the A C E on both (on Times Square under its own heading). Times Square looks mocked: Broadway (red, marquee bulbs), Signage (white with the lines' colors), Sunset (pink-orange), Daylight (light page; needs contrast work). Awaiting the owner's pick.
