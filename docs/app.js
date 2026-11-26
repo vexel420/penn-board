@@ -1460,7 +1460,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const before = bShown.get(key);
   bShown.set(key, html);
   const body = `<span class="b-wrap">${html}</span>`;
-  return `<div class="sline optb">${rowBullet(g, upcoming[0])}${body}</div>`;
+  return `<div class="sline optb" data-k="${esc(`${stn.id}|${g.route}|${dir}|${g.svc}|b`)}">${rowBullet(g, upcoming[0])}${body}</div>`;
 }
 $('sub-toggles').addEventListener('click', (e) => {
   const lp = e.target.closest('[data-latepills]');
@@ -1488,6 +1488,24 @@ const DIRS = HUB.dirs; // each hub's stations and how their directions are named
 // so a redraw that comes mid-slide waits until the slide has finished.
 const SLIDE_MS = 1000; // .dname slide: .75 s out, .8 s in after .15 s
 let slideStarted = -Infinity, slideWait = 0;
+// Rows and sections never shrink back between refreshes (owner, Nov 26: "still
+// so much movement" at Penn and Times Square): each keeps the tallest height it
+// has had, so a pill, a wrapped name or a time changing inside it can't make
+// everything under it bounce. Forgotten when the window, the layout or the
+// subway style changes, and every 15 minutes (one settle, not constant motion).
+const rowMax = new Map();
+let rowMaxKey = '', rowMaxAt = 0;
+function holdHeights(root) {
+  if (!root) return;
+  const key = `${innerWidth}x${innerHeight}|${document.body.className}|${subwayStyle}|${flipMode}`;
+  if (key !== rowMaxKey || Date.now() - rowMaxAt > 15 * 60000) { rowMax.clear(); rowMaxKey = key; rowMaxAt = Date.now(); }
+  const els = [...root.querySelectorAll('[data-k]')];
+  for (const el of els) { const m = rowMax.get(el.dataset.k); if (m) el.style.minHeight = `${m}px`; }
+  for (const el of els) {
+    const h = el.offsetHeight, m = rowMax.get(el.dataset.k) || 0;
+    if (h > m) { rowMax.set(el.dataset.k, h); el.style.minHeight = `${h}px`; }
+  }
+}
 function renderSubway() {
   if (!board) return;
   const busy = SLIDE_MS - (performance.now() - slideStarted);
@@ -1659,16 +1677,16 @@ function renderSubway() {
       const linePills = subwayPills(g.route, dir, svc, stn.id, trains[0]);
       // (A rerouted train under a notice: the notice's pill is already in linePills.)
       if (!rerouted || changeFor(g.route, dir)) {
-        return `<div class="sline">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${pills(pill, linePills)}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
+        return `<div class="sline" data-k="${esc(rowKey)}">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${pills(pill, linePills)}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
       }
       // Rerouted with no notice behind it: the row itself opens the map.
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${staticPills(pills(pill && LATE_PILL, linePills))}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
+      return `<button type="button" class="sline rerouted" data-k="${esc(rowKey)}" data-reroute="${i}" aria-haspopup="dialog">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${staticPills(pills(pill && LATE_PILL, linePills))}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');
     // (Each direction also carries its station's bullets, shown when the directions stand as their own columns.)
-    return parts ? `<div class="dir"><h3><span class="dir-lines">${stn.lines.map((l) => bulletHtml(l, 'small')).join('')}</span>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
+    return parts ? `<div class="dir" data-k="${stn.id}|${dir}"><h3><span class="dir-lines">${stn.lines.map((l) => bulletHtml(l, 'small')).join('')}</span>${DIRS[stn.id][dir]}</h3>${parts}</div>` : '';
   }).join('');
   // Each platform named by its line where the hub says (Times Square: they're far apart).
   const label = stn.lines.map((l) => bulletHtml(l, 'small')).join('') + (stn.platform ? `<span class="plat-name">${esc(stn.platform)}</span>` : '');
@@ -1709,6 +1727,7 @@ function renderSubway() {
   const changing = !!$('subway').querySelector('.late-pill:not(.hol-pill):not(.wx-pill):not(.wknd-pill):not(.warn-pill)')
     || states.some((st) => st.phase === 'night' || st.phase === 'morning');
   $('subway').classList.toggle('no-sp', !changing);
+  holdHeights($('subway'));
 }
 
 // Tags beside the Subway heading. Late-night service shows once no more
@@ -3473,8 +3492,9 @@ function renderPath() {
     const dots = (g.colors.length ? g.colors : ['']).map((c) => `<i${c ? ` style="background:#${c}"` : ''}></i>`).join('');
     const lateP = pathLateNight(dest, nowS + (mins[0] || 0) * 60);
     const pill = lateP ? LATE_PILL : (holidayOn(nowS + (mins[0] || 0) * 60) ? HOLIDAY_PILL : '');
-    return `<div class="sline"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pills(pill, pathTrouble(dest, g.first))}</span><span class="smins">${firstMin}${rest}</span></div>`;
+    return `<div class="sline" data-k="path|${esc(dest)}"><span class="pdots" aria-hidden="true">${dots}</span><span class="sdest">${esc(dest)}${pills(pill, pathTrouble(dest, g.first))}</span><span class="smins">${firstMin}${rest}</span></div>`;
   }).join('') + '<p class="sched-note live-note">Live times from PATH.</p>';
+  holdHeights($('path'));
 }
 
 // ---------- PATH timetable, shown when live PATH times aren't available ----------
