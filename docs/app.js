@@ -3636,6 +3636,15 @@ function dayTime(t, nowS = Date.now() / 1000) {
   return `${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(t * 1000))} ${time}`;
 }
 const cityEventsNow = (nowS) => cityEvents.filter((e) => nowS >= e.fromS && nowS <= e.endS + 2 * 3600);
+const evMin = new Set((() => { try { return JSON.parse(localStorage.getItem('eventsMin') || '[]'); } catch { return []; } })());
+document.addEventListener('click', (ev) => {
+  const b = ev.target.closest('[data-evmin]'); if (!b) return;
+  const id = b.dataset.evmin;
+  evMin.has(id) ? evMin.delete(id) : evMin.add(id);
+  try { localStorage.setItem('eventsMin', JSON.stringify([...evMin])); } catch {}
+  renderEvents();
+  document.querySelector(`[data-evmin="${CSS.escape(id)}"]`)?.focus();
+});
 function cityEventsHtml(nowS) {
   return cityEventsNow(nowS).map((e) => {
     const c = clock(e.endS), end = c.hm === '12:00' ? (c.ap === 'PM' ? 'noon' : 'midnight') : `${c.hm} ${c.ap}`;
@@ -3646,7 +3655,9 @@ function cityEventsHtml(nowS) {
     const more = `<span class="ev-sub"><button type="button" class="al-map" data-cityevent="${esc(e.id)}">Route map</button>${e.source ? ` <a class="alt-map" href="${esc(e.source.url)}" target="_blank" rel="noopener">${esc(e.source.label)}&nbsp;↗&#xFE0E;</a>` : ''}</span>`;
     // One short line, the rest folded (it sits above the trains on a phone).
     const which = [e.buses.length ? 'buses' : '', e.lines.length ? 'subway' : ''].filter(Boolean).join(', ');
-    return `<div class="ev-note city">${EVENT_ICON}<div><p><b>${esc(e.title)}</b>, ${when}. ${here}</p><details class="ev-more" data-k="ev-${esc(e.id)}"><summary>Details${which ? `, ${which}` : ''} and route map</summary><p>${e.note ? `${esc(e.note)} ` : ''}${e.routeText ? `Route: ${esc(e.routeText)}. ` : ''}${esc(e.closures || '')}${buses}${lines}${checkHtml(e, nowS)}${more}</p></details></div></div>`;
+    // Minimized (owner, Nov 26): one slim line that opens it again; remembered per event.
+    if (evMin.has(e.id)) return `<button type="button" class="ev-note city ev-min" data-evmin="${esc(e.id)}" aria-expanded="false">${EVENT_ICON}<span><b>${esc(e.title)}</b>, ${nowS < e.startS ? esc(dayTime(e.startS, nowS)) : nowS < e.endS ? 'happening now' : 'just ended'}</span><span class="ev-open">Show</span></button>`;
+    return `<div class="ev-note city">${EVENT_ICON}<div><p><b>${esc(e.title)}</b>, ${when}. ${here}</p><details class="ev-more" data-k="ev-${esc(e.id)}"><summary>Details${which ? `, ${which}` : ''} and route map</summary><p>${e.note ? `${esc(e.note)} ` : ''}${e.routeText ? `Route: ${esc(e.routeText)}. ` : ''}${esc(e.closures || '')}${buses}${lines}${checkHtml(e, nowS)}${more}</p></details></div><button type="button" class="ev-hide" data-evmin="${esc(e.id)}" aria-expanded="true" aria-label="Minimize ${esc(e.title)}" title="Minimize">–</button></div>`;
   }).join('');
 }
 async function openCityEvent(id) {
@@ -3810,15 +3821,16 @@ function renderStamp() {
 }
 
 // The bus panel is showing: the Buses tab (phones), or the side panel switched to Buses (computers).
+// Every board opens on Subway (owner, Nov 26: "default view to be subway not
+// busses"); Buses is a tap away and isn't remembered between visits.
 let side = 'subway';
-try { side = localStorage.getItem('sidePanel') === 'buses' ? 'buses' : 'subway'; } catch {}
+try { localStorage.removeItem('sidePanel'); } catch {}
 if (HUB.layout === 'subway') side = 'buses';
 document.body.dataset.side = side;
 const WIDE = matchMedia('(min-width: 961px)');
 const busesShown = () => view === 'buses' || (WIDE.matches && side === 'buses') || (WIDE.matches && HUB.layout === 'subway');
 function setSide(x) {
   side = x; document.body.dataset.side = side;
-  try { localStorage.setItem('sidePanel', side); } catch {}
   setPressed('.side-switch', 'side', side);
   if (busesShown()) { renderBuses(); renderHubBuses(); }
 }

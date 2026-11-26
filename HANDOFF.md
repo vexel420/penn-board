@@ -957,3 +957,7 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Holiday tag now shows as soon as any line's daytime service has started (phase 'morning' counts, not only 'day'), alongside Late-night until every line is out of late nights. Simulated Thanksgiving at all 4 hubs: night → "Late-night"; first morning trains → both; all day → "Holiday" only.
 - The subway heading's tags render even when no subway trains are listed (was an early return).
 - `.rail` is a size container: below 760 px (690 px in split-big) each row stacks like the phone layout. Fixes the destination column squeezed to a sliver at laptop widths (~960–1150 px) on every board, worst at Port Authority (owner: "overlapping").
+
+## Event alerts minimize; side panel opens on Subway (Nov 26)
+- City event alerts (the parade) have a – button: minimized to one slim line with "Show". Remembered per event in localStorage `eventsMin` (all boards share it); `renderEvents()` re-renders.
+- The side panel always opens on Subway (owner: "default view to be subway not busses"). The old remembered `sidePanel` choice is removed on load and no longer saved.

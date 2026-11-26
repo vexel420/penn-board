@@ -933,3 +933,13 @@ body.has-station-bar { padding-bottom: calc(4.6rem + env(safe-area-inset-bottom)
   html.split-big .row .plate { white-space: nowrap; }
   html.split-big .status small { display: inline; margin-left: .4em; }
 }
+
+/* Event alerts can be minimized to one slim line (owner, Nov 26). */
+.ev-note.city { position: relative; }
+.ev-note.city .ev-hide { position: absolute; top: .35rem; right: .35rem; width: 2rem; height: 2rem; display: grid; place-items: center;
+  border: 0; border-radius: 6px; background: none; color: inherit; font: 800 1.2rem/1 "Archivo", sans-serif; cursor: pointer; opacity: .75; }
+.ev-note.city .ev-hide:hover, .ev-note.city .ev-hide:focus-visible { opacity: 1; background: rgba(255, 255, 255, .08); }
+.ev-note.city > div { padding-right: 1.8rem; }
+button.ev-note.ev-min { display: flex; align-items: center; gap: .6rem; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; padding-block: .45rem; }
+button.ev-note.ev-min > span:first-of-type { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.ev-note.ev-min .ev-open { flex: none; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
