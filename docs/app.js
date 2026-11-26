@@ -961,7 +961,9 @@ let allLatePills = false;
 try { allLatePills = localStorage.getItem('subwayLatePills') === 'all'; } catch {}
 function subwayDelayPill(route, dir, stnId, train) {
   const ds = subwayDelays(route, dir);
-  if (ds.length) return subwayOnTime(stnId, route, dir, train) ? '' : dropPill(`${stnId}|${route}|${dir}|delays`, 'Delays', 'warn', ds);
+  // (An open dropdown stays while its notice does, even when the row turns to an on-time train.)
+  const key = `${stnId}|${route}|${dir}|delays`;
+  if (ds.length) return subwayOnTime(stnId, route, dir, train) && !openDrops.has(key) ? '' : dropPill(key, 'Delays', 'warn', ds);
   if (!allLatePills) return '';
   const late = subwayLateBy(stnId, route, dir, train);
   return late != null && late >= LATE_PILL_MIN * 60 ? warnPill(`${Math.round(late / 60)} min late`) : '';
@@ -981,7 +983,38 @@ function subwayPills(route, dir, svc, stnId, train) {
     + (svc === 'local' && sw.length ? dropPill(k('switch'), mtaType(sw[0].type), 'warn', sw, skipMapBtn(sw)) : '')
     + (e2l.length ? dropPill(k('e2l'), 'Express to local', 'info', e2l) : '')
     + (skip.length ? dropPill(k('skip'), 'Stops skipped', 'warn', skip, skipMapBtn(skip)) : '')
-    + (red.length ? dropPill(k('reduced'), 'Reduced service', 'info', red) : '');
+    + (red.length ? dropPill(k('reduced'), 'Reduced service', 'info', red) : '')
+    + changePill(route, dir, k('change'));
+}
+// Part of the line suspended or rerouted (storms, flooding, track work): a
+// pill on the line's rows at the hub, named as the MTA does ("Part
+// suspended", "Reroute"), with its map (owner, Nov 26).
+// A notice naming no direction, about a stretch on one side of the hub (no 1
+// trains above 96 St): only trains heading into that stretch, whatever the hub.
+function headsInto(n, route, dir, stnId) {
+  const m = changeModel(n);
+  const ends = subwayData && subwayData.terminals && subwayData.terminals[route];
+  if (!m || m.whole || !ends || !subwayData.stops[stnId] || noticeDir(n)) return true;
+  // Which side of the hub each closed station is on, along the line's axis
+  // from its southern to its northern end (km east and north).
+  const here = LL(stnId);
+  const at = (d) => { const ts = (ends[d] || []).filter((t) => subwayData.stops[t]).map(LL); return ts.length ? [ts.reduce((a, t) => a + t[0], 0) / ts.length, ts.reduce((a, t) => a + t[1], 0) / ts.length] : null; };
+  const tn = at('N'), ts = at('S');
+  if (!tn || !ts) return true;
+  const ax = [(tn[0] - ts[0]) * 111, (tn[1] - ts[1]) * 84];
+  return [...m.closed].filter((id) => subwayData.stops[id]).some((id) => {
+    const x = LL(id);
+    if (kmLL(x, here) < 0.3) return true; // the stretch includes the hub itself
+    const side = (x[0] - here[0]) * 111 * ax[0] + (x[1] - here[1]) * 84 * ax[1];
+    return dir === 'N' ? side > 0 : side < 0;
+  });
+}
+function changePill(route, dir, key) {
+  const stnId = key.split('|')[0];
+  const ns = subNotices(route, dir, CHANGE_TYPES).filter((n) => !isSwitchNotice(n) && headsInto(n, route, dir, stnId));
+  if (!ns.length) return '';
+  const m = ns.map(changeModel).find(Boolean);
+  return dropPill(key, mtaType(ns[0].type), 'warn', ns, m ? `<button type="button" class="al-map" data-change="${esc(m.n.id)}">See map</button>` : '');
 }
 // "See map" in a skipped-stops dropdown, when the notice names the stations,
 // and the buses to those stations (below).
@@ -1067,10 +1100,6 @@ function refreshSkipBuses() {
   });
 }
 // A reroute pill, with the notice behind it (and its map) when there is one.
-function reroutePill(stnId, route, dir) {
-  const m = changeFor(route);
-  return m ? dropPill(`${stnId}|${route}|${dir}|reroute`, 'Reroute', 'warn', [m.n], `<button type="button" class="al-map" data-change="${esc(m.n.id)}">See map</button>`) : warnPill('Reroute');
-}
 
 // PATH's late-night service: the hours when weekday trains from 33 St run to
 // Journal Square via Hoboken (about 11 PM to 6 AM). PATH trains leaving in
@@ -1465,12 +1494,13 @@ function renderSubway() {
       const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
       const rest = mins.slice(1).length ? `, ${mins.slice(1).join(', ')}` : '';
       minsShown.set(rowKey, firstMin + rest);
-      const rerouted = !skipFor(g.route) && trains.find((x) => unusualStops(g.route, x).length);
+      const rerouted = !skipFor(g.route, dir) && trains.find((x) => unusualStops(g.route, x).length);
       // Delays and skipped stops: pills on the row (the notice, its map and
       // other options are in the service notices).
       const linePills = subwayPills(g.route, dir, svc, stn.id, trains[0]);
-      if (!rerouted || changeFor(g.route)) {
-        return `<div class="sline">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${pills(pill, linePills, rerouted ? reroutePill(stn.id, g.route, dir) : '')}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
+      // (A rerouted train under a notice: the notice's pill is already in linePills.)
+      if (!rerouted || changeFor(g.route, dir)) {
+        return `<div class="sline">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${pills(pill, linePills)}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
       }
       // Rerouted with no notice behind it: the row itself opens the map.
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
@@ -1660,7 +1690,9 @@ const findStations = (name, prefer) => [...new Set(String(name).split('/').map((
 // the first sentence of each kind is used (the other direction is the same
 // route in reverse).
 function readVia(desc, route) {
-  const sentence = String(desc || '').split('\n').find((x) => new RegExp(`\\[${route}\\][^.]*runs via the \\[`).test(x));
+  // "[4] trains run via the [2] from Nevins St to Flatbush Av", "Brooklyn-bound
+  // [A][C] trains are running via the [F] from W 4 St to Jay St": headline or details.
+  const sentence = String(desc || '').split(/\n|(?<=\.)\s+(?=[A-Z\[])/).find((x) => new RegExp(`\\[${route}\\][^.]*\\b(?:runs?|running|operates?|operating|travels?|go(?:es)?)\\s+via the \\[`).test(x));
   if (!sentence) return [];
   const out = [];
   let from = null;
@@ -1740,7 +1772,7 @@ function changeModel(n) {
   const whole = /suspended/i.test(n.type) && !/part/i.test(n.type);
   if (whole) for (const id of subwayData.routes[route].normal) if (subwayData.stops[id]) closed.add(id);
   if (!closed.size) return null;
-  return { n, route, closed, whole, skip, alt: readAlternatives(n.desc, route), via: readVia(n.desc, route) };
+  return { n, route, closed, whole, skip, alt: readAlternatives(n.desc, route), via: readVia(`${n.text}\n${n.desc || ''}`, route) };
 }
 const changeModels = () => ((board && board.notices && board.notices.subway) || []).map(changeModel).filter(Boolean);
 
@@ -1845,7 +1877,7 @@ async function openChange(id, view = 1) {
     $('chg-h').innerHTML = noticeText(n.text);
     $('chg-top').innerHTML = `<ul class="cm-key">
         ${model.whole ? '' : `<li><span class="sw" style="border-color:${esc(lineInfo(route).color)}"></span>${label} trains running</li>`}
-        <li><span class="sw off"></span>${model.skip ? `${label} trains skip these stations` : `No ${label} trains`}</li>
+        <li>${model.skip ? `<span class="sw-skip"></span>${label} trains skip these stations` : `<span class="sw off"></span>No ${label} trains`}</li>
         <li class="ent-li">Zoom in for entrances: <span class="ent">${ENT_STAIR}</span> stairs <span class="ent el">${ENT_ELEV}</span> elevator <span class="ent ex">${ENT_STAIR}</span> exit only</li>
         ${alt.buses.length ? '<li><span class="sw bus"></span>Free shuttle bus</li>' : ''}
         ${model.via && model.via.length ? `<li>${bulletHtml(route, 'tiny')} on its temporary route, via the ${[...new Set(model.via.map((v) => v.line))].map((l) => bulletHtml(l, 'tiny')).join(' and ')}</li>` : ''}
@@ -2037,7 +2069,10 @@ function drawChange(map, model, view) {
   // Station dots grow as you zoom in; zoomed right out they'd hide the line.
   const dots = [];
   const dotSize = (small) => { const z = map.getZoom(); return z < 11.5 ? (small ? 1.5 : 2.5) : z < 13 ? (small ? 2.5 : 3.5) : (small ? 3.5 : 4.5); };
-  const dot = (id, off, small) => dots.push([small, L.circleMarker(LL(id), { radius: 3, weight: small ? 1.5 : 2, color: off ? '#8f8f8f' : '#1b1b1b', fillColor: '#fff', fillOpacity: 1, interactive: false }).addTo(map)]);
+  // A skipped station (the line keeps running past it) gets a red ring, so a
+  // lone skipped stop stands out even though the line through it stays colored.
+  const skipped = (id) => model.skip && closed.has(id);
+  const dot = (id, off, small) => dots.push([small, L.circleMarker(LL(id), { radius: 3, weight: small ? 1.5 : skipped(id) ? 3 : 2, color: skipped(id) ? '#d4512b' : off ? '#8f8f8f' : '#1b1b1b', fillColor: skipped(id) ? '#d9d9d9' : '#fff', fillOpacity: 1, interactive: false }).addTo(map), skipped(id)]);
   const lineIds = subwayData.routes[route].normal.filter((id) => subwayData.stops[id]);
   for (const id of new Set([...lineIds, ...closed])) dot(id, closed.has(id));
   const names = L.layerGroup();
@@ -2062,7 +2097,7 @@ function drawChange(map, model, view) {
     const [la, lo] = LL(id);
     if (named.some(([n, a, o]) => n === stationName(id) && Math.hypot(a - la, o - lo) < 0.004)) continue;
     named.push([stationName(id), la, lo]);
-    L.marker(LL(id), { interactive: false, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="cm-name${closed.has(id) && !ls.length ? ' off' : ''}">${esc(stationName(id))}${bullets(ls)}</div>` }) }).addTo(names);
+    L.marker(LL(id), { interactive: false, icon: L.divIcon({ className: '', iconSize: [0, 0], html: `<div class="cm-name${closed.has(id) && !ls.length ? ' off' : ''}"><span class="nm">${esc(stationName(id))}</span>${skipped(id) ? '<span class="skip-tag">skipped</span>' : ''}${bullets(ls)}</div>` }) }).addTo(names);
   }
 
   // Labels for the overall picture.
@@ -2113,7 +2148,7 @@ function drawChange(map, model, view) {
   loadSubwayEntrances().then(drawEntrances);
   const sync = () => {
     drawEntrances();
-    for (const [small, m] of dots) { m.setRadius(dotSize(small)); m.setStyle({ weight: map.getZoom() < 11.5 ? 1.2 : small ? 1.5 : 2 }); }
+    for (const [small, m, sk] of dots) { m.setRadius(dotSize(small) + (sk ? 2.5 : 0)); m.setStyle({ weight: sk ? 3 : map.getZoom() < 11.5 ? 1.2 : small ? 1.5 : 2 }); }
     if (map.getZoom() >= 14) { labelLayer.clearLayers(); names.addTo(map); }
     else { names.remove(); placeLabels(map, labelLayer, labels); }
   };
@@ -2124,7 +2159,8 @@ function drawChange(map, model, view) {
   // (Only once the map has a view: dots and labels are sized from it.)
   map.on('zoomend moveend', sync);
   sync();
-  setTimeout(() => { map.invalidateSize(); map.fitBounds(fit, { padding: [24, 24] }); sync(); }, 60);
+  // (Skipped if this map was closed or replaced by another view meanwhile.)
+  setTimeout(() => { if (map !== changeMap || !map._loaded) return; map.invalidateSize(); map.fitBounds(fit, { padding: [24, 24] }); sync(); }, 60);
 
   // Tap a station under the map: zoom to it and circle it.
   $('chg-below').onclick = (e) => {
@@ -2862,12 +2898,48 @@ const subwayDelays = (route, dir) => ((board && board.notices && board.notices.s
 // riders affected are those using local stops, so the note and its options go
 // under the line's local service (or, if none is listed, its Local section).
 // A notice naming one direction ("Some uptown C trains...") applies to that one.
-const DOWN_WORDS = /\b(downtown|southbound|brooklyn-bound)\b/i, UP_WORDS = /\b(uptown|northbound|bronx-bound|queens-bound|manhattan-bound)\b/i;
-const dirMatch = (n, dir) => {
+// Which way a notice's trains run, for any line at any hub (owner, Nov 26):
+// "uptown"/"northbound" and "downtown"/"southbound" say it outright; "<place>-
+// bound" ("Woodlawn-bound [4]", "Flushing-bound [7]", "Manhattan-bound",
+// "Brooklyn-bound") is the direction whose last stops are nearest that place,
+// measured from where the notice applies. null: both ways (or can't tell).
+const BOROUGH_AT = { manhattan: [40.758, -73.985], brooklyn: [40.65, -73.95], bronx: [40.85, -73.88], queens: [40.73, -73.82] };
+const normStn = (x) => String(x).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+const kmLL = (a, b) => Math.hypot((a[0] - b[0]) * 111, (a[1] - b[1]) * 84);
+const noticeDirs = new Map();
+function noticeDir(n) {
+  const memo = `${n.id}|${n.text}`;
+  if (noticeDirs.has(memo)) return noticeDirs.get(memo);
   const first = String(n.text).split(/\.\s/)[0];
-  const down = DOWN_WORDS.test(first), up = UP_WORDS.test(first);
-  if (!dir || down === up) return true;
-  return dir === 'S' ? down : up;
+  const down = /\b(downtown|southbound)\b/i.test(first), up = /\b(uptown|northbound)\b/i.test(first);
+  let dir = down !== up ? (down ? 'S' : 'N') : null;
+  const bound = [...first.matchAll(/([A-Z][\w.'’]*(?:[ -][A-Z0-9][\w.'’]*)*)-bound\b/g)].map((m) => m[1]);
+  if (!dir && bound.length && subwayData) {
+    const line = (n.lines || []).map((l) => l.replace(/X$/, '')).find((l) => subwayData.terminals && subwayData.terminals[l]);
+    const ends = line && subwayData.terminals[line];
+    if (ends) {
+      // Where the notice applies: its stations on that line, else this hub.
+      const at = ((n.affected || {})[line] || []).filter((id) => subwayData.stops[id]).map(LL)[0] || HUB.ll;
+      const votes = bound.map((place) => {
+        const key = normStn(place);
+        const p = BOROUGH_AT[key] || (() => {
+          const hit = Object.entries(subwayData.stops).find(([, v]) => normStn(v[0]) === key) || Object.entries(subwayData.stops).find(([, v]) => normStn(v[0]).startsWith(key));
+          return hit && [hit[1][1], hit[1][2]];
+        })();
+        if (!p) return null;
+        // The direction whose last stops are nearer that place than the notice's stretch is.
+        const score = (d) => Math.min(...(ends[d] || []).filter((id) => subwayData.stops[id]).map((id) => kmLL(LL(id), p) - kmLL(at, p)));
+        return score('N') < score('S') ? 'N' : 'S';
+      }).filter(Boolean);
+      if (votes.length && votes.every((v) => v === votes[0])) dir = votes[0];
+    }
+  }
+  if (subwayData) noticeDirs.set(memo, dir);
+  return dir;
+}
+const dirMatch = (n, dir) => {
+  const d = noticeDir(n);
+  return !dir || !d || d === dir;
 };
 // Trains skipping local stops ("running express", "local to express"). Not
 // "express to local": that's an express line making extra local stops.
@@ -3124,9 +3196,12 @@ $('subway').addEventListener('click', (e) => {
   if (b) openChange(b.dataset.change);
 });
 // A "Rerouted, see map" row opens the notice behind it when there is one.
-const changeFor = (route) => changeModels().find((m) => m.route === route && !m.skip && happeningNow(m.n));
-// Trains skipping stops under a notice aren't "rerouted": the notice's own pill covers them.
-const skipFor = (route) => changeModels().find((m) => m.route === route && m.skip && happeningNow(m.n));
+const changeFor = (route, dir) => changeModels().find((m) => m.route === route && !m.skip && happeningNow(m.n) && dirMatch(m.n, dir));
+// Trains sent express under a notice (sometimes on another line's express
+// track) aren't "rerouted": the notice's own pill covers them. A notice about
+// skipping a station never adds stations, so it doesn't count (owner, Nov 26:
+// "Woodlawn-bound 4 skips Burnside Av" was hiding a rerouted 4).
+const skipFor = (route, dir) => changeModels().find((m) => m.route === route && m.skip && isSwitchNotice(m.n) && happeningNow(m.n) && dirMatch(m.n, dir));
 
 function renderPath() {
   if (!board || !HUB.path) return; // PATH's 33 St station is Penn's neighbour
@@ -3248,10 +3323,11 @@ const noticeText = (t) => esc(t)
 function noticeStrip(list, where) {
   if (!list || !list.length) return '';
   const sig = list.map((n) => n.id).join('|');
-  // Starts collapsed (owner's choice); opening it is remembered for this visit
-  // until the set of notices changes.
+  // Starts collapsed (owner's choice); once opened it stays open for this visit
+  // until it's closed (owner, Nov 26: it was closing by itself whenever the MTA
+  // updated a notice, which changes the notice's id).
   let opened = false;
-  try { opened = sessionStorage.getItem('opened-' + where) === sig; } catch {}
+  try { opened = !!sessionStorage.getItem('opened-' + where); } catch {}
   const urgent = list.some((n) => n.urgent);
   const label = where === 'subway' ? 'Subway service notices' : where === 'path' ? 'PATH alerts' : `Service notices for trains at ${HUB.short}`;
   // Notices that close or reroute part of a line open a map.
@@ -3318,13 +3394,13 @@ function elevatorsHtml() {
     const back = eneWhen(x.estimatedreturntoservice);
     // The MTA's advice, without its own status line ("out of service for replacement"), which may be older than the outage.
     const advice = String(info.alt || '').replace(/^[^.]*out of service[^.]*\.\s*/i, '');
-    const alt = advice ? `<details class="ene-alt"><summary>What to do instead</summary><p>${esc(advice)}</p></details>` : '';
+    const alt = advice ? `<details class="ene-alt" data-k="ene-${esc(x.equipment || '')}"><summary>What to do instead</summary><p>${esc(advice)}</p></details>` : '';
     return `<div class="ene-note">${ENE_ICON}<div><p><b>${kind} out</b>${x.trainno ? ` at the ${esc(x.trainno)} station` : ''}: ${esc(what)}.${back ? ` Back in service by ${esc(back)} (MTA estimate).` : ''}</p>${alt}</div></div>`;
   }).join('');
 }
 function renderElevators() {
   const el = $('elevators');
-  if (el) el.innerHTML = elevatorsHtml();
+  if (el) setKeepOpen(el, elevatorsHtml());
   if (board && board.notices) renderAlertsTab();
 }
 loadElevators();

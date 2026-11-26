@@ -885,3 +885,13 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Amtrak has no public service-alert feed: not covered.
 - The banner's folded details list the notices that concern the hub (its bus routes, subway lines, railroads) and when the check last ran.
 - First run (Nov 25 evening): NJ Transit says the extra trains planned for Thursday's parade won't run; LIRR and Metro-North list extra/added Thanksgiving service; MTA bus and subway parade notices as above; no new routes beyond the MTA's lists.
+
+## Storm readiness: skipped stops, reroutes, suspensions, dropdowns (Nov 26)
+- Skipped-stop maps: a skipped station (the line keeps running past it) gets a red-ringed dot and a red "SKIPPED" tag; the legend shows the same dot. A lone skipped stop was easy to miss (only its name was greyed).
+- Notice direction for any hub (`noticeDir`): uptown/downtown/northbound/southbound, or "<place>-bound" (Woodlawn-, Flushing-, Far Rockaway-, Manhattan-, Brooklyn-bound…) resolved from the line's terminals (subway-data "terminals") and where the notice applies. Replaces the fixed word lists, which missed "Woodlawn-bound" (pill showed both ways) and always took "Manhattan-bound" as uptown (wrong for the 7, E…).
+- Reroute detection: a "skips <station>" notice no longer switches off "Rerouted, see map" for the whole line (the live "Woodlawn-bound 4 skips Burnside Av" was hiding a 4 rerouted via the 2); only "running express" notices in that direction do.
+- Temporary routes: `readVia` reads the headline and details, any wording ("[4] trains run / are running / operate via the [2] from X to Y").
+- New row pill for suspensions and reroutes (`changePill`): "Part suspended", "Suspended", "Reroute" (the MTA's own type) with See map, on the line's rows at the hub. A notice naming no direction goes only on trains heading into the closed stretch (`headsInto`, by which side of the hub it lies along the line's axis): "no 1 above 96 St" is on the uptown 1 only.
+- Tested with simulated storm notices and rerouted trains at both hubs: 4 via the 2 to Flatbush, 7 part suspended in Queens with shuttle buses, 6 and E suspended, uptown 5 skipping 86 St, A/C via the F, 1 part suspended uptown. Rows, pills, maps (both views) and "getting around it" all work, no errors.
+- Fixed a map error when switching views quickly (a delayed fit ran on a replaced map).
+- Dropdowns: the notice strips ("Subway service notices" etc.) now stay open until closed; they closed whenever the MTA updated any notice (its ids change with each version). A row's open "Delays" dropdown stays while its notice does, even when the row turns to an on-time train. The elevator panel's "What to do instead" keeps its open state.

@@ -336,7 +336,9 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 .cm-label.off { background: #5b5b5b; color: #fff; }
 .cm-label:has(.bullet) { flex-direction: row; align-items: center; }
 .cm-name { transform: translate(8px, -50%); width: max-content; display: inline-flex; align-items: center; gap: 2px; font-size: 12px; font-weight: 700; color: #1b1b1b; text-shadow: 0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff; white-space: nowrap; }
-.cm-name.off { color: #8a8a8a; text-decoration: line-through; }
+.cm-name.off .nm { color: #8a8a8a; text-decoration: line-through; }
+.cm-name .skip-tag { margin-left: 4px; padding: 0 5px; border-radius: 99px; background: #d4512b; color: #fff; font-size: 10px; text-shadow: none; text-transform: uppercase; letter-spacing: .03em; }
+.cm-key .sw-skip { display: inline-block; width: 14px; height: 14px; margin: 0 1.05rem 0 .4rem; border-radius: 50%; border: 3px solid #d4512b; background: #d9d9d9; vertical-align: -2px; }
 .cm-name .bullet { text-shadow: none; }
 .cm-ring { width: 34px; height: 34px; border-radius: 50%; border: 3px solid var(--gold); transform: translate(-50%, -50%); }
 .cm-below { padding: .4rem 1.1rem 1.2rem; }
