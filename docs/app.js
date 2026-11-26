@@ -963,7 +963,10 @@ const WX_PILL = `<span class="late-pill wx-pill">${'<svg class="ic" viewBox="0 0
 const holidayOn = (epoch) => subwayHoliday(nyDayAt(epoch).date) || (holidayNotice() && subwayHoliday(nyNow().date));
 function specialPills(epoch, late) {
   if (late) return '';
-  return (holidayOn(epoch) ? HOLIDAY_PILL : '') + (weatherNotice() ? WX_PILL : '');
+  const html = (holidayOn(epoch) ? HOLIDAY_PILL : '') + (weatherNotice() ? WX_PILL : '');
+  // (Wrapped: shown only while the hub is changing over to or from late
+  // nights; see renderSubway.)
+  return html ? `<span class="sp-pills">${html}</span>` : '';
 }
 const SUB_LATE_PILL = `<a class="late-pill" href="${MTA_NIGHT_MAP}" target="_blank" rel="noopener" title="MTA late-night subway map (opens in a new tab)">${ICON.moon}Late night<span class="ext" aria-hidden="true">↗&#xFE0E;</span><span class="sr">, MTA late-night map, opens in a new tab</span></a>`;
 // Trouble on a line (delays, skipped stops, reroutes): a pill on its rows.
@@ -1634,6 +1637,13 @@ function renderSubway() {
   }, '');
   $('sub-toggles').innerHTML = subwayStyleHtml();
   renderSubwayTags(states);
+  // The holiday/weather pill on each train only while late-night service is
+  // starting or ending at this hub (some train or line still on late nights);
+  // once it's all daytime service, only the tag by the Subway heading says so,
+  // until the next change-over tonight (owner, Nov 26).
+  const changing = !!$('subway').querySelector('.late-pill:not(.hol-pill):not(.wx-pill):not(.warn-pill)')
+    || states.some((st) => st.phase === 'night' || st.phase === 'morning');
+  $('subway').classList.toggle('no-sp', !changing);
 }
 
 // Tags beside the Subway heading. Late-night service shows once no more

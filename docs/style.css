@@ -1045,3 +1045,10 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 @media (min-width: 961px) { body.stack-dirs { --track: 24rem; } }
 
 .panel-back[hidden] { display: none !important; }
+
+/* Holiday/weather pills on trains: only while late nights start or end (app.js). */
+#subway.no-sp .sp-pills { display: none; }
+.sp-pills { display: contents; }
+/* The tags by the Subway heading carry it the rest of the day: a little more prominent (owner, Nov 26). */
+.subway h2 .tag, .main-sub h2 .tag { font-size: .9rem; font-weight: 800; padding: .22rem .7rem; gap: .38rem; vertical-align: 3px; box-shadow: inset 0 0 0 1px currentColor; }
+.subway h2 .tag .ic, .main-sub h2 .tag .ic { width: 1em; height: 1em; }
