@@ -1,26 +1,26 @@
 {
- "checked": 1795654734,
+ "checked": 1795690715,
  "until": 1795885200,
  "sources": {
   "MTA subway": {
    "ok": true,
-   "notices": 217
+   "notices": 213
   },
   "MTA bus": {
    "ok": true,
-   "notices": 181
+   "notices": 165
   },
   "LIRR": {
    "ok": true,
-   "notices": 13
+   "notices": 11
   },
   "Metro-North": {
    "ok": true,
-   "notices": 15
+   "notices": 14
   },
   "NJ Transit": {
    "ok": true,
-   "notices": 3
+   "notices": 19
   },
   "PATH": {
    "ok": true,
@@ -28,11 +28,11 @@
   },
   "TrainTime (Penn)": {
    "ok": true,
-   "notices": 1
+   "notices": 3
   },
   "TrainTime (Grand Central)": {
    "ok": true,
-   "notices": 1
+   "notices": 3
   }
  },
  "events": {
@@ -162,8 +162,103 @@
    },
    {
     "agency": "NJ Transit",
+    "id": "njt-0",
+    "head": "M &amp; E extra service train #8908, the 6:40 AM departure from Dover, scheduled to arrive in PSNY at 8:09 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+   },
+   {
+    "agency": "NJ Transit",
     "id": "njt-1",
+    "head": "M &amp; E extra service train #8910, the 6:54 AM departure from Dover, scheduled to arrive in PSNY at 8:23 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-2",
+    "head": "M &amp; E extra service train #8912, the 7:40 AM departure from Dover, scheduled to arrive in PSNY at 9:00 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-3",
+    "head": "M &amp; E extra service train #8921, the 11:39 AM departure from PSNY, scheduled to arrive in Dover at 1:13 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-4",
+    "head": "M &amp; E extra service train #8923, the 11:52 AM departure from PSNY, scheduled to arrive in Dover at 1:27 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-5",
+    "head": "M &amp; E extra service train #8925, the 12:57 PM departure from PSNY, scheduled to arrive in Dover at 2:31 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-6",
+    "head": "NEC extra service train #8800, the 5:47 AM departure from Trenton, scheduled to arrive in PSNY at 7:09 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-7",
+    "head": "NEC extra service train #8806, the 6:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 8:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-8",
+    "head": "NEC extra service train #8810, the 6:43 AM departure from Trenton, scheduled to arrive in PSNY at 8:07 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-9",
+    "head": "NEC extra service train #8812, the 7:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 9:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-10",
+    "head": "NEC extra service train #8829, the 11:44 AM departure from PSNY, scheduled to arrive in Trenton at 1:09 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-11",
+    "head": "NEC extra service train #8833, the 12:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 1:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-12",
+    "head": "NEC extra service train #8835, the 12:52 PM departure from PSNY, scheduled to arrive in Trenton at 2:23 PM, will note operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-13",
+    "head": "NEC extra service train #8837, the 1:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 2:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-14",
     "head": "NJ TRANSIT is tracking a storm system bringing periods of heavy rain and gusty winds to New Jersey Thursday and into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus on Thursday, November 26 and Friday, November 27, 2026. Due to the postponement of the Macy's Thanksgiving Day Parade, select NJ TRANSIT trains originally scheduled to provide additional service for the event on Thursday, November 26, will not operate. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-15",
+    "head": "NJCL extra service train #8216, the 7:38 AM departure from Long Branch, scheduled to arrive in PSNY at 9:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-16",
+    "head": "NJCL extra service train #8223, the 1:41 PM departure from PSNY, scheduled to arrive in Long Branch at 3:13 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-17",
+    "head": "NJCL extra service train #8314, the 6:03 AM departure from Bay Head, scheduled to arrive in PSNY at 8:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+   },
+   {
+    "agency": "NJ Transit",
+    "id": "njt-18",
+    "head": "NJCL extra service train #8321, the 12:41 PM departure from PSNY, scheduled to arrive in Bay Head at 2:49 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+   },
+   {
+    "agency": "TrainTime",
+    "id": "tt-NYK-74473468",
+    "head": "    Please note:  The Thanksgiving Day Parade has been rescheduled to Saturday because of the weather.    Plan your trip on our TrainTime app or at  mta.info/schedules  .  "
    }
   ]
  },
@@ -249,106 +344,6 @@
    ],
    "start": 1795669200,
    "end": 1795755540
-  },
-  {
-   "agency": "MTA bus",
-   "id": "lmm:alert:277976:26",
-   "head": "Expect delays on all Bronx local and express bus routes due to crowds for Thanksgiving Day celebrations.",
-   "routes": [
-    "BX1",
-    "BX10",
-    "BX11",
-    "BX12",
-    "BX12+",
-    "BX13",
-    "BX15",
-    "BX16",
-    "BX17",
-    "BX18A",
-    "BX18B",
-    "BX19",
-    "BX2",
-    "BX20",
-    "BX21",
-    "BX22",
-    "BX23",
-    "BX24",
-    "BX25",
-    "BX26",
-    "BX27",
-    "BX28",
-    "BX29",
-    "BX3",
-    "BX30",
-    "BX31",
-    "BX32",
-    "BX33",
-    "BX34",
-    "BX35",
-    "BX36",
-    "BX38",
-    "BX39",
-    "BX4",
-    "BX40",
-    "BX41",
-    "BX41+",
-    "BX42",
-    "BX46",
-    "BX4A",
-    "BX5",
-    "BX6",
-    "BX6+",
-    "BX7",
-    "BX8",
-    "BX9",
-    "BXM1",
-    "BXM10",
-    "BXM11",
-    "BXM18",
-    "BXM2",
-    "BXM3",
-    "BXM4",
-    "BXM6",
-    "BXM7",
-    "BXM8",
-    "BXM9"
-   ],
-   "start": 1795641526
-  },
-  {
-   "agency": "MTA bus",
-   "id": "lmm:alert:277983:26",
-   "head": "Expect delays on all Staten Island express bus routes due to heavy traffic in Manhattan for Thanksgiving Day celebrations.",
-   "routes": [
-    "SIM1",
-    "SIM10",
-    "SIM11",
-    "SIM15",
-    "SIM1C",
-    "SIM2",
-    "SIM22",
-    "SIM23",
-    "SIM24",
-    "SIM25",
-    "SIM26",
-    "SIM3",
-    "SIM30",
-    "SIM31",
-    "SIM32",
-    "SIM33",
-    "SIM33C",
-    "SIM34",
-    "SIM35",
-    "SIM3C",
-    "SIM4",
-    "SIM4C",
-    "SIM5",
-    "SIM6",
-    "SIM7",
-    "SIM8",
-    "SIM9"
-   ],
-   "start": 1795643633
   },
   {
    "agency": "MTA bus",
@@ -914,18 +909,6 @@
   },
   {
    "agency": "Metro-North",
-   "id": "lmm:planned_work:36440",
-   "head": "The Hudson, Harlem, and New Haven lines run on a Friday schedule with extra early-afternoon service",
-   "routes": [
-    "1",
-    "2",
-    "3"
-   ],
-   "start": 1795604400,
-   "end": 1795662000
-  },
-  {
-   "agency": "Metro-North",
    "id": "lmm:planned_work:36356",
    "head": "The Port Jervis Line runs on a weekend schedule on the day after Thanksgiving, with three extra trains",
    "routes": [
@@ -937,7 +920,7 @@
   {
    "agency": "Metro-North",
    "id": "lmm:planned_work:36355",
-   "head": "The Port Jervis Line runs on a weekend schedule on Thanksgiving Day, with an extra train",
+   "head": "The Port Jervis Line runs on a weekend schedule on Thanksgiving Day",
    "routes": [
     "51"
    ],
@@ -986,8 +969,108 @@
   },
   {
    "agency": "NJ Transit",
+   "id": "njt-0",
+   "head": "M &amp; E extra service train #8908, the 6:40 AM departure from Dover, scheduled to arrive in PSNY at 8:09 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+  },
+  {
+   "agency": "NJ Transit",
    "id": "njt-1",
+   "head": "M &amp; E extra service train #8910, the 6:54 AM departure from Dover, scheduled to arrive in PSNY at 8:23 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-2",
+   "head": "M &amp; E extra service train #8912, the 7:40 AM departure from Dover, scheduled to arrive in PSNY at 9:00 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-3",
+   "head": "M &amp; E extra service train #8921, the 11:39 AM departure from PSNY, scheduled to arrive in Dover at 1:13 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-4",
+   "head": "M &amp; E extra service train #8923, the 11:52 AM departure from PSNY, scheduled to arrive in Dover at 1:27 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-5",
+   "head": "M &amp; E extra service train #8925, the 12:57 PM departure from PSNY, scheduled to arrive in Dover at 2:31 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-6",
+   "head": "NEC extra service train #8800, the 5:47 AM departure from Trenton, scheduled to arrive in PSNY at 7:09 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-7",
+   "head": "NEC extra service train #8806, the 6:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 8:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-8",
+   "head": "NEC extra service train #8810, the 6:43 AM departure from Trenton, scheduled to arrive in PSNY at 8:07 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-9",
+   "head": "NEC extra service train #8812, the 7:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 9:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-10",
+   "head": "NEC extra service train #8829, the 11:44 AM departure from PSNY, scheduled to arrive in Trenton at 1:09 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-11",
+   "head": "NEC extra service train #8833, the 12:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 1:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-12",
+   "head": "NEC extra service train #8835, the 12:52 PM departure from PSNY, scheduled to arrive in Trenton at 2:23 PM, will note operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-13",
+   "head": "NEC extra service train #8837, the 1:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 2:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-14",
    "head": "NJ TRANSIT is tracking a storm system bringing periods of heavy rain and gusty winds to New Jersey Thursday and into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus on Thursday, November 26 and Friday, November 27, 2026. Due to the postponement of the Macy's Thanksgiving Day Parade, select NJ TRANSIT trains originally scheduled to provide additional service for the event on Thursday, November 26, will not operate. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-15",
+   "head": "NJCL extra service train #8216, the 7:38 AM departure from Long Branch, scheduled to arrive in PSNY at 9:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-16",
+   "head": "NJCL extra service train #8223, the 1:41 PM departure from PSNY, scheduled to arrive in Long Branch at 3:13 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-17",
+   "head": "NJCL extra service train #8314, the 6:03 AM departure from Bay Head, scheduled to arrive in PSNY at 8:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
+  },
+  {
+   "agency": "NJ Transit",
+   "id": "njt-18",
+   "head": "NJCL extra service train #8321, the 12:41 PM departure from PSNY, scheduled to arrive in Bay Head at 2:49 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
+  },
+  {
+   "agency": "PATH",
+   "id": "path-106681",
+   "head": "Thanksgiving Service Schedule"
+  },
+  {
+   "agency": "TrainTime",
+   "id": "tt-NYK-74473468",
+   "head": "    Please note:  The Thanksgiving Day Parade has been rescheduled to Saturday because of the weather.    Plan your trip on our TrainTime app or at  mta.info/schedules  .  "
   }
  ]
 }
