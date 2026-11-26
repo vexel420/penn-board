@@ -284,6 +284,8 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
   .subway { position: static; display: none; }
   body[data-view="subway"] .subway { display: block; }
   body[data-view="subway"] .rail, body[data-view="subway"] .chips, body[data-view="subway"] #rail-notices, body[data-view="subway"] .style-bar { display: none; }
+  body[data-view="buses"] .subway { display: block; }
+  body[data-view="buses"] .rail, body[data-view="buses"] .chips, body[data-view="buses"] #rail-notices, body[data-view="buses"] .style-bar { display: none; }
 }
 @media (max-width: 640px) {
   .mast-in, .wrap { padding-inline: 1rem; }
@@ -299,9 +301,7 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
   .place { font-size: 1.25rem; }
   .track b { font-size: 1.8rem; }
   .status small { display: inline; margin-left: .4em; }
-  .seg { width: 100%; flex-wrap: wrap; } .seg button { flex: 1; padding-inline: .5rem; }
-  /* The test Buses tab gets its own row on phones. */
-  .seg button[data-view="buses"] { flex-basis: 100%; border-left: 0; border-top: 1px solid var(--line); padding-block: .4rem; }
+  .seg { width: 100%; } .seg button { flex: 1; padding-inline: .25rem; font-size: .9rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   .track.flip b, .track.ring b { animation: none; }
@@ -543,10 +543,19 @@ button.late-pill { border: 0; font: inherit; font-size: .72rem; font-weight: 700
 .opt-card .air-note { margin-top: .3rem; padding: .3rem .5rem; border-left: 3px solid var(--gold); background: #2a2614; font-size: .8rem; }
 .p-path { background: #d93a30; }
 
-/* ---------- Buses tab (testing): buses from Port Authority to NJ Transit stations ---------- */
-.buses-tab { display: none; max-width: 40rem; }
-body[data-view="buses"] .buses-tab { display: block; }
-body[data-view="buses"] .layout, body[data-view="buses"] .chips, body[data-view="buses"] .style-bar { display: none; }
+/* ---------- Buses (owner, Nov 26): the hub's MTA buses and NJ Transit buses from Port Authority ----------
+   Computers: a switch at the top of the side panel shows the subway or the buses.
+   Phones: a Buses tab of its own. */
+.side-switch { display: flex; margin: 0 0 .9rem; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; }
+.side-switch button { flex: 1; font: inherit; font-weight: 800; font-size: .92rem; padding: .45rem .6rem; background: none; border: 0; color: var(--ivory); cursor: pointer; }
+.side-switch button[aria-pressed="true"] { background: var(--ivory); color: #121815; }
+.bus-part { display: none; }
+.bus-part .buses-tab { display: block; max-width: none; }
+.bus-h:first-child { margin-top: 0; }
+body[data-side="buses"] .sub-part { display: none; }
+body[data-side="buses"] .bus-part { display: block; }
+.njt-xh { margin: 0 0 .7rem; padding: .6rem .75rem; border: 1px solid #6b4ea0; border-left: 4px solid #8a3db5; border-radius: 8px; background: rgba(138, 61, 181, .12); font-size: .92rem; line-height: 1.4; }
+.njt-xh b { color: #d2b4ff; }
 .tab-test { font-size: .62em; font-weight: 800; letter-spacing: .05em; text-transform: uppercase; color: var(--gold); margin-left: .2em; }
 .bf-intro { color: var(--dim); font-size: .9rem; margin: .2rem 0 .7rem; }
 .bf-select { width: 100%; font: inherit; font-weight: 800; font-size: 1.05rem; color: var(--ink, #f3ecd9); background: #19271f; border: 1px solid var(--gold); border-radius: 10px; padding: .6rem .7rem; }
@@ -795,3 +804,13 @@ a.bus-pl:hover, a.bus-pl:focus-visible { outline: 2px solid var(--gold); outline
 .air-sort span { color: var(--dim); margin-right: .2rem; }
 .air-sort button { font: inherit; font-weight: 700; padding: .3rem .8rem; border-radius: 99px; border: 1px solid var(--line, #2c4034); background: none; color: var(--ivory); cursor: pointer; }
 .air-sort button[aria-pressed="true"] { background: var(--ivory); color: #121815; border-color: var(--ivory); }
+
+/* Phones: the tabs choose what the side panel shows; no switch, whatever a
+   computer last picked (this comes last so it wins over the switch's rules). */
+@media (max-width: 960px) {
+  .subway .side-switch { display: none; }
+  body[data-view][data-side] .sub-part { display: block; }
+  body[data-view][data-side] .bus-part { display: none; }
+  body[data-view="buses"][data-side] .sub-part { display: none; }
+  body[data-view="buses"][data-side] .bus-part { display: block; }
+}

@@ -31,7 +31,7 @@
       ],
     },
     gct: {
-      id: 'gct', name: 'Grand Central', short: 'Grand Central', kicker: 'New York', title: 'Grand Central', subwayTab: 'subway and buses',
+      id: 'gct', name: 'Grand Central', short: 'Grand Central', kicker: 'New York', title: 'Grand Central', subwayTab: 'subway',
       pill: { href: 'index.html', label: 'Penn Station' },
       ll: [40.7527, -73.9772],
       directions: { google: 'https://www.google.com/maps/dir/?api=1&origin=Grand+Central+Terminal+New+York&travelmode=transit', apple: 'https://maps.apple.com/?saddr=Grand+Central+Terminal+New+York&dirflg=r' },

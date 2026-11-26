@@ -16,7 +16,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..900&family=Cinzel:wght@600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=202611260133">
+<link rel="stylesheet" href="style.css?v=202611260137">
 </head>
 <!-- Grand Central (owner, Nov 25): the same board engine as Penn (app.js),
      with Grand Central's settings (hub.js) in the "Celestial" theme. -->
@@ -38,7 +38,8 @@
     <div class="seg" role="group" aria-label="Show">
       <button type="button" data-view="departures" aria-pressed="true">Departures</button>
       <button type="button" data-view="arrivals" aria-pressed="false">Arrivals</button>
-      <button type="button" data-view="subway" aria-pressed="false" class="only-narrow">Subway, buses</button>
+      <button type="button" data-view="subway" aria-pressed="false" class="only-narrow">Subway</button>
+      <button type="button" data-view="buses" aria-pressed="false" class="only-narrow">Buses</button>
       <button type="button" data-view="alerts" aria-pressed="false" class="only-narrow">Alerts<span class="tab-count" id="alerts-count"></span></button>
     </div>
     <div class="chips" role="group" aria-label="Line">
@@ -66,6 +67,9 @@
     </section>
 
     <aside class="subway" aria-labelledby="sub-h">
+      <!-- Computers: the panel shows the subway or the buses (owner, Nov 26); phones have a tab for each. -->
+      <div class="side-switch" role="group" aria-label="Show in this panel"><button type="button" data-side="subway" aria-pressed="true">Subway</button><button type="button" data-side="buses" aria-pressed="false">Buses</button></div>
+      <div class="sub-part">
       <h2 id="sub-h">Subway <span>Grand Central-42 St</span></h2>
       <div id="subway-notices"></div>
       <div id="elevators"></div>
@@ -74,17 +78,21 @@
       <div hidden><h2 id="path-h" class="path-h">PATH</h2>
             <div id="path-notices"></div>
       <div id="path"></div></div>
-      <h2 class="path-h">Buses <span>at Grand Central, live from MTA Bus Time</span></h2>
-      <div id="hub-buses"><p class="empty">Loading buses…</p></div>
       <p class="walk">To Penn Station: the S to Times Sq, then the 1, 2 or 3 one stop down (about 15 min), or a 20-minute walk.</p>
       <!-- Display choices for the subway and PATH lists. -->
       <div id="sub-toggles"></div>
+      </div>
+      <div class="bus-part" id="bus-panel">
+        <h2 class="path-h bus-h">Buses <span>at Grand Central, live from MTA Bus Time</span></h2>
+        <div id="hub-buses"><p class="empty">Loading buses…</p></div>
+        <h2 class="path-h bus-h">NJ Transit buses <span>from Port Authority Bus Terminal</span></h2>
+        <div id="njt-bus-note"></div>
+        <section id="buses" class="buses-tab" aria-label="Buses to New Jersey"></section>
+      </div>
     </aside>
   </div>
 
   <section id="alerts" class="alerts-tab" aria-label="Service alerts"></section>
-  <!-- Testing: buses from Port Authority to NJ Transit stations (later shown only during rail disruptions). -->
-  <section id="buses" class="buses-tab" aria-label="Buses to New Jersey"></section>
 
   <div class="style-bar">
     <span>Board style</span>
@@ -126,12 +134,12 @@
   </div>
 </dialog>
 
-<script src="config.js?v=202611260133"></script>
+<script src="config.js?v=202611260137"></script>
 <script>window.HUB_ID = 'gct';</script>
-<script src="hub.js?v=202611260133"></script>
-<script src="feeds.js?v=202611260133"></script>
-<script src="flip.js?v=202611260133"></script>
-<script src="app.js?v=202611260133"></script>
-<script src="airport.js?v=202611260133"></script>
+<script src="hub.js?v=202611260137"></script>
+<script src="feeds.js?v=202611260137"></script>
+<script src="flip.js?v=202611260137"></script>
+<script src="app.js?v=202611260137"></script>
+<script src="airport.js?v=202611260137"></script>
 </body>
 </html>

@@ -3680,7 +3680,21 @@ function renderStamp() {
     : `Updated ${age < 5 ? 'just now' : age + ' seconds ago'}.`;
 }
 
-function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderServiceNotices(); renderStamp(); if (view === 'buses') renderBuses(); }
+// The bus panel is showing: the Buses tab (phones), or the side panel switched to Buses (computers).
+let side = 'subway';
+try { side = localStorage.getItem('sidePanel') === 'buses' ? 'buses' : 'subway'; } catch {}
+document.body.dataset.side = side;
+const WIDE = matchMedia('(min-width: 961px)');
+const busesShown = () => view === 'buses' || (WIDE.matches && side === 'buses');
+function setSide(x) {
+  side = x; document.body.dataset.side = side;
+  try { localStorage.setItem('sidePanel', side); } catch {}
+  setPressed('.side-switch', 'side', side);
+  if (busesShown()) { renderBuses(); renderHubBuses(); }
+}
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-side]'); if (b) setSide(b.dataset.side); });
+setPressed('.side-switch', 'side', side);
+function render() { renderRail(); renderSubway(); renderPath(); renderNotices(); renderServiceNotices(); renderStamp(); if (busesShown()) renderBuses(); }
 
 // With server.js running, the server gathers everything. On static hosting
 // (GitHub Pages) there is no server, so the page reads the feeds itself.
@@ -3856,7 +3870,7 @@ document.querySelector('.seg').addEventListener('click', (e) => {
 });
 
 // The masthead names the view: Penn Station departures, arrivals, or subway and PATH.
-const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: HUB.subwayTab, alerts: 'service alerts', buses: 'buses to New Jersey' };
+const HEADINGS = { departures: 'departures', arrivals: 'arrivals', subway: HUB.subwayTab, alerts: 'service alerts', buses: 'buses' };
 function setHeading() {
   $('h1-sub').textContent = HEADINGS[view];
   document.title = `${HUB.title} ${HEADINGS[view]}`;
@@ -3874,7 +3888,11 @@ $('rows').addEventListener('toggle', (e) => {
 }, true);
 // The Subway tab only exists on narrow screens; fall back when the window widens.
 matchMedia('(min-width: 961px)').addEventListener('change', (e) => {
-  if (e.matches && (view === 'subway' || view === 'alerts')) document.querySelector('.seg button[data-view="departures"]').click();
+  if (e.matches && (view === 'subway' || view === 'alerts' || view === 'buses')) {
+    // (Coming from the Buses tab: the side panel shows the buses.)
+    if (view === 'buses' || view === 'subway') setSide(view);
+    document.querySelector('.seg button[data-view="departures"]').click();
+  }
 });
 
 function tick() {
@@ -4311,14 +4329,14 @@ try { busStation = localStorage.getItem('busStation') || ''; } catch {}
 function loadBusFinder() {
   if (busFinder !== undefined || busFinderLoading) return;
   busFinderLoading = fetch('njt-bus-finder.json').then((r) => (r.ok ? r.json() : null)).catch(() => null)
-    .then((d) => { busFinder = d; busFinderLoading = null; if (view === 'buses') renderBuses(); });
+    .then((d) => { busFinder = d; busFinderLoading = null; if (busesShown()) renderBuses(); });
 }
 function loadBusLive() {
   if (busLiveLoading || Date.now() - busLiveAt < 30000 || !window.PENN_RELAY) return;
   busLiveLoading = fetch(window.PENN_RELAY + '/njt-bus-pabt', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
     .then((d) => { busLive = { trips: (d && d.DVTrip) || [], at: Date.now() }; })
     .catch(() => { busLive = busLive && busLive.trips ? busLive : { error: true, trips: [] }; })
-    .finally(() => { busLiveAt = Date.now(); busLiveLoading = null; if (view === 'buses') renderBuses(); });
+    .finally(() => { busLiveAt = Date.now(); busLiveLoading = null; if (busesShown()) renderBuses(); });
 }
 const normSign = (x) => String(x || '').replace(/\s+/g, ' ').trim().toUpperCase();
 const busPill = (o) => (o.agency === 'NJ Transit' ? `<span class="pl p-njt">${esc(o.route)}</span>` : `<span class="pl p-partner">${esc(o.agency)}${o.route ? ` ${esc(o.route)}` : ''}</span>`);
@@ -4358,6 +4376,7 @@ function busName(o) {
   return rest || o.head || '';
 }
 function portAuthorityHtml(nowS) {
+  if (!IS_PENN) return portAuthorityFromGct(nowS);
   const trainsTo = (routes, from, to) => ((board && board.subway) || []).filter((g) => routes.includes(g.route) && g.trains[0] && g.trains[0].stops && g.trains[0].stops[0] === from)
     .flatMap((g) => g.trains.map((t) => ({ ...t, route: g.route }))).filter((t) => (t.stops || []).includes(to) && t.time >= nowS + 60).sort((a, b) => a.time - b.time).slice(0, 3);
   const next = (ts) => ts.map((t) => `${bulletHtml(t.route, 'inl')} ${Math.round((t.time - nowS) / 60)} min`).join(' &nbsp; ');
@@ -4372,6 +4391,14 @@ function portAuthorityHtml(nowS) {
     })();
   return `<div class="bf-get">${sub}<div><span>Walk up 8 Av to 41 St</span><span class="dim">About 10 min. Port Authority's entrance is at 8 Av and 41 St.</span></div></div>`;
 }
+// From Grand Central: the shuttle or the 7 to Times Sq, then the passage under 42 St to Port Authority.
+function portAuthorityFromGct(nowS) {
+  const ts = [['GS', '901', '902'], ['7', '723', '725']].map(([r, a, b]) => { const t = subwayFromTo(r, a, b, nowS); return t && { ...t, route: r }; }).filter(Boolean).sort((x, y) => x.time - y.time);
+  const sub = ts.length
+    ? `<div><span>Subway: the ${lineName('S')} or ${lineName('7')} to Times Sq-42 St, then the underground passage west to Port Authority</span><span class="dim">About 10 min with the walk</span><b>Next: ${ts.slice(0, 3).map((t) => `${bulletHtml(t.route, 'inl')} ${Math.max(0, Math.round((t.time - nowS) / 60))} min`).join(' &nbsp; ')}</b></div>`
+    : '<div><span>Subway: no shuttle or 7 to Times Sq listed right now.</span></div>';
+  return `<div class="bf-get">${sub}<div><span>Walk west on 42 St to 8 Av</span><span class="dim">About 20 min. Port Authority's entrance is at 8 Av and 41 St.</span></div></div>`;
+}
 function renderBuses() {
   const box = $('buses');
   loadBusFinder();
@@ -4383,7 +4410,10 @@ function renderBuses() {
   const st = busFinder.stations[busStation];
   const open = document.activeElement && document.activeElement.id === 'bf-station';
   if (open) return;  // don't redraw under an open picker
-  let html = `<p class="bf-intro">Testing. When NJ Transit trains aren’t running, pick your station to see buses from Port Authority Bus Terminal that stop near it.</p>
+  // NJ Transit's own word that rail tickets are good on its buses (a storm, a rail outage).
+  const xh = ((board && board.notices && board.notices.rail) || []).filter((n) => n.carrier === 'njt' && /cross[- ]?honou?r/i.test(n.text) && /bus/i.test(n.text));
+  $('njt-bus-note').innerHTML = xh.length ? `<div class="njt-xh"><b>Cross-honoring:</b> ${noticeText(xh[0].text)}</div>` : '';
+  let html = `<p class="bf-intro">Pick your NJ Transit station to see the buses from Port Authority Bus Terminal that stop near it: for when trains aren’t running, or rail tickets are good on buses.</p>
     <select id="bf-station" class="bf-select" aria-label="Your station"><option value="">Choose your station</option>${stations.map(([c, x]) => `<option value="${esc(c)}"${c === busStation ? ' selected' : ''}>${esc(x.name)}${x.lines.length ? ` (${esc([...new Set(x.lines.map((l) => NJT_LINE_NAMES[l] || l))].join(', '))})` : ''}</option>`).join('')}</select>`;
   if (st) {
     html += `<p class="bf-h">1 · Get to Port Authority</p>${portAuthorityHtml(nowS)}<p class="bf-h">2 · Bus to ${esc(st.name)}</p>`;
@@ -4426,7 +4456,7 @@ document.addEventListener('change', (e) => {
   e.target.blur();
   renderBuses();
 });
-setInterval(() => { if (view === 'buses') renderBuses(); }, 30000);
+setInterval(() => { if (busesShown()) renderBuses(); }, 30000);
 
 
 // A line bullet keeps the punctuation after it on the same line ("on the 2."
