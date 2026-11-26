@@ -230,7 +230,9 @@ a.late-pill:hover, a.late-pill:focus-visible { background: #263259; color: #fff;
 .fare { display: inline-block; margin-left: .2rem; padding: 0 .4rem; border: 1px solid var(--line); border-radius: 3px; font-size: .72rem; font-weight: 700; color: var(--dim); vertical-align: 1px; text-decoration: none; }
 .fare.peak { border-color: var(--gold); color: var(--gold); }
 .dir h3 { margin: 1rem 0 .3rem; font-size: .85rem; font-weight: 500; color: var(--dim); border-bottom: 1px solid var(--line); padding-bottom: .3rem; }
-.sline { display: grid; grid-template-columns: 2rem minmax(0, 1fr) auto; gap: .7rem; align-items: center; padding: .4rem 0; }
+/* (The minutes column has a fixed width, so a change like "12 min, 32" to "now, 16, 31"
+   doesn't change how the name beside it wraps and move the board. Owner, Nov 26.) */
+.sline { display: grid; grid-template-columns: 2rem minmax(0, 1fr) 6.8rem; gap: .7rem; align-items: center; padding: .4rem 0; }
 .bullet { width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 1.1rem; color: #fff; background: #6b7a70; box-shadow: 0 0 0 1px rgba(242, 234, 216, .2); }
 .bullet.inl { display: inline-grid; width: 1.3em; height: 1.3em; font-size: .78em; vertical-align: -.22em; box-shadow: none; margin: 0 .05em; }
 .bullet.inl.wide { width: auto; padding: 0 .35em; }
