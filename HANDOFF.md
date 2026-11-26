@@ -966,3 +966,9 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 ## Shuttle overnight: take the 7 (Nov 26)
 - Overnight the S says "No S trains until 6:04 AM. Take the 7 to Grand Central (or Times Sq) until the first shuttle." (destination from HUB.dirs). Then "Daytime service has started on the S" (existing 'morning' phase) until the first shuttle shows "now".
 - Overnight notes now show while the only trains listed for that line are after the gap ends (the first morning trains appear in the feed hours early; before, that hid the note — Grand Central's S had none). This applies to every line, e.g. Penn's C now says "No C trains until 7:51 AM. Use the A." before 7:51 even with the first C listed.
+
+## PATH on holidays (Nov 26)
+- Owner asked whether PATH was really late all night. It wasn't: PATH ran its Thanksgiving schedule (its 5 AM notice), and the board measured live trains against the weekday timetable (live 5:56 vs weekday 5:48 = "8 min late"; banner said direct Journal Square from 6:03 AM; PATH said 9:40 AM).
+- `pathKey(d)`: on subwayHoliday() days PATH's weekend ('sunday') timetable is used for late measurement, on-time checks, the late-night pill/banner and the scheduled fallback. Approximate: Thanksgiving's direct Journal Square trains start 9:40 AM vs the weekend's 10:10 AM.
+- `pathLateBy` returns 0 when the train is within 2 min of a scheduled time (a train leaving 2 min before its slot was counted late from the slot before).
+- PATH's own overnight advisory ("Overnight trains may leave up to 10 minutes late") is real and daily, but it's in a Closed state in the feed, so the board doesn't show it.

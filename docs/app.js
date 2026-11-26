@@ -1165,6 +1165,12 @@ function refreshSkipBuses() {
 // PATH's day and late-night patterns from 33 St, per day, from PATH's
 // timetable: direct Journal Square trains by day, Journal Square via Hoboken
 // late at night (weekdays about 10:40 PM to 6 AM; weekends 9 PM to 10 AM).
+// Which of PATH's timetables runs on a day. On the major holidays (New Year's,
+// Memorial Day, July 4, Labor Day, Thanksgiving, Christmas) PATH runs a holiday
+// schedule close to its weekend one (Nov 26: Thanksgiving's trains matched the
+// weekend times; measured against the weekday timetable they looked late all
+// night, and the banner said direct Journal Square trains started at 6 AM).
+const pathKey = (d) => (subwayHoliday(d.date) ? 'sunday' : d.day);
 function pathDay(day) {
   const list = pathSchedule && pathSchedule.days && pathSchedule.days[day];
   if (!list) return null;
@@ -1186,7 +1192,7 @@ function pathDay(day) {
 // Where PATH stands now: 'countdown' (last direct train within the hour),
 // 'night' (no direct Journal Square trains until morning) or 'day'.
 function pathState() {
-  const now = nyNow(), T = pathDay(now.day);
+  const now = nyNow(), T = pathDay(pathKey(now));
   if (!T) return null;
   const m = now.mins;
   // Morning: late-night service lasts until its last train via Hoboken has
@@ -1202,7 +1208,7 @@ function pathState() {
   // Still counting down while the last direct train, running late, hasn't left.
   if (m > T.lastDirect && livePathLast(T.lastDirect)) return { phase: 'countdown', lastDirect: T.lastDirect, nightStart: T.nightStart, left: 0 };
   if (m > T.lastDirect) {
-    const N = pathDay(nyNow(1).day);
+    const N = pathDay(pathKey(nyNow(1)));
     return { phase: 'night', until: N ? N.firstDirect : T.firstDirect };
   }
   if (m >= T.lastDirect - 60) return { phase: 'countdown', lastDirect: T.lastDirect, nightStart: T.nightStart, left: T.lastDirect - m };
@@ -1242,13 +1248,13 @@ function pathNightWindow(day, line) {
 }
 function pathLateNight(dest, epoch) {
   if (!pathSchedule) return false;
-  const { day, mins } = nyDayAt(epoch);
+  const at = nyDayAt(epoch), day = pathKey(at), mins = at.mins;
   const W = pathNightWindow(day, pathLine(dest));
   // The scheduled departure this train is (closest within 8 min), else its own time.
   const near = W.times.reduce((best, t) => (Math.abs(t - mins) < Math.abs(best - mins) ? t : best), Infinity);
   const m = Math.abs(near - mins) <= 8 ? near : mins;
   if (m < 12 * 60 && m < W.to) {
-    const Y = pathNightWindow(nyDayAt(epoch - 86400).day, pathLine(dest));
+    const Y = pathNightWindow(pathKey(nyDayAt(epoch - 86400)), pathLine(dest));
     return Y.from == null ? false : Y.from >= 720 || m >= Y.from;
   }
   return W.from != null && W.from >= 720 && m >= W.from;
@@ -2554,7 +2560,7 @@ function pathModel(n) {
 function pathOnTime(dest, epoch) {
   if (!pathSchedule || !epoch) return false;
   for (const off of [-1, 0, 1]) {
-    const day = nyNow(off).day; // PATH's own timetable by the real day
+    const day = pathKey(nyNow(off)); // PATH's own timetable by the real day (weekend on holidays)
     for (const d of pathSchedule.days[day] || []) if (d.to === dest && Math.abs(minsToEpoch(off * 1440 + d.t) - epoch) <= 120) return true;
   }
   return false;
@@ -2586,9 +2592,11 @@ function pathTrouble(dest, epoch) {
 // running late: measured from the latest scheduled time at or before it.
 function pathLateBy(dest, epoch) {
   if (!pathSchedule || !epoch) return null;
+  // Within 2 min of a scheduled departure (either side) is on time.
+  if (pathOnTime(dest, epoch)) return 0;
   let best = null;
   for (const off of [-1, 0, 1]) {
-    const day = nyNow(off).day; // PATH's own timetable by the real day
+    const day = pathKey(nyNow(off)); // PATH's own timetable by the real day (weekend on holidays)
     for (const d of pathSchedule.days[day] || []) {
       if (d.to !== dest) continue;
       const t = minsToEpoch(off * 1440 + d.t);
@@ -3368,8 +3376,8 @@ const fmtMins = (t) => { const h = Math.floor(t / 60) % 24, m = t % 60; return `
 function nextScheduledPath() {
   const today = nyNow(), tomorrow = nyNow(1);
   const list = [
-    ...(pathSchedule.days[today.day] || []).filter((d) => d.t >= today.mins),
-    ...(pathSchedule.days[tomorrow.day] || []).map((d) => ({ ...d, t: d.t + 1440 })),
+    ...(pathSchedule.days[pathKey(today)] || []).filter((d) => d.t >= today.mins),
+    ...(pathSchedule.days[pathKey(tomorrow)] || []).map((d) => ({ ...d, t: d.t + 1440 })),
   ].filter((d) => d.t < today.mins + 120);
   const byDest = new Map();
   for (const d of list) {
