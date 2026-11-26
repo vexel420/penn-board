@@ -2,6 +2,39 @@
 
 Written 16 Nov 2026 (evening, New York time). Read this first, then `README.md`.
 
+## Next week: features to build when the owner's usage resets (list started Nov 26)
+
+The owner is spending the rest of this week's usage on **bugs only**. New features
+wait for next week. Add to this list instead of building them now.
+
+**Asked for by the owner**
+- [ ] **"To the airport" on the Times Square–42 St board** (owner, Nov 26). The
+  button is hidden there now (`airport: false` in hub.js). It needs routes from
+  Times Sq: the subway to Penn/Grand Central/Port Authority connections, the A/E to
+  JFK via Howard Beach/Jamaica, the M60-SBS/Q70 for LaGuardia, and NJ Transit or
+  Newark Airport Express from Port Authority for Newark. Same fastest/cheapest sort.
+
+**Carried over from earlier (offered or open; confirm with the owner first)**
+- [ ] "To the airport" on the Port Authority board too (also hidden; the Newark
+  Airport Express already leaves from there).
+- [ ] A note under the Times Square 7 about 42 St–Bryant Park: no in-station
+  walkway; ride the 7 one stop to 5 Av, or walk two avenue blocks (offered Nov 26).
+- [ ] PATH holiday timetables: today the board uses the weekend timetable on
+  holidays, which is close but not exact (Thanksgiving's direct Journal Square
+  trains started 9:40 AM, the weekend's 10:10 AM).
+- [ ] Owner's feedback on the delayed-train layout (mockup E).
+- [ ] Ticketmaster key in the relay (event warnings beyond the NHL schedule).
+- [ ] Licensing: check the FlixBus/Greyhound GTFS terms; MTA data email (mention
+  Grand Central/Metro-North); a Port Authority MyTerminal data request (offered).
+- [ ] A name for the app.
+
+**Bugs still open going into next week**
+- [ ] Times Square "jumping" in the 4-board view: not reproducible in Chromium.
+  Fixes shipped Nov 26 for Safari (keepAnchor, locked split page); waiting on the
+  owner's device and browser if it still happens.
+- [ ] Watch the S's "Daytime service has started" and the Thanksgiving holiday
+  pills on the live board (first seen working Nov 26 for the Q).
+
 ## Update, later the same evening
 
 - The project is on GitHub: https://github.com/vexel420/penn-board (public, `main`).
