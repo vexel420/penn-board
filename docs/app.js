@@ -2974,7 +2974,7 @@ const loadLirrTT = () => loadTT('lirr');
 setTimeout(loadLirrTT, 3000); // for last trains of the night (final call)
 const trainNo = (x) => String(x || '').replace(/^0+(?=\d)/, '');
 // Today's and tomorrow's trains as { route, head, train, calls: [[stop, epoch s], ...] }.
-function ttTripsNear(tt) {
+function ttTripsNear(tt, aheadH = 14) {
   const out = [];
   const nowS = Date.now() / 1000;
   for (let k = 0; k < 2; k++) {
@@ -2984,7 +2984,7 @@ function ttTripsNear(tt) {
       if (!day.has(svc)) continue;
       const calls = [];
       for (let i = 0; i < flat.length; i += 2) calls.push([tt.stops[flat[i]], midnight + flat[i + 1] * 60]);
-      if (calls[calls.length - 1][1] < nowS || calls[0][1] > nowS + 14 * 3600) continue;
+      if (calls[calls.length - 1][1] < nowS || calls[0][1] > nowS + aheadH * 3600) continue;
       out.push({ route, head, train: trainNo(train), calls });
     }
   }
@@ -2992,13 +2992,14 @@ function ttTripsNear(tt) {
 }
 const lirrTripsNear = () => ttTripsNear(lirrTT);
 // Best plan to each target station: { first, leave, change?: { at, time, second }, arrive }.
-function ttPlans(tt, changeS, targets, skipTrain, fromS) {
-  const trips = ttTripsNear(tt);
+// (windowH: how far ahead the first train may leave; the airport looks into tomorrow.)
+function ttPlans(tt, changeS, targets, skipTrain, fromS, windowH = 12) {
+  const trips = ttTripsNear(tt, windowH + 4);
   const penn = ttFrom(tt);
   const byStop = new Map();
   for (const t of trips) t.calls.forEach(([sid], i) => { if (!byStop.has(sid)) byStop.set(sid, []); byStop.get(sid).push([t, i]); });
   const firsts = trips.map((t) => [t, t.calls.findIndex(([sid]) => sid === penn)])
-    .filter(([t, i]) => i >= 0 && i < t.calls.length - 1 && t.calls[i][1] >= fromS && t.calls[i][1] <= fromS + 12 * 3600 && t.train !== skipTrain);
+    .filter(([t, i]) => i >= 0 && i < t.calls.length - 1 && t.calls[i][1] >= fromS && t.calls[i][1] <= fromS + windowH * 3600 && t.train !== skipTrain);
   const best = new Map();
   // Earliest arrival; for the same arrival, no change beats a change, then the
   // later train from Penn (less waiting at the change).

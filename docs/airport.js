@@ -246,6 +246,43 @@ function ispOptions(nowS) {
     out.push({ at: bus.arrive, fare: null, fareText: `LIRR fare to ${station}, plus ${money(ispBus.fare || 2.25)} for the bus`, live: true,
       legs: [[dep, `${airPl('LIRR', 'p-lirr')} to ${station}${HUB_AIR.lirrFrom || ''}${t.track ? `, track ${esc(t.track)}` : ''}`], [bus.leave, `${airPl('Suffolk 6', 'p-partner')} bus from ${station} station to the terminal (scheduled)`]] });
   }
+  // Nothing on the live board (late at night, or the board's list is short):
+  // the next trains from the LIRR timetable, tonight or tomorrow, direct or
+  // with a change (owner, Nov 26: "if there is nothing today, work out the next
+  // available time").
+  if (!out.length) out.push(...ispScheduled(nowS));
+  return out;
+}
+let ispTTAsked = false;
+function ispScheduled(nowS) {
+  if (typeof lirrTT === 'undefined' || !lirrTT || !lirrData) {
+    if (!ispTTAsked && typeof loadLirrTT === 'function') { ispTTAsked = true; loadLirrTT().then(() => { if (changeOpen && changeOpen.id === 'airport' && $('change').open) renderAirport(); }); }
+    return [];
+  }
+  const idOf = (name) => Object.keys(lirrData.stops).find((k) => normName2(lirrData.stops[k][0]) === normName2(name));
+  const ids = { Ronkonkoma: idOf('Ronkonkoma'), 'Central Islip': idOf('Central Islip'), Patchogue: idOf('Patchogue') };
+  const plans = ttPlans(lirrTT, TT.lirr.change, new Set(Object.values(ids).filter(Boolean)), null, nowS + 60, 30);
+  const today = nyNow().date;
+  const out = [];
+  for (const [station, id] of Object.entries(ids)) {
+    const p = id && plans.get(id);
+    if (!p) continue;
+    // The first train on the live board, on time: its live time and track.
+    const r = ((board && board.departures) || []).find((x) => x.carrier === 'lirr' && trainNo(x.train) === p.first.train && x.tone !== 'stop');
+    const onTime = r && Math.abs((r.leaves ?? r.time) - p.leave) < 120;
+    const ride = [[p.leave, `${airPl('LIRR', 'p-lirr')} train ${esc(p.first.train)} to ${esc(p.change ? ttStopName('lirr', p.change.at) : station)}${HUB_AIR.lirrFrom || ''}${onTime && r.track ? `, track ${esc(r.track)}` : ''}`]];
+    if (p.change) ride.push([p.change.time, `Change at ${esc(ttStopName('lirr', p.change.at))} for train ${esc(p.change.second.train)} to ${esc(station)}`]);
+    const only = nyDayAt(p.leave).date !== today ? 'Tomorrow' : '';
+    if (station === 'Ronkonkoma') {
+      out.push({ at: p.arrive + 8 * 60, fare: null, fareText: 'LIRR fare to Ronkonkoma, plus the taxi', live: !!onTime, tag: 'Scheduled', only,
+        legs: [...ride, [p.arrive + 3 * 60, 'Taxi or ride-hail to the terminal, about 5 min']] });
+    } else {
+      const bus = ispBusAfter(station, p.arrive + 3 * 60);
+      if (!bus || bus.leave - p.arrive > 50 * 60) continue;
+      out.push({ at: bus.arrive, fare: null, fareText: `LIRR fare to ${station}, plus ${money((ispBus && ispBus.fare) || 2.25)} for the bus`, live: !!onTime, tag: 'Scheduled', only,
+        legs: [...ride, [bus.leave, `${airPl('Suffolk 6', 'p-partner')} bus from ${station} station to the terminal (scheduled)`]] });
+    }
+  }
   return out;
 }
 // ---------- New York Stewart (SWF) (owner, Nov 25) ----------
@@ -366,7 +403,7 @@ function renderAirport() {
   $('chg-below').innerHTML = (opts.length ? opts.map((x) => `<div class="opt-card"><div class="top"><span>${x === fastest ? '<span class="tagx tag-fast">Fastest</span>' : ''}${x === cheapest ? '<span class="tagx tag-cheap">Cheapest</span>' : ''}${x.live === false ? `<span class="tagx tag-sched">${x.tag || 'Estimated'}</span>` : '<span class="tagx tag-live">Live</span>'}${x.only ? `<span class="am-tag">${esc(x.only)}</span>` : ''}</span><span class="t">${minsText(Math.round((x.at - nowS) / 60))}</span></div>
     <ul class="legs">${x.legs.map(([t, txt]) => `<li><span>${hm(t)}</span><span>${txt}</span></li>`).join('')}<li><span>${hm(x.at)}</span><span>Arrive at ${lgaT || x.term || 'the airport'} (estimated)</span></li></ul>
     <div class="air-fare">${x.fareText || (x.fare != null ? `${money(x.fare)} one way` : '')}</div>${x.note ? `<div class="air-note">${x.note}</div>` : ''}</div>`).join('')
-    : `<p class="cm-live">${airportPick === 'SWF' ? 'No connection to Stewart in the next day: the shuttle to the terminal runs only at certain times.' : `No trains to there are listed from ${HUB_AIR.from} right now.`}</p>`)
+    : `<p class="cm-live">${airportPick === 'SWF' ? 'No connection to Stewart in the next day: the shuttle to the terminal runs only at certain times.' : (airportPick === 'ISP' && (typeof lirrTT === 'undefined' || lirrTT === undefined) ? 'Looking up the next trains in the LIRR timetable…' : `No trains to there are listed from ${HUB_AIR.from} right now.`)}</p>`)
     + '<p class="cm-live">First train: live times from the board. Buses: live from MTA Bus Time when marked live. Connections use usual times. Fares from the MTA, the Port Authority, PATH and NJ Transit; Newark Airport Express and Coach USA times are Coach USA’s schedule; Metro-North is live from TrainTime; the Stewart shuttle is Leprechaun Lines’ schedule; the Islip bus is Suffolk County Transit’s. Check before you travel.</p>';
 }
 function openAirport() {
