@@ -1024,3 +1024,10 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Port Authority full screen inside side-by-side: its two columns (subway 37rem, buses 32rem) are now shrinkable (`minmax(0, …)`); at the split view's larger text the fixed widths had squeezed the buses to a sliver (owner's iPad photo).
 - Minimized alerts are shared by every open board: a toggle re-reads localStorage before saving (an old copy in another frame/tab no longer saves over it), and a `storage` listener re-renders the other boards at once (owner: "it says it's minimized but is still showing").
 - Times Square also lists the bus terminal station's elevators (its board shows the A C E there).
+
+## Special-schedule pills on every train (Nov 26)
+- Owner: every train under a holiday schedule gets the pill until it turns late night or the holiday ends; the same for other special schedules like weather. Built on Thanksgiving to watch live.
+- Subway: `specialPills(epoch, late)`: a daytime train on a holiday (subwayHoliday of the train's own date) gets "Holiday schedule"; while the severe-weather notice is up, "Severe weather schedule" (`WX_PILL`). A late-night train gets only the late-night pill. The after-midnight holiday trips (`subHolidayTrip`) keep their pill as before.
+- PATH (live and timetable): "Holiday schedule" unless the late-night pill applies.
+- Rail: every LIRR, Metro-North and NJ Transit train of a holiday's service day (run_date, else the train's own date); Amtrak none.
+- First look, 6:40 AM Thanksgiving: Penn 8 late / 4 holiday, Grand Central 2 / 5, Times Square 9 / 13; no train with both.
