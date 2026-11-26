@@ -1410,6 +1410,8 @@ function renderSubway() {
   loadSubwayGuide();
   if (!board.subway.length) {
     $('subway').innerHTML = `<p class="empty">${board.sources.subway.error ? 'Subway times didn’t load. Trying again shortly.' : 'No subway trains reported right now.'}</p>`;
+    // The heading's tags still say which service is running.
+    renderSubwayTags(HUB.stations.flatMap((stn) => stn.lines.flatMap((line) => ['N', 'S'].map((dir) => switchState(stn.id, line, dir)))).filter(Boolean));
     return;
   }
   const nowS = Date.now() / 1000;
@@ -1596,11 +1598,16 @@ function renderSubwayTags(states) {
   const tags = [];
   const isNight = (st) => st.phase === 'night' || st.phase === 'morning';
   const allNight = states.length > 0 && states.every(isNight);
-  const someNight = states.some(isNight), someDay = !states.length || states.some((st) => !isNight(st));
+  const someNight = states.some(isNight);
   // A holiday's schedule is daytime service: late-night service runs as usual
   // overnight (owner, Nov 26). So the holiday tag shows once daytime service
   // has started; while some lines are still on late nights, both tags show.
-  const holiday = (holidayNotice() || subwayHoliday(nyNow().date)) && someDay;
+  // Daytime service has started once any line's first morning train is on its
+  // way ('morning': "Daytime service has started on the C"), not only once a
+  // line is fully back to daytime (owner, Nov 26: "as soon as daytime service
+  // has started … show both pills until late nite has concluded").
+  const started = !states.length || states.some((st) => st.phase !== 'night');
+  const holiday = (holidayNotice() || subwayHoliday(nyNow().date)) && started;
   if (allNight || (holiday && someNight)) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
   const day = nyNow().day;
   // Late night or weekend, not both (owner: keep the two patterns distinct).

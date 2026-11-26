@@ -905,3 +905,31 @@ body.has-station-bar { padding-bottom: calc(4.6rem + env(safe-area-inset-bottom)
   html.split-big .hub-pabt .cols, html.split-big .hub-pabt .row { grid-template-columns: 5.4rem 6.4rem minmax(0, 1fr) 6.5rem 3.9rem; }
   .hub-pabt .row .plate { white-space: normal; max-width: 100%; line-height: 1.15; }
 }
+
+/* A narrow train column (laptops around 960–1150 px wide, where the side panel
+   takes its share; tablets): the destination got squeezed to a sliver and its
+   text ran into the next column (owner, Nov 26: Port Authority overlapping).
+   Below the width the columns need, each row stacks like on a phone. */
+.rail { container: rail / inline-size; }
+@container rail (max-width: 759px) {
+  html:not(.split-big) .cols { display: none; }
+  html:not(.split-big) .row {
+    grid-template-columns: 5.2rem minmax(0, 1fr) auto; column-gap: .75rem; row-gap: .15rem; padding-inline: .5rem;
+    grid-template-areas: "t c k" "t d k" "t s k"; align-items: start;
+  }
+  html:not(.split-big) .row > .time { grid-area: t; } html:not(.split-big) .row > .carrier { grid-area: c; } html:not(.split-big) .row > .dest { grid-area: d; }
+  html:not(.split-big) .row > .status { grid-area: s; } html:not(.split-big) .row > .track { grid-area: k; align-self: center; min-width: 3.4rem; }
+  html:not(.split-big) .row .plate { white-space: nowrap; }
+  html:not(.split-big) .status small { display: inline; margin-left: .4em; }
+}
+@container rail (max-width: 689px) {
+  html.split-big .cols { display: none; }
+  html.split-big .row {
+    grid-template-columns: 5.2rem minmax(0, 1fr) auto; column-gap: .75rem; row-gap: .15rem; padding-inline: .5rem;
+    grid-template-areas: "t c k" "t d k" "t s k"; align-items: start;
+  }
+  html.split-big .row > .time { grid-area: t; } html.split-big .row > .carrier { grid-area: c; } html.split-big .row > .dest { grid-area: d; }
+  html.split-big .row > .status { grid-area: s; } html.split-big .row > .track { grid-area: k; align-self: center; min-width: 3.4rem; }
+  html.split-big .row .plate { white-space: nowrap; }
+  html.split-big .status small { display: inline; margin-left: .4em; }
+}

@@ -952,3 +952,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Each board's "Side by side" button links to split.html?from=<hub>: that board starts on the left, and the toolbar's back link returns to it.
 - Toolbar fits from 1100 px (title and Left/Right words hide under 1350 px).
 - Port Authority rows: wider company column (long names like "Newark Airport Express" wrap inside it instead of running into the destination).
+
+## Holiday pills from the first morning train; narrow train columns stack (Nov 26)
+- Holiday tag now shows as soon as any line's daytime service has started (phase 'morning' counts, not only 'day'), alongside Late-night until every line is out of late nights. Simulated Thanksgiving at all 4 hubs: night → "Late-night"; first morning trains → both; all day → "Holiday" only.
+- The subway heading's tags render even when no subway trains are listed (was an early return).
+- `.rail` is a size container: below 760 px (690 px in split-big) each row stacks like the phone layout. Fixes the destination column squeezed to a sliver at laptop widths (~960–1150 px) on every board, worst at Port Authority (owner: "overlapping").
