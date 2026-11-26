@@ -1011,3 +1011,6 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
   body.side-main:not(.merge-side) aside.subway > .side-switch { max-width: 22rem; }
   body.merge-side.side-main aside.subway > .sub-part { margin-top: .2rem; }
 }
+/* Side-by-side view (larger text): hiding a side must still free its column
+   (the rule above for that view was keeping an empty 22rem column; owner's iPad, Nov 26). */
+@media (min-width: 961px) { html.split-big body.panel-off .layout { grid-template-columns: minmax(0, 1fr); } }
