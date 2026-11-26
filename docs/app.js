@@ -2637,8 +2637,9 @@ function pathLineFor(a, b) {
   const ln = PATH_LINES.find((x) => { const [p, q] = x.id.split('-'); return (a === p && b === q) || (a === q && b === p); });
   return ln ? ln.id : null;
 }
-const PATH_NAMES = [['33S', /\b33(rd)? St/i], ['23S', /\b23(rd)? St/i], ['14S', /\b14(th)? St/i], ['09S', /\b9(th)? St/i], ['CHR', /Christopher/i],
-  ['HOB', /Hoboken/i], ['NEW', /Newport/i], ['EXP', /Exchange P/i], ['GRV', /Grove/i], ['JSQ', /Journal Sq/i], ['HAR', /Harrison/i], ['NWK', /Newark/i], ['WTC', /World Trade|\bWTC\b/i]];
+// (With PATH's own short names too: "elevators at HOB & EX PL"; owner, Nov 26: an alert written that way was missed.)
+const PATH_NAMES = [['33S', /\b33(rd)? St/i], ['23S', /\b23(rd)? St/i], ['14S', /\b14(th)? St/i], ['09S', /\b9(th)? St/i], ['CHR', /Christopher|\bCHR\b/i],
+  ['HOB', /Hoboken|\bHOB\b/i], ['NEW', /Newport|\bNWPT\b/i], ['EXP', /Exchange P|\bEX\.? ?PL\b|\bEXP\b/i], ['GRV', /Grove|\bGRV\b/i], ['JSQ', /Journal Sq|\bJSQ\b/i], ['HAR', /Harrison|\bHAR\b/i], ['NWK', /Newark|\bNWK\b/i], ['WTC', /World Trade|\bWTC\b/i]];
 function pathModel(n) {
   if (!n || n.carrier !== 'path') return null;
   const text = String(n.text || '');
@@ -2651,7 +2652,13 @@ function pathModel(n) {
   }
   // "JSQ-33 via HOB" (late nights, weekends) runs through Hoboken: both 33 St lines.
   if (/\bJSQ\s*-\s*33\b[^.]*\bvia\s+HOB\b/i.test(text) && state['JSQ-33'] && !state['HOB-33']) state['HOB-33'] = state['JSQ-33'];
-  const first = text.replace(PATH_PAIR, ' ').split(/\.\s/)[0];
+  // A notice for every train, naming no line ("Overnight trains may leave up to
+  // 10 minutes late"; owner, Nov 26: such alerts got no pill): all lines delayed.
+  if (!Object.keys(state).length && /\b(overnight|all|PATH)\s+trains?\b|\bsystem-?wide\b/i.test(text) && /\b(late|delay|slow|wait)/i.test(text)) {
+    for (const ln of PATH_LINES) state[ln.id] = /suspend|no service|not running/i.test(text) ? 'off' : 'delay';
+  }
+  // (Parentheses only say where trains go: "elevator … (trains to 33 St and WTC)".)
+  const first = text.replace(PATH_PAIR, ' ').split(/\.\s/)[0].replace(/\([^)]*\)/g, ' ');
   const issue = /elevator|escalator/i.test(first) ? 'Elevator out of service' : /closed|bypass|skip/i.test(first) ? 'Closed or skipped' : '';
   const flagged = issue ? PATH_NAMES.filter(([, re]) => re.test(first)).map(([c]) => c) : [];
   // Where a delay comes from, in PATH's words: "Crew reported a track
@@ -2690,6 +2697,14 @@ function pathTrouble(dest, epoch) {
   const ns = pathModels().filter((m) => ids.some((id) => m.state[id] === 'off' || m.state[id] === 'delay')).map((m) => m.n);
   if (worst === 'off') return dropPill(`path|${dest}|off`, 'Suspended', 'warn', ns);
   if (worst === 'delay') return dropPill(`path|${dest}|delay`, 'Delays', 'warn', ns);
+  // An elevator out, or a station closed or skipped, where this train stops
+  // (owner, Nov 26: these PATH alerts got no pill).
+  const stops = new Set(PATH_LINES.filter((ln) => ids.includes(ln.id)).flatMap((ln) => ln.stops)); // (via Hoboken: both lines' stops)
+  const at = pathModels().filter((m) => m.issue && m.flagged.some((c) => stops.has(c)));
+  if (at.length) {
+    const closed = at.some((m) => /closed|skip/i.test(m.issue));
+    return dropPill(`path|${dest}|${closed ? 'closed' : 'elev'}`, closed ? 'Station closed' : 'Elevator out', 'warn', at.map((m) => m.n));
+  }
   // "All late trains" (the subway panel's toggle): a train 5+ min behind.
   if (allLatePills && epoch) {
     const late = pathLateBy(dest, epoch);
