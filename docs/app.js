@@ -1344,13 +1344,18 @@ const minsShown = new Map(); // what each row's times showed, to slide out on a 
 const ROTATE_MS = 8000;      // how long each end of the line shows
 let subwayTurning = false;   // a row is taking turns (redraw on each turn)
 const turnCycles = new Map(); // row -> { order of its ends, turn it started on }
-function destName(key, name, extra = '') {
+// `alts`: every name this row takes turns between. Each sits invisibly in the
+// same spot, so the row is always as tall as its longest name and doesn't grow
+// and shrink as it turns (owner, Nov 26: "Ozone Park-Lefferts Blvd" moved the
+// Times Square board on every turn).
+function destName(key, name, extra = '', alts = []) {
   const html = esc(name) + extra;
   const before = destShown.get(key);
   destShown.set(key, html);
-  if (before === undefined || before === html) return `<span class="dname">${html}</span>`;
+  const size = alts.length > 1 ? alts.map((a) => `<span class="dname-size" aria-hidden="true">${esc(a)}${extra}</span>`).join('') : '';
+  if (before === undefined || before === html) return `<span class="dname"><span>${html}</span>${size}</span>`;
   slideStarted = performance.now();
-  return `<span class="dname changing"><span class="out" aria-hidden="true">${before}</span><span class="in">${html}</span></span>`;
+  return `<span class="dname changing"><span class="out" aria-hidden="true">${before}</span><span class="in">${html}</span>${size}</span>`;
 }
 
 // ---------- subway rows, option B (trial) ----------
@@ -1537,6 +1542,8 @@ function renderSubway() {
     }
     const lines = here.filter((g) => g.dir === dir && (g.svc || 'local') === svc).map((g) => {
       let upcoming = g.trains.filter((x) => x.time >= nowS - 30);
+      // (Every place this row may show, for its size.)
+      const endNames = [...new Set(upcoming.map((x) => stationName(x.stops && x.stops[x.stops.length - 1]) || x.dest).filter(Boolean))];
       // A shared row with trains to more than one end of the line (the A
       // downtown) takes turns: each end's own next trains for a few seconds,
       // soonest first, sliding from one to the next.
@@ -1572,7 +1579,7 @@ function renderSubway() {
       const rowKey = `${stn.id}|${g.route}|${dir}|${g.svc}|${g.scheduled ? 'sched' : last}`;
       const note = diamondNote(g, first);
       const turned = destShown.has(rowKey) && destShown.get(rowKey) !== esc(dest) + note;
-      const destHtml = destName(rowKey, dest, note);
+      const destHtml = destName(rowKey, dest, note, endNames);
       // The times slide over with the name when the row turns to another end.
       const minsHtml = (html) => (turned ? `<span class="dname changing"><span class="out" aria-hidden="true">${minsShown.get(rowKey) || ''}</span><span class="in">${html}</span></span>` : html);
       const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;

@@ -445,7 +445,8 @@ button.sline.rerouted:hover { background: rgba(230, 183, 81, .16); }
 
 /* Subway: a line's destination changing to its next train's (A to Far Rockaway, then Lefferts Blvd) */
 .dname { display: inline-grid; vertical-align: top; }
-.dname.changing > span { grid-area: 1 / 1; }
+.dname > span { grid-area: 1 / 1; }
+.dname > .dname-size { visibility: hidden; pointer-events: none; }
 .dname .out { animation: dest-out .75s ease-in-out forwards; }
 .dname .in { animation: dest-in .8s ease-in-out .15s both; }
 @keyframes dest-out { to { opacity: 0; transform: translateY(-.6em); } }
