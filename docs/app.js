@@ -4055,23 +4055,27 @@ addEventListener('resize', fitSubCols);
 // smaller it is, the more side-panel-width columns fit, so the size and the
 // number of columns are chosen together, largest size that fits first.
 // Port Authority: the subway part only (the bus list beside it can scroll).
+const tsqFit = { key: '', z: 1 };
 function fitSubZoom() {
   const b = document.body, merge = b.classList.contains('merge-side');
   // A subway hub (Times Square): the subway is always the main board on a
   // computer, so it always fits its platforms on the screen (owner, Nov 26: in
   // the 2-board view the 7 sat below the screen), in its fixed columns, down to 80%.
   if (HUB.layout === 'subway') {
-    // (The size lives on #subway, which stays put; the platform grid inside it is
-    // rebuilt on every refresh, and keeping the size there re-measured it from
-    // 100% each time, which Safari can show as a jump.)
-    const sub = $('subway'), plats = sub && sub.querySelector('.plats');
+    // (The grid is rebuilt on every refresh: the size found for this window and
+    // layout is kept here and put straight back on the new grid, so it isn't
+    // re-measured from 100% each time. The size stays on the grid itself; on
+    // #subway, Safari scrolled the page to the top when it was refilled.)
+    const plats = document.querySelector('.main-sub .plats');
     if (!plats) return;
-    if (!WIDE.matches || b.classList.contains('side-main')) { sub.style.zoom = ''; sub.dataset.sized = ''; return; }
+    if (!WIDE.matches || b.classList.contains('side-main')) { plats.style.zoom = ''; tsqFit.key = ''; return; }
     const key = `${innerWidth}|${b.className}`;
     const fits = () => Math.max(...[...plats.querySelectorAll('.stn')].map((x) => x.getBoundingClientRect().bottom), 0) + window.scrollY <= innerHeight - 12;
-    let z = parseFloat(sub.style.zoom) || 1;
-    if (sub.dataset.sized !== key) { sub.dataset.sized = key; z = 1; sub.style.zoom = '1'; }
-    while (!fits() && z > 0.81) { z -= 0.05; sub.style.zoom = z.toFixed(2); }
+    if (tsqFit.key !== key) { tsqFit.key = key; tsqFit.z = 1; }
+    let z = tsqFit.z;
+    plats.style.zoom = z.toFixed(2);
+    while (!fits() && z > 0.81) { z -= 0.05; plats.style.zoom = z.toFixed(2); }
+    tsqFit.z = z;
     return;
   }
   const el = document.querySelector('aside.subway .sub-part'), box = document.querySelector('aside.subway');
@@ -4424,7 +4428,8 @@ renderSubway = ((f) => function () { const out = f.apply(this, arguments); fitSu
   let saved = null;
   try { saved = JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch {}
   const nav = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || {};
-  if (!saved || nav.type !== 'reload' || Date.now() - saved.t > 30 * 60000) return;
+  // (Also after side by side's Reload, which opens the board afresh with ?fresh=.)
+  if (!saved || (nav.type !== 'reload' && !/[?&]fresh=/.test(location.search)) || Date.now() - saved.t > 30 * 60000) return;
   // (After the rest of this script has run: the tabs' code is set up further down.)
   setTimeout(() => {
   // The same tab (phones) and side panel (computers).
