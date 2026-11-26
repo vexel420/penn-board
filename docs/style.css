@@ -965,7 +965,9 @@ button.ene-note.ev-min b { color: var(--late); }
   /* Newspaper columns: a station's directions may continue in the next column,
      so a big station (the 4 5 6) doesn't run below the screen while the 7 and
      the S leave room; each direction stays whole. */
-  body.side-main:not(.merge-side) aside.subway #subway { columns: 18rem; column-gap: 1rem; }
+  /* Columns stay the side panel's width (owner: "not stretched wide"): as many
+     as fit (--sub-cols, set by app.js from the room there is), and no wider. */
+  body.side-main:not(.merge-side) aside.subway #subway { columns: var(--sub-cols, 3); column-gap: 1rem; width: calc(var(--sub-cols, 3) * 18rem + (var(--sub-cols, 3) - 1) * 1rem); max-width: 100%; }
   body.side-main:not(.merge-side) aside.subway #subway > .stn { margin: 0 0 1rem; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   body.side-main:not(.merge-side) aside.subway #subway .dir, body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-inside: avoid; }
   body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-after: avoid; }
@@ -976,8 +978,10 @@ button.ene-note.ev-min b { color: var(--late); }
   body.merge-side.side-main aside.subway > .sub-part, body.merge-side.side-main aside.subway > .bus-part { display: block !important; }
   body.merge-side.side-main aside.subway .sub-part { font-size: 1.12em; }
   body.merge-side.side-main aside.subway .bus-part > .bus-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-  body.merge-side.side-main.panel-off aside.subway .stn { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1.4rem; align-items: start; }
-  body.merge-side.side-main.panel-off aside.subway .stn > :not(.dir) { grid-column: 1 / -1; }
+  body.merge-side.side-main.panel-off aside.subway { grid-template-columns: 37rem minmax(0, 32rem); justify-content: start; }
+  body.merge-side.side-main.panel-off aside.subway #subway { columns: 2; column-gap: 1rem; }
+  body.merge-side.side-main aside.subway #subway > .stn { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  body.merge-side.side-main aside.subway #subway .dir, body.merge-side.side-main aside.subway #subway .stn-lines { break-inside: avoid; }
   /* One side hidden: the other takes the full width. */
   body.panel-off .layout { grid-template-columns: minmax(0, 1fr); }
   body.panel-off:not(.side-main) .layout > aside.subway { display: none; }
@@ -993,3 +997,10 @@ button.ene-note.ev-min b { color: var(--late); }
 body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 /* Times Square with buses as the main board: the subway's platforms stack in the narrow column. */
 @media (min-width: 961px) { body.side-main.layout-subway .rail .plats { grid-template-columns: 1fr; } }
+/* Subway as the main board: the Subway/Buses switch and the tools share one row (room for every line on screen). */
+@media (min-width: 961px) {
+  body.side-main aside.subway { position: relative; }
+  body.side-main aside.subway > .panel-tools { position: absolute; top: 1rem; right: 1.1rem; margin: 0; }
+  body.side-main:not(.merge-side) aside.subway > .side-switch { max-width: 22rem; }
+  body.merge-side.side-main aside.subway > .sub-part { margin-top: .2rem; }
+}

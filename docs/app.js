@@ -3865,6 +3865,7 @@ function applyDeskLayout() {
   document.body.classList.toggle('side-main', sideMain);
   document.body.classList.toggle('panel-off', panelOff);
   document.body.classList.toggle('merge-side', !!HUB.mergeSide);
+  fitSubCols();
   // (Deferred: the bus code further down this script is set up by then.)
   setTimeout(() => { if (board && busesShown()) { renderBuses(); renderHubBuses(); } }, 0);
   const swap = document.querySelector('.pt-swap'), hide = document.querySelector('.pt-hide'), back = document.querySelector('.panel-back');
@@ -3876,6 +3877,15 @@ function applyDeskLayout() {
   // The bus map and lists size themselves to their box.
   setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
 }
+// How many side-panel-width columns of subway fit (each 18rem, 1rem apart).
+function fitSubCols() {
+  const box = document.querySelector('aside.subway');
+  if (!box || !document.body.classList.contains('side-main')) return;
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const room = box.clientWidth - 2.2 * rem;
+  document.body.style.setProperty('--sub-cols', Math.max(1, Math.floor((room + rem) / (19 * rem))));
+}
+addEventListener('resize', fitSubCols);
 function setDesk(k, v) {
   if (k === 'main') sideMain = v; else panelOff = v;
   try { localStorage.setItem(k === 'main' ? 'sideMain' : 'panelOff', v ? '1' : '0'); } catch {}
