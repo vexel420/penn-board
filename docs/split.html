@@ -177,7 +177,14 @@ function fit() {
 document.querySelectorAll('[data-count]').forEach((b) => b.addEventListener('click', () => { count = +b.dataset.count; store.set('splitCount', String(count)); build(); }));
 document.querySelectorAll('[data-size]').forEach((b) => b.addEventListener('click', () => { size = b.dataset.size; store.set('splitSize', size); fit(); }));
 document.getElementById('swap').addEventListener('click', () => { pair.reverse(); store.set('splitPair', pair.join(',')); build(); });
-document.getElementById('reload').addEventListener('click', () => frames().forEach((f) => f.contentWindow && f.contentWindow.location.reload()));
+// Reload all: open each board afresh at a one-time address, so no browser
+// cache (Safari kept serving the old page and data) can answer instead (owner,
+// Nov 26: "I've been having to refresh each one manually to get a real refresh").
+document.getElementById('reload').addEventListener('click', () => frames().forEach((f) => {
+  const u = new URL(f.getAttribute('src'), location.href);
+  u.searchParams.set('fresh', Date.now().toString(36));
+  f.src = u.pathname.split('/').pop() + u.search;
+}));
 const BIG = matchMedia('(min-width: 1100px)');
 function start() {
   document.body.classList.toggle('too-small', !BIG.matches);
