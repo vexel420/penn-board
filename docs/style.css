@@ -1059,3 +1059,5 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 #sub-h > span:not(.tag) { flex-basis: 100%; }
 .subway h2#sub-h .tag, .main-sub h2#sub-h .tag { margin: 0; vertical-align: 0; font-size: 1rem; padding: .3rem .8rem; gap: .4rem; }
 .main-sub h2#sub-h, .subway h2#sub-h { font-size: 1.65rem; }
+
+.njt-alt .njt-honor { margin: .55rem 0 0; font-weight: 700; }

@@ -2950,7 +2950,9 @@ function njtTrouble() {
   return c && d ? 'delayed or cancelled' : c ? 'cancelled' : 'delayed';
 }
 const njtAltHtml = () => (IS_PENN && njtDisrupted() ? `<div class="njt-alt"><p><b>NJ Transit trains from Penn are ${njtTrouble()}.</b> Other ways to New Jersey:</p>
-  <div><button type="button" data-guide="newark">To Newark Penn by PATH</button><button type="button" data-guide="hoboken">To Hoboken by PATH</button></div></div>` : '');
+  <div><button type="button" data-guide="newark">To Newark Penn by PATH</button><button type="button" data-guide="hoboken">To Hoboken by PATH</button><button type="button" data-guide="bus">By bus from Port Authority</button></div>${njtBusHonored() ? '<p class="njt-honor">NJ Transit says rail tickets and passes are accepted on NJ Transit buses now.</p>' : ''}</div>` : '');
+// NJ Transit's own notice that rail tickets are good on its buses (cross-honoring).
+const njtBusHonored = () => ((board && board.notices && board.notices.rail) || []).some((n) => n.carrier === 'njt' && /cross[- ]?honou?r/i.test(n.text) && /\bbus/i.test(n.text));
 
 // ---------- delays on the trains they affect, with other options ----------
 const NJT_LINE_WORDS = [[/\bNEC\b|Northeast Corridor/i, /Northeast/i], [/North Jersey Coast|\bNJCL\b/i, /Jersey Coast/i], [/Morris (and|&) Essex|\bM&E\b/i, /Morristown|Gladstone/i],
@@ -3365,7 +3367,7 @@ function openOptions(r) {
   const lirrDone = TT[r.carrier] && ttOf(r.carrier);
   $('chg-below').innerHTML = `${lirrDone ? (timetable || `<p class="cm-live">No other train from ${HUB.short} reaches these stations in the next few hours.</p>`)
     : `${items ? `<h3 class="cm-h">Other trains from ${HUB.short} to the same stations</h3><ul class="cm-stns">${items}</ul>` : '<p class="cm-live">No other train on the board right now stops at the same stations.</p>'}${timetable}`}
-    ${r.carrier === 'njt' ? '<h3 class="cm-h">Or by PATH</h3><p class="lchips"><button type="button" class="cm-back" data-guide="newark">To Newark Penn by PATH</button> <button type="button" class="cm-back" data-guide="hoboken">To Hoboken by PATH</button></p>' : ''}
+    ${r.carrier === 'njt' ? '<h3 class="cm-h">Or by PATH or bus</h3><p class="lchips"><button type="button" class="cm-back" data-guide="newark">To Newark Penn by PATH</button> <button type="button" class="cm-back" data-guide="hoboken">To Hoboken by PATH</button> <button type="button" class="cm-back" data-guide="bus">By bus from Port Authority</button></p>' : ''}
     <p class="cm-live">${TT[r.carrier] ? `Live: time and track from the live board. Scheduled: from the ${CARRIERS[r.carrier]} timetable until the train is on the board. ` : 'Times and tracks from the live board. '}Fares and tickets differ by line; check before you board.</p>`;
   openSheet();
 }
@@ -3430,6 +3432,7 @@ document.addEventListener('click', (e) => {
   const lg = e.target.closest('[data-lguide]');
   if (lg) { e.preventDefault(); openLirrGuide(lg.dataset.lguide); return; }
   const g = e.target.closest('[data-guide]');
+  if (g && g.dataset.guide === 'bus') { e.preventDefault(); openBusFinder(); return; }
   if (g) { e.preventDefault(); openGuide(g.dataset.guide); return; }
   const o = e.target.closest('[data-options]');
   if (o) { e.preventDefault(); e.stopPropagation(); const r = board.departures.find((x) => x.id === o.dataset.options); if (r) openOptions(r); return; }
@@ -4961,6 +4964,27 @@ function portAuthorityFromGct(nowS) {
     ? `<div><span>Subway: the ${lineName('S')} or ${lineName('7')} to Times Sq-42 St, then the underground passage west to Port Authority</span><span class="dim">About 10 min with the walk</span><b>Next: ${ts.slice(0, 3).map((t) => `${bulletHtml(t.route, 'inl')} ${Math.max(0, Math.round((t.time - nowS) / 60))} min`).join(' &nbsp; ')}</b></div>`
     : '<div><span>Subway: no shuttle or 7 to Times Sq listed right now.</span></div>';
   return `<div class="bf-get">${sub}<div><span>Walk west on 42 St to 8 Av</span><span class="dim">About 20 min. Port Authority's entrance is at 8 Av and 41 St.</span></div></div>`;
+}
+// The NJ Transit disruption banner's bus option (owner, Nov 26: the bus finder
+// planned for cancellations was missing from it): open the buses, wherever they
+// are on this screen, at "Choose your station".
+function openBusFinder() {
+  const dlg = document.querySelector('dialog[open]');
+  if (dlg) dlg.close();
+  if (WIDE.matches) {
+    if (sideMain || panelOff) { setDesk('off', false); setDesk('main', false); }
+    setSide('buses');
+  } else {
+    const tab = document.querySelector('.seg button[data-view="buses"]');
+    if (tab) tab.click();
+  }
+  renderBuses();
+  setTimeout(() => {
+    const sel = document.getElementById('bf-station') || document.getElementById('buses');
+    if (!sel) return;
+    sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (sel.focus) sel.focus({ preventScroll: true });
+  }, 120);
 }
 function renderBuses() {
   const box = $('buses');
