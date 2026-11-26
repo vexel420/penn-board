@@ -3866,12 +3866,13 @@ function applyDeskLayout() {
   document.body.classList.toggle('panel-off', panelOff);
   document.body.classList.toggle('merge-side', !!HUB.mergeSide);
   fitSubCols();
+  requestAnimationFrame(() => fitSubZoom());
   // (Deferred: the bus code further down this script is set up by then.)
   setTimeout(() => { if (board && busesShown()) { renderBuses(); renderHubBuses(); } }, 0);
   const swap = document.querySelector('.pt-swap'), hide = document.querySelector('.pt-hide'), back = document.querySelector('.panel-back');
   // What's on the side right now, and what's hidden.
   const onSide = sideMain ? mainName() : sideName();
-  if (swap) { swap.setAttribute('aria-pressed', String(sideMain)); swap.title = sideMain ? `Put ${mainName()} back as the main board` : `Make ${sideName()} the main board (or double-click its tab)`; swap.querySelector('span').textContent = sideMain ? `${mainName()} to main` : 'Make main'; }
+  if (swap) { swap.setAttribute('aria-pressed', String(sideMain)); swap.title = sideMain ? `Put ${mainName()} back as the main board` : `Make ${sideName()} the main board (double-click its tab for full screen)`; swap.querySelector('span').textContent = sideMain ? `${mainName()} to main` : 'Make main'; }
   if (hide) { hide.title = `Hide ${onSide} for a full-width ${sideMain ? sideName() : mainName()}`; hide.querySelector('span').textContent = `Hide ${onSide}`; }
   if (back) { back.hidden = !panelOff; back.querySelector('span').textContent = `Show ${onSide}`; }
   // The bus map and lists size themselves to their box.
@@ -3886,6 +3887,27 @@ function fitSubCols() {
   document.body.style.setProperty('--sub-cols', Math.max(1, Math.floor((room + rem) / (19 * rem))));
 }
 addEventListener('resize', fitSubCols);
+// Full screen (trains hidden): every line on the screen without scrolling
+// (owner, Nov 26). Shrink the subway a little when needed (down to 75%); the
+// smaller it is, the more side-panel-width columns fit, so the size and the
+// number of columns are chosen together, largest size that fits first.
+// Port Authority: the subway part only (the bus list beside it can scroll).
+function fitSubZoom() {
+  const b = document.body, merge = b.classList.contains('merge-side');
+  const el = document.querySelector('aside.subway .sub-part'), box = document.querySelector('aside.subway');
+  if (!el || !box) return;
+  if (!(WIDE.matches && b.classList.contains('side-main') && b.classList.contains('panel-off'))) { if (el.style.zoom) { el.style.zoom = ''; fitSubCols(); } return; }
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+  const room = box.clientWidth - 2.2 * rem;
+  for (let z = 1; z > 0.74; z -= 0.05) {
+    el.style.zoom = z.toFixed(2);
+    if (!merge) b.style.setProperty('--sub-cols', Math.max(1, Math.floor((room / z + rem) / (19 * rem))));
+    // (Down to the last line; the display choices under them may run below the screen.)
+    const last = Math.max(...[...el.querySelectorAll('#subway .stn, #path')].map((x) => x.getBoundingClientRect().bottom), 0);
+    if (last + window.scrollY <= innerHeight - 12) return;
+  }
+}
+addEventListener('resize', () => fitSubZoom());
 function setDesk(k, v) {
   if (k === 'main') sideMain = v; else panelOff = v;
   try { localStorage.setItem(k === 'main' ? 'sideMain' : 'panelOff', v ? '1' : '0'); } catch {}
@@ -3910,7 +3932,10 @@ function setDesk(k, v) {
   document.querySelector('.side-switch')?.addEventListener('dblclick', (e) => {
     const b = e.target.closest('[data-side]'); if (!b || !WIDE.matches) return;
     if (side !== b.dataset.side) setSide(b.dataset.side);
-    setDesk('main', !sideMain);
+    // Straight to full screen, the trains hidden (owner, Nov 26); again: back to both.
+    const full = !sideMain;
+    setDesk('off', full);
+    setDesk('main', full);
   });
   document.querySelector('.side-switch')?.addEventListener('click', () => applyDeskLayout());
   applyDeskLayout();
@@ -4167,7 +4192,7 @@ function tick() {
 function everySecond() { setTimeout(() => { tick(); everySecond(); }, 1000 - (Date.now() % 1000) + 5); }
 setPressed('.chips', 'carrier', carrier);
 // (The redraws that can change heights above the reader, kept anchored.)
-renderSubway = keepAnchor(renderSubway);
+renderSubway = keepAnchor(((f) => function () { const out = f.apply(this, arguments); fitSubZoom(); return out; })(renderSubway));
 renderRail = keepAnchor(renderRail);
 renderPath = keepAnchor(renderPath);
 renderEvents = keepAnchor(renderEvents);

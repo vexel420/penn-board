@@ -123,7 +123,8 @@ function build() {
       pane = document.createElement('div');
       pane.className = 'pane';
       pane.dataset.hub = id;
-      pane.innerHTML = `<iframe title="${h.name} board"></iframe><span class="lab"><i style="background:${h.tab ? h.tab.bg : '#444'}"></i>${h.name}</span>`;
+      // (No name label over the board: it covered the bottom rows. Owner, Nov 26.)
+      pane.innerHTML = `<iframe title="${h.name} board"></iframe>`;
       pane.querySelector('iframe').addEventListener('load', bigText);
     }
     keep.push(pane);

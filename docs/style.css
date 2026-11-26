@@ -967,7 +967,14 @@ button.ene-note.ev-min b { color: var(--late); }
      the S leave room; each direction stays whole. */
   /* Columns stay the side panel's width (owner: "not stretched wide"): as many
      as fit (--sub-cols, set by app.js from the room there is), and no wider. */
-  body.side-main:not(.merge-side) aside.subway #subway { columns: var(--sub-cols, 3); column-gap: 1rem; width: calc(var(--sub-cols, 3) * 18rem + (var(--sub-cols, 3) - 1) * 1rem); max-width: 100%; }
+  /* The whole subway part flows in the columns, PATH included (Penn); the heading,
+     notices and display choices span them all. */
+  body.side-main:not(.merge-side) aside.subway .sub-part { columns: var(--sub-cols, 3); column-gap: 1rem; width: calc(var(--sub-cols, 3) * 18rem + (var(--sub-cols, 3) - 1) * 1rem); }
+  body.side-main:not(.merge-side):not(.panel-off) aside.subway .sub-part { max-width: 100%; }
+  body.side-main:not(.merge-side) aside.subway .sub-part > #sub-h, body.side-main:not(.merge-side) aside.subway .sub-part > #subway-notices,
+  body.side-main:not(.merge-side) aside.subway .sub-part > #elevators, body.side-main:not(.merge-side) aside.subway .sub-part > #sub-toggles { column-span: all; }
+  body.side-main:not(.merge-side) aside.subway .sub-part > .path-h { margin-top: 0; break-after: avoid; }
+  body.side-main:not(.merge-side) aside.subway .sub-part > .walk, body.side-main:not(.merge-side) aside.subway #path { break-inside: avoid; }
   body.side-main:not(.merge-side) aside.subway #subway > .stn { margin: 0 0 1rem; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   body.side-main:not(.merge-side) aside.subway #subway .dir, body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-inside: avoid; }
   body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-after: avoid; }
