@@ -871,3 +871,4 @@ body.hub-tsq { --gold: #fccc0a; }
 .main-sub .stn-head { margin: 0 0 .3rem; font-size: 1.15rem; }
 .main-sub .stn-head span { display: block; font-size: .9rem; font-weight: 400; color: var(--dim); }
 #hub-buses .late-pill { white-space: nowrap; }
+.late-pill.hol-pill { background: #332a17; color: var(--gold); }

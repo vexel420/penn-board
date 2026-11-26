@@ -929,3 +929,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - NJ Transit last-train-of-the-night pill: if the schedule's last train is cancelled or not on the live list (storm/holiday changes), the latest listed train of that line (or of NJ Transit) leaving within an hour before it gets the pill (`njtLastFallback`).
 - NJ Transit bus finder removed from Grand Central (owner: confusing there); kept at Penn and Port Authority.
 - Bus "Service change" tags are now pills that open to the MTA's alert text (like the subway's), with "See full alert".
+
+## Holidays vs late nights (Nov 26)
+- Owner: a holiday's schedule doesn't override late-night service. The subway heading shows "Late-night service" alone overnight; on a holiday, "Holiday service" appears once daytime service has started (a line's switch phase is "day"); while some lines are still on late nights and others have started the day, both show (`renderSubwayTags`). Weekend tag not shown on a holiday.
+- After a holiday, trains still on its schedule keep a "Holiday schedule" pill until they leave: subway trips whose id starts 144000+ (scheduled start past 24:00, the holiday's late trips) the day after a holiday (`subHolidayTrip`); LIRR and Metro-North rows whose TrainTime service date (`runDate`, from `run_date`) is a past holiday (`railHolidayHtml`). Holidays: `subwayHoliday` (New Year's, Memorial Day, July 4, Labor Day, Thanksgiving, Christmas).
+- Tested with the page clock set: Thanksgiving 2:15 AM and 5:40 AM late night only; 8:00 AM both; 8:30 AM and 10 AM holiday only; Friday 1:30 AM late night only, holiday-schedule trains pilled.

@@ -392,7 +392,7 @@ function rowHtml(r) {
   return `<li class="row ${r.tone}${fading ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.plateClass || r.carrier}">${esc(r.plate || CARRIERS[r.carrier])}</span></div>
-    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${rowAlertHtml(r)}</div>
+    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${railHolidayHtml(r)}${rowAlertHtml(r)}</div>
     <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${sched}</div>
     ${trackCell(r, r.tone === 'final' ? ' ring' : '')}
   </li>`;
@@ -908,6 +908,11 @@ function mergeNightBanners(html) {
 const LATE_PILL = `<span class="late-pill">${ICON.moon}Late night</span>`;
 // Subway: the pill opens the MTA's late-night subway map in a new tab.
 const MTA_NIGHT_MAP = 'https://www.mta.info/map/5336';
+// A train still on the holiday's schedule after midnight, once the next day's
+// service has begun (owner, Nov 26): the subway feed's trip ids start with the
+// scheduled start, and the holiday's late trips start at 24:00 or later (144000+).
+const HOLIDAY_PILL = `<span class="late-pill hol-pill">${'<svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.6 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z" fill="currentColor"/></svg>'}Holiday schedule</span>`;
+const subHolidayTrip = (t) => !!(t && t.code && t.code >= '144000' && !subwayHoliday(nyNow().date) && subwayHoliday(nyNow(-1).date));
 const SUB_LATE_PILL = `<a class="late-pill" href="${MTA_NIGHT_MAP}" target="_blank" rel="noopener" title="MTA late-night subway map (opens in a new tab)">${ICON.moon}Late night<span class="ext" aria-hidden="true">↗&#xFE0E;</span><span class="sr">, MTA late-night map, opens in a new tab</span></a>`;
 // Trouble on a line (delays, skipped stops, reroutes): a pill on its rows.
 // The notice itself, its map and other options are in the service notices.
@@ -1315,7 +1320,7 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
       const ts = mine.slice(0, 3).map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`;
       // Late-night pill by this destination's next train.
-      const p = lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) || localNight(stn.id, g, dir, mine[0].time) || cutbackNight(stn.id, g.route, dir, mine[0].time) ? SUB_LATE_PILL : '';
+      const p = (lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) || localNight(stn.id, g, dir, mine[0].time) || cutbackNight(stn.id, g.route, dir, mine[0].time) ? SUB_LATE_PILL : '') + (subHolidayTrip(mine[0]) ? HOLIDAY_PILL : '');
       // A row with diamond trains marks each end with its own small bullet.
       const mark = anyDiamond ? bulletHtml(g.route, `tiny${isDiamond(g, mine[0]) ? ' diamond' : ''}`) + ' ' : '';
       return `<span class="b-row"><span>${mark}${esc(name(e.split('|')[0]))}${diamondNote(g, mine[0])}${pills(p, subwayPills(g.route, dir, g.svc, stn.id, mine[0]))}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
@@ -1491,7 +1496,8 @@ function renderSubway() {
       const trains = upcoming.slice(0, 3);
       if (!trains.length) return '';
       // Late-night pill by the next train's own time and line (stays until it leaves).
-      const pill = lateNightTrain(stn.id, g.route, dir, trains[0].time, trains[0].code) || localNight(stn.id, g, dir, trains[0].time) || cutbackNight(stn.id, g.route, dir, trains[0].time) ? SUB_LATE_PILL : '';
+      const pill = (lateNightTrain(stn.id, g.route, dir, trains[0].time, trains[0].code) || localNight(stn.id, g, dir, trains[0].time) || cutbackNight(stn.id, g.route, dir, trains[0].time) ? SUB_LATE_PILL : '')
+        + (subHolidayTrip(trains[0]) ? HOLIDAY_PILL : '');
       const mins = trains.map((x) => Math.max(0, Math.round((x.time - nowS) / 60)));
       const first = trains[0];
       const last = first.stops && first.stops[first.stops.length - 1];
@@ -1547,12 +1553,19 @@ function renderSubway() {
 // morning when the first daytime express shows "now" at Penn.
 function renderSubwayTags(states) {
   const tags = [];
-  if (states.length && states.every((st) => st.phase === 'night' || st.phase === 'morning')) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
+  const isNight = (st) => st.phase === 'night' || st.phase === 'morning';
+  const allNight = states.length > 0 && states.every(isNight);
+  const someNight = states.some(isNight), someDay = !states.length || states.some((st) => !isNight(st));
+  // A holiday's schedule is daytime service: late-night service runs as usual
+  // overnight (owner, Nov 26). So the holiday tag shows once daytime service
+  // has started; while some lines are still on late nights, both tags show.
+  const holiday = (holidayNotice() || subwayHoliday(nyNow().date)) && someDay;
+  if (allNight || (holiday && someNight)) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
   const day = nyNow().day;
   // Late night or weekend, not both (owner: keep the two patterns distinct).
   const night = tags.length > 0;
-  if (holidayNotice() || subwayHoliday(nyNow().date)) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
-  else if (!night && (day === 'saturday' || day === 'sunday')) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
+  if (holiday) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
+  else if (!night && (day === 'saturday' || day === 'sunday') && !subwayHoliday(nyNow().date)) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
   if (weatherNotice()) tags.push(`<span class="tag wx">${ICON.snow}Severe weather service</span>`);
   $('sub-h').innerHTML = `Subway${tags.join('')}<span>${esc(HUB.subwayName || HUB.name)}</span>`;
 }
@@ -2878,6 +2891,12 @@ function njtLastFallback(r) {
     if (e.all && !listed.some((x) => (x.leaves ?? x.time) > t)) { out.all = true; out.allUntil = e.allUntil; }
   }
   return out.line || out.all ? out : null;
+}
+// A railroad train still running on yesterday's holiday schedule (TrainTime's
+// service date, LIRR and Metro-North).
+function railHolidayHtml(r) {
+  if (!r.runDate || view !== 'departures' || r.tone === 'departed' || r.runDate === nyNow().date || !subwayHoliday(r.runDate)) return '';
+  return `<div class="pills">${HOLIDAY_PILL}</div>`;
 }
 function njtLastHtml(r) {
   if (r.carrier !== 'njt' || view !== 'departures' || r.tone === 'departed' || r.tone === 'stop') return '';

@@ -268,6 +268,7 @@ function trainTimeRows(json, railroad, here) {
     rows[leaving ? 'departures' : 'arrivals'].push({
       id: a.train_id,
       carrier: railroad,
+      runDate: a.run_date || '', // its service day ("2026-11-26"): a holiday's late trains keep its schedule
       // TrainTime lists the scheduled time and reports the delay separately (otp,
       // seconds, negative = late): show and sort by the real expected time.
       time: expected,
