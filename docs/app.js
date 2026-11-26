@@ -3916,6 +3916,7 @@ function applyDeskLayout() {
   document.body.classList.toggle('side-main', sideMain);
   document.body.classList.toggle('panel-off', panelOff);
   document.body.classList.toggle('merge-side', !!HUB.mergeSide);
+  document.body.classList.add('stack-dirs'); // (every board: directions stacked, never side by side)
   fitSubCols();
   requestAnimationFrame(() => fitSubZoom());
   // (Deferred: the bus code further down this script is set up by then.)
@@ -3929,18 +3930,20 @@ function applyDeskLayout() {
   // The bus map and lists size themselves to their box.
   setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
 }
-// Subway as the full-screen board: each station one card, its directions side
-// by side in it (owner, Nov 26: don't split a line across columns), then PATH;
+// Subway as the full-screen board: each station one card in its own column,
+// directions stacked like Times Square (owner, Nov 26: "no side by side at all
+// for subways"), then PATH;
 // a fixed order, so a refresh never moves anything (owner: Penn "moving around
 // and flashing when it refreshes"). --sub-cols is the number of 18rem tracks
-// (a card takes one per direction); with the trains showing, as many as fit.
+// (18rem each, a card one per direction; stacked: 24rem, one per card); with the trains showing, as many as fit.
 function fitSubCols() {
   const box = document.querySelector('aside.subway');
   const b = document.body;
   if (!box || !b.classList.contains('side-main') || b.classList.contains('merge-side')) return;
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-  const n = [...box.querySelectorAll('#subway > .stn')].reduce((t, x) => t + (parseInt(x.style.getPropertyValue('--dirs'), 10) || 1), 0) + (box.querySelector('.path-part') ? 1 : 0);
-  const fit = Math.max(1, Math.floor((box.clientWidth - 2.2 * rem + rem) / (19 * rem)));
+  const n = (box.querySelectorAll('#subway > .stn').length) + (box.querySelector('.path-part') ? 1 : 0);
+  const tw = 25; // a 24rem track and its gap, in rem
+  const fit = Math.max(1, Math.floor((box.clientWidth - 2.2 * rem + rem) / (tw * rem)));
   b.style.setProperty('--sub-cols', b.classList.contains('panel-off') ? Math.max(1, n) : Math.min(fit, Math.max(1, n)));
 }
 addEventListener('resize', fitSubCols);
@@ -3981,11 +3984,11 @@ function fitSubZoom() {
     el.dataset.sized = `${innerWidth}x${innerHeight}|${b.className}`;
     // Start no larger than lets every column fit across.
     const n = parseInt(getComputedStyle(b).getPropertyValue('--sub-cols'), 10) || 1;
-    z = merge ? 1 : Math.min(1, (box.clientWidth - 2.2 * rem + rem) / (n * 19 * rem));
-    z = Math.max(merge ? 0.75 : 0.6, Math.floor(z * 20) / 20);
+    z = merge ? 1 : Math.min(1, (box.clientWidth - 2.2 * rem + rem) / (n * 25 * rem));
+    z = Math.max(merge ? 0.75 : 0.7, Math.floor(z * 20) / 20);
     el.style.zoom = z.toFixed(2);
   }
-  while (!fits() && z > (merge ? 0.76 : 0.61)) { z -= 0.05; el.style.zoom = z.toFixed(2); }
+  while (!fits() && z > (merge ? 0.76 : 0.71)) { z -= 0.05; el.style.zoom = z.toFixed(2); }
 }
 addEventListener('resize', () => fitSubZoom());
 function setDesk(k, v) {

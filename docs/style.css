@@ -972,12 +972,15 @@ button.ene-note.ev-min b { color: var(--late); }
   /* The subway part as a grid: the heading, notices and display choices across
      the top/bottom; then one column per direction (each carrying its station's
      bullets), and PATH (Penn), in a fixed order. */
-  body.side-main:not(.merge-side):not([data-side="buses"]) aside.subway .sub-part { display: grid; grid-template-columns: repeat(var(--sub-cols, 3), minmax(0, 18rem)); column-gap: 1rem; align-items: start; justify-content: start; }
+  body.side-main:not(.merge-side):not([data-side="buses"]) aside.subway .sub-part { display: grid; grid-template-columns: repeat(var(--sub-cols, 3), minmax(0, var(--track, 18rem))); column-gap: 1rem; align-items: start; justify-content: start; }
   body.side-main:not(.merge-side) aside.subway .sub-part > :not(#subway):not(.path-part) { grid-column: 1 / -1; }
   body.side-main:not(.merge-side) aside.subway #subway { display: contents; }
-  /* A station: one card, as many tracks wide as it has directions, directions side by side. */
-  body.side-main:not(.merge-side) aside.subway #subway > .stn { grid-column: span var(--dirs, 1); display: grid; grid-template-columns: repeat(var(--dirs, 1), minmax(0, 1fr)); column-gap: 1rem; align-items: start; margin: 0 0 1rem; }
-  body.side-main:not(.merge-side) aside.subway #subway > .stn > :not(.dir) { grid-column: 1 / -1; }
+  /* A station: one card, as many tracks wide as it has directions, directions side by side
+     (Penn). With stack-dirs (Grand Central; owner, Nov 26: side by side made text run
+     into each other there): one track, directions stacked, like Times Square. */
+  body.side-main:not(.merge-side):not(.stack-dirs) aside.subway #subway > .stn { grid-column: span var(--dirs, 1); display: grid; grid-template-columns: repeat(var(--dirs, 1), minmax(0, 1fr)); column-gap: 1rem; align-items: start; }
+  body.side-main:not(.merge-side):not(.stack-dirs) aside.subway #subway > .stn > :not(.dir) { grid-column: 1 / -1; }
+  body.side-main:not(.merge-side) aside.subway #subway > .stn { margin: 0 0 1rem; }
   body.side-main:not(.merge-side) aside.subway #subway > :not(.stn) { grid-column: 1 / -1; }
   body.side-main:not(.merge-side) aside.subway .path-part > .path-h { margin-top: 0; padding-top: 0; border-top: 0; }
   .dir-lines { display: none; }
@@ -993,7 +996,7 @@ button.ene-note.ev-min b { color: var(--late); }
   body.merge-side.side-main aside.subway .bus-part > .bus-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
   /* (Both may shrink: inside the side-by-side view's larger text, fixed widths squeezed the buses to a sliver.) */
   body.merge-side.side-main.panel-off aside.subway { grid-template-columns: minmax(0, 37rem) minmax(0, 32rem); justify-content: start; }
-  body.merge-side.side-main.panel-off aside.subway #subway { columns: 2; column-gap: 1rem; }
+  /* (The A C E stays one column, directions stacked: owner, Nov 26.) */
   body.merge-side.side-main aside.subway #subway > .stn { -webkit-box-decoration-break: clone; box-decoration-break: clone; }
   body.merge-side.side-main aside.subway #subway .dir, body.merge-side.side-main aside.subway #subway .stn-lines { break-inside: avoid; }
   /* One side hidden: the other takes the full width. */
@@ -1036,3 +1039,5 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
   body.layout-subway:not(.side-main) .plats.fixed-cols { display: grid; grid-template-columns: repeat(var(--pcols, 3), minmax(0, 1fr)); column-gap: 1rem; align-items: start; }
   body.layout-subway:not(.side-main) .plats.fixed-cols .pcol { display: block; }
 }
+
+@media (min-width: 961px) { body.stack-dirs { --track: 24rem; } }
