@@ -487,8 +487,17 @@ const lineName = (route) => bulletHtml(route, 'inl');
 // Express runs of the 6 and the 7 (Grand Central) get the MTA's diamond; the
 // feed decides express by the stops a train makes (feeds.js serviceFromPenn).
 const DIAMOND_NOTE = { 6: 'express in the Bronx', 7: 'express in Queens' };
-const rowBullet = (g) => bulletHtml(g.route, g.svc === 'express' && DIAMOND_NOTE[g.route] ? 'diamond' : '');
-const diamondNote = (g, dir) => (g.svc === 'express' && DIAMOND_NOTE[g.route] && dir === 'N' ? `<small class="dnote">${DIAMOND_NOTE[g.route]}</small>` : '');
+// They run local in Manhattan, so they share the local row with the circle
+// trains: the bullet and note follow the train shown (t.diamond, feeds.js).
+const isDiamond = (g, t) => !!(t && t.diamond && DIAMOND_NOTE[g.route]);
+const bulletShown = new Map(); // row -> diamond shown last, to flip when it changes
+function rowBullet(g, t, key) {
+  const d = isDiamond(g, t);
+  const before = key ? bulletShown.get(key) : undefined;
+  if (key) bulletShown.set(key, d);
+  return bulletHtml(g.route, `${d ? 'diamond' : ''}${before !== undefined && before !== d ? ' bflip' : ''}`);
+}
+const diamondNote = (g, t) => (isDiamond(g, t) ? `<small class="dnote">${DIAMOND_NOTE[g.route]}</small>` : '');
 function bulletHtml(route, extraClass = '') {
   const l = lineInfo(route);
   return `<span class="bullet ${extraClass}${l.label.length > 2 ? ' wide' : ''}" style="background:${esc(l.color)};color:${esc(l.text)}" aria-label="${esc(l.label)} train">${esc(l.label)}</span>`;
@@ -1226,12 +1235,13 @@ const minsShown = new Map(); // what each row's times showed, to slide out on a 
 const ROTATE_MS = 8000;      // how long each end of the line shows
 let subwayTurning = false;   // a row is taking turns (redraw on each turn)
 const turnCycles = new Map(); // row -> { order of its ends, turn it started on }
-function destName(key, name) {
+function destName(key, name, extra = '') {
+  const html = esc(name) + extra;
   const before = destShown.get(key);
-  destShown.set(key, name);
-  if (before === undefined || before === name) return `<span class="dname">${esc(name)}</span>`;
+  destShown.set(key, html);
+  if (before === undefined || before === html) return `<span class="dname">${html}</span>`;
   slideStarted = performance.now();
-  return `<span class="dname changing"><span class="out" aria-hidden="true">${esc(before)}</span><span class="in">${esc(name)}</span></span>`;
+  return `<span class="dname changing"><span class="out" aria-hidden="true">${before}</span><span class="in">${html}</span></span>`;
 }
 
 // ---------- subway rows, option B (trial) ----------
@@ -1247,7 +1257,8 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
   const phase = 2; // (owner, Nov 19: just the list, no switching or animation)
   const linePills = subwayPills(g.route, dir, g.svc, stn.id, upcoming[0]);
   const name = (id) => stationName(id) || id;
-  const lastOf = (x) => x.stops[x.stops.length - 1];
+  const lastOf = (x) => `${x.stops[x.stops.length - 1]}${x.diamond ? '|d' : ''}`;
+  const anyDiamond = upcoming.some((x) => isDiamond(g, x));
   const pill = lateNightTrain(stn.id, g.route, dir, upcoming[0].time, upcoming[0].code) || localNight(stn.id, g, dir, upcoming[0].time) || cutbackNight(stn.id, g.route, dir, upcoming[0].time) ? SUB_LATE_PILL : '';
   let html;
   if (phase === 1) {
@@ -1259,13 +1270,15 @@ function optionBRow(g, stn, dir, upcoming, ends, arriving, nowS) {
       const first = ts[0] === 0 ? '<b class="now">now</b>' : `<b>${ts[0]}</b> min`;
       // Late-night pill by this destination's next train.
       const p = lateNightTrain(stn.id, g.route, dir, mine[0].time, mine[0].code) || localNight(stn.id, g, dir, mine[0].time) || cutbackNight(stn.id, g.route, dir, mine[0].time) ? SUB_LATE_PILL : '';
-      return `<span class="b-row"><span>${esc(name(e))}${pills(p, subwayPills(g.route, dir, g.svc, stn.id, mine[0]))}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
+      // A row with diamond trains marks each end with its own small bullet.
+      const mark = anyDiamond ? bulletHtml(g.route, `tiny${isDiamond(g, mine[0]) ? ' diamond' : ''}`) + ' ' : '';
+      return `<span class="b-row"><span>${mark}${esc(name(e.split('|')[0]))}${diamondNote(g, mine[0])}${pills(p, subwayPills(g.route, dir, g.svc, stn.id, mine[0]))}</span><span class="smins">${first}${ts.length > 1 ? `, ${ts.slice(1).join(', ')}` : ''}</span></span>`;
     }).join('')}</span>`;
   }
   const before = bShown.get(key);
   bShown.set(key, html);
   const body = `<span class="b-wrap">${html}</span>`;
-  return `<div class="sline optb">${rowBullet(g)}${body}</div>`;
+  return `<div class="sline optb">${rowBullet(g, upcoming[0])}${body}</div>`;
 }
 $('sub-toggles').addEventListener('click', (e) => {
   const lp = e.target.closest('[data-latepills]');
@@ -1410,7 +1423,8 @@ function renderSubway() {
       // A shared row with trains to more than one end of the line (the A
       // downtown) takes turns: each end's own next trains for a few seconds,
       // soonest first, sliding from one to the next.
-      const lastOf = (x) => x.stops && x.stops[x.stops.length - 1];
+      // (The diamond 6 and 7 count as their own end: circle and diamond take turns.)
+      const lastOf = (x) => x.stops && `${x.stops[x.stops.length - 1]}${x.diamond ? '|d' : ''}`;
       const ends = g.scheduled ? [...new Set(upcoming.map(lastOf))] : [];
       // ...except while a train is "now": then it stops on that train and lists
       // every A train's time, whatever its end.
@@ -1437,8 +1451,9 @@ function renderSubway() {
       const last = first.stops && first.stops[first.stops.length - 1];
       const dest = stationName(last) || first.dest || (dir === 'N' ? 'Uptown' : 'Downtown');
       const rowKey = `${stn.id}|${g.route}|${dir}|${g.svc}|${g.scheduled ? 'sched' : last}`;
-      const turned = destShown.has(rowKey) && destShown.get(rowKey) !== dest;
-      const destHtml = destName(rowKey, dest);
+      const note = diamondNote(g, first);
+      const turned = destShown.has(rowKey) && destShown.get(rowKey) !== esc(dest) + note;
+      const destHtml = destName(rowKey, dest, note);
       // The times slide over with the name when the row turns to another end.
       const minsHtml = (html) => (turned ? `<span class="dname changing"><span class="out" aria-hidden="true">${minsShown.get(rowKey) || ''}</span><span class="in">${html}</span></span>` : html);
       const firstMin = mins[0] === 0 ? '<b class="now">now</b>' : `<b>${mins[0]}</b> min`;
@@ -1449,11 +1464,11 @@ function renderSubway() {
       // other options are in the service notices).
       const linePills = subwayPills(g.route, dir, svc, stn.id, trains[0]);
       if (!rerouted || changeFor(g.route)) {
-        return `<div class="sline">${rowBullet(g)}<span class="sdest">${destHtml}${diamondNote(g, dir)}${pills(pill, linePills, rerouted ? reroutePill(stn.id, g.route, dir) : '')}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
+        return `<div class="sline">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${pills(pill, linePills, rerouted ? reroutePill(stn.id, g.route, dir) : '')}</span><span class="smins">${minsHtml(firstMin + rest)}</span></div>`;
       }
       // Rerouted with no notice behind it: the row itself opens the map.
       const i = subwayShown.push({ route: g.route, dir, svc: g.svc, train: rerouted }) - 1;
-      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${rowBullet(g)}<span class="sdest">${destHtml}${staticPills(pills(pill && LATE_PILL, linePills))}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
+      return `<button type="button" class="sline rerouted" data-reroute="${i}" aria-haspopup="dialog">${rowBullet(g, first, rowKey)}<span class="sdest">${destHtml}${staticPills(pills(pill && LATE_PILL, linePills))}<span class="reroute-tag">Rerouted, see map</span></span><span class="smins">${minsHtml(firstMin + rest)}</span></button>`;
     }).join('');
       return lines || notes ? `<div class="svc"><h4>${SVC[svc]}</h4>${notes}${lines}</div>` : '';
     }).join('');

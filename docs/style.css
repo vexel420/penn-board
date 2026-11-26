@@ -721,9 +721,14 @@ body.hub-gct {
 .hub-gct .clock .secs, .hub-gct .clock .ap { color: #cfe3df; }
 
 /* The MTA's diamond for express runs (the 6 in the Bronx, the 7 in Queens). */
+.bullet.bflip { animation: bullet-flip .8s ease-in-out; }
+@keyframes bullet-flip { 0% { transform: rotateY(0); } 45% { transform: rotateY(90deg); } 55% { transform: rotateY(90deg); } 100% { transform: rotateY(0); } }
 .bullet.diamond { border-radius: 0; clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); box-shadow: none; width: 2.35rem; height: 2.35rem; margin: -.18rem; }
 .bullet.small.diamond { width: 1.65rem; height: 1.65rem; margin: -.12rem; }
+.b-row .dnote { display: block; margin: .05rem 0 0 1.55rem; font-size: .8rem; font-weight: 500; opacity: .75; }
+.b-row .bullet.tiny { display: inline-grid; width: 1.15rem; height: 1.15rem; font-size: .7rem; vertical-align: -.15em; box-shadow: none; }
 .bullet.tiny.diamond { margin: 0; }
+.b-row .bullet.tiny.diamond { width: 1.4rem; height: 1.4rem; margin: -.12rem -.12rem; vertical-align: -.3em; }
 
 /* Flip board on Grand Central: teal tiles, gold letters. */
 .hub-gct .mast-flip .f, .hub-gct.flipboard .clock .f { --tile: #123f48; --tile-top: #174a54; --seam: #08262c; color: #f3d88f; }

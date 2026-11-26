@@ -123,8 +123,12 @@ const USUALLY_EXPRESS = new Set(['2', '3', 'A', '4', '5']);
 const DIAMOND_LOCAL_ONLY = { 7: ['716', '715', '714', '713', '711', '709', '708', '706', '705'], 6: ['618', '617', '616', '615', '614', '612', '611', '610', '609'] };
 const DIAMOND_END = { 7: '702', 6: '608' };
 const diamondExpress = (route, stops) => !!DIAMOND_LOCAL_ONLY[route] && stops.includes(DIAMOND_END[route]) && !stops.some((id) => DIAMOND_LOCAL_ONLY[route].includes(id));
+// In Manhattan the diamond trains make every local stop (owner, Nov 26: "if
+// the diamond 6 is running on local tracks at Grand Central then it needs to
+// be listed as local"), so they're local here; each train carries `diamond`
+// and the row takes turns between the circle and the diamond.
 function serviceFromPenn(route, stops) {
-  if (route === '6' || route === '7') return diamondExpress(route, stops) ? 'express' : 'local';
+  if (route === '6' || route === '7') return 'local';
   if (route === 'GS') return 'local';
   const next = stops.slice(1, 4);
   if (next.some((s) => LOCAL_NEXT.has(s))) return 'local';
@@ -161,7 +165,7 @@ const subway = source('subway', 20, async () => {
     // `code`: the trip's scheduled start ("033750" of "033750_1..N03R"), which
     // says which timetable trip this is (the late-night pill uses it).
     const code = (/^(\d{6})_/.exec(trip.trip || '') || [])[1] || '';
-    groups.get(key).trains.push({ time: stop.time, stops, code });
+    groups.get(key).trains.push({ time: stop.time, stops, code, ...(dir === 'N' && diamondExpress(route, stops) ? { diamond: true } : {}) });
   }
   return [...groups.values()].map((g) => {
     g.trains.sort((a, b) => a.time - b.time);

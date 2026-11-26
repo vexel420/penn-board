@@ -852,3 +852,8 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - Each route badge links to the MTA route page, `https://www.mta.info/schedules/bus/<route lowercase>` (e.g. m34-sbs), in a new tab.
 - "Map of the stops" opens a Leaflet sheet: hub star plus numbered stop dots (nudged apart when two stops share a corner) and a numbered list. Stop coordinates (`ll`) in hub.js come from the MTA Manhattan bus GTFS.
 - Tapping a stop in the list under the map flies the map to it (zoom 18.5), highlights its dot and list row, and opens its popup; a "Show all stops" button on the map zooms back out. Tapping a route badge still opens the MTA page.
+
+## Diamond 6 and 7 listed as local (Nov 26)
+- Owner: "If the diamond 6 is running on local tracks at Grand Central then it needs to be listed as local." In Manhattan the diamond trains make every local stop, so `serviceFromPenn` returns 'local' for the 6 and 7; uptown trains that run express in the Bronx/Queens carry `diamond: true` (feeds.js, `diamondExpress`).
+- Take turns: a diamond train counts as its own "end" (`lastOf` = last stop + '|d'), so the row turns between circle and diamond like the A's ends; the bullet flips (`.bflip`, rotateY) and the "express in the Bronx" note slides with the name (destName takes extra html).
+- All destinations: rows with diamond trains mark each end with its own small circle or diamond bullet.
