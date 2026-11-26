@@ -3845,7 +3845,7 @@ try { localStorage.removeItem('sidePanel'); } catch {}
 if (HUB.layout === 'subway') side = 'buses';
 document.body.dataset.side = side;
 const WIDE = matchMedia('(min-width: 961px)');
-const busesShown = () => view === 'buses' || (WIDE.matches && side === 'buses') || (WIDE.matches && HUB.layout === 'subway');
+const busesShown = () => view === 'buses' || (WIDE.matches && side === 'buses') || (WIDE.matches && HUB.layout === 'subway') || (WIDE.matches && HUB.mergeSide && document.body.classList.contains('side-main'));
 function setSide(x) {
   side = x; document.body.dataset.side = side;
   setPressed('.side-switch', 'side', side);
@@ -3860,10 +3860,13 @@ setPressed('.side-switch', 'side', side);
 let sideMain = false, panelOff = false;
 try { sideMain = localStorage.getItem('sideMain') === '1'; panelOff = localStorage.getItem('panelOff') === '1'; } catch {}
 const mainName = () => (HUB.layout === 'subway' ? 'Subway' : (HUB.mainLabel || 'departures').replace(/^./, (c) => c.toUpperCase()));
-const sideName = () => (HUB.layout === 'subway' || side === 'buses' ? 'Buses' : (HUB.path ? 'Subway & PATH' : 'Subway'));
+const sideName = () => (HUB.layout === 'subway' || (side === 'buses' && !HUB.mergeSide) ? 'Buses' : HUB.mergeSide ? 'Subway & buses' : (HUB.path ? 'Subway & PATH' : 'Subway'));
 function applyDeskLayout() {
   document.body.classList.toggle('side-main', sideMain);
   document.body.classList.toggle('panel-off', panelOff);
+  document.body.classList.toggle('merge-side', !!HUB.mergeSide);
+  // (Deferred: the bus code further down this script is set up by then.)
+  setTimeout(() => { if (board && busesShown()) { renderBuses(); renderHubBuses(); } }, 0);
   const swap = document.querySelector('.pt-swap'), hide = document.querySelector('.pt-hide'), back = document.querySelector('.panel-back');
   // What's on the side right now, and what's hidden.
   const onSide = sideMain ? mainName() : sideName();

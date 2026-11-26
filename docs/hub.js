@@ -57,6 +57,8 @@
     },
     pabt: {
       tab: { code: 'PABT', serves: 'Buses, A C E', label: 'Port Authority', bg: '#1d3f86', ink: '#ffd24a' }, // the station bar (phones) and the station menu (computers), owner Nov 26
+      // Computers, side panel as the main board: subway (only the A C E) and MTA buses together (owner, Nov 26).
+      mergeSide: true,
       id: 'pabt', page: 'pabt.html', name: 'Port Authority Bus Terminal', short: 'Port Authority', kicker: 'New York', title: 'Port Authority Bus Terminal', subwayTab: 'subway',
       pill: { href: 'tsq.html', label: 'Times Square–42 St' },
       ll: [40.7572, -73.9903],

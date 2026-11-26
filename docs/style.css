@@ -959,10 +959,25 @@ button.ene-note.ev-min b { color: var(--late); }
   body.side-main .layout { grid-template-columns: minmax(0, 1fr) 27rem; }
   body.side-main .layout > aside.subway { order: -1; }
   body.side-main .layout > .panel-back { order: 1; }
-  /* Subway as the main board: each station's two directions side by side. */
-  body.side-main aside.subway .stn { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1.6rem; align-items: start; }
-  body.side-main aside.subway .stn > :not(.dir) { grid-column: 1 / -1; }
-  body.side-main aside.subway .subway-h, body.side-main aside.subway h2 { font-size: 1.5rem; }
+  /* Subway as the main board: every station's lines in view at once, each in a
+     column about the side panel's width and size (owner, Nov 26: "see all of
+     the lines at once without scrolling"). */
+  /* Newspaper columns: a station's directions may continue in the next column,
+     so a big station (the 4 5 6) doesn't run below the screen while the 7 and
+     the S leave room; each direction stays whole. */
+  body.side-main:not(.merge-side) aside.subway #subway { columns: 18rem; column-gap: 1rem; }
+  body.side-main:not(.merge-side) aside.subway #subway > .stn { margin: 0 0 1rem; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  body.side-main:not(.merge-side) aside.subway #subway .dir, body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-inside: avoid; }
+  body.side-main:not(.merge-side) aside.subway #subway .stn-lines { break-after: avoid; }
+  /* Port Authority (only the A C E): the subway and the MTA buses together, the subway bigger. */
+  body.merge-side.side-main aside.subway { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 1.6rem; align-items: start; }
+  body.merge-side.side-main aside.subway > .panel-tools { grid-column: 1 / -1; }
+  body.merge-side.side-main aside.subway > .side-switch { display: none; }
+  body.merge-side.side-main aside.subway > .sub-part, body.merge-side.side-main aside.subway > .bus-part { display: block !important; }
+  body.merge-side.side-main aside.subway .sub-part { font-size: 1.12em; }
+  body.merge-side.side-main aside.subway .bus-part > .bus-h:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+  body.merge-side.side-main.panel-off aside.subway .stn { display: grid; grid-template-columns: 1fr 1fr; column-gap: 1.4rem; align-items: start; }
+  body.merge-side.side-main.panel-off aside.subway .stn > :not(.dir) { grid-column: 1 / -1; }
   /* One side hidden: the other takes the full width. */
   body.panel-off .layout { grid-template-columns: minmax(0, 1fr); }
   body.panel-off:not(.side-main) .layout > aside.subway { display: none; }
