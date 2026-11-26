@@ -622,27 +622,6 @@ function morningArrived(key, here, line, dir, svc, nowS) {
   if (seen == null && times.length) morningWatch.set(key, Math.min(...times));
   return false;
 }
-// A line whose late-night pattern is only fewer trains (the 3 uptown at Penn:
-// no express/local switch, no overnight gap) also says when daytime service
-// has started (owner, Nov 26: "the banner is missing the 3"): from the first
-// daytime trip listed until it arrives, within 20 min of when the timetable's
-// late-night pattern ends (subway-data.json "night" .to).
-function windowMorning(stn, line, dir, svc, here, nowS) {
-  const today = nyNow();
-  if (today.mins >= 12 * 60 || switchState(stn.id, line, dir) || nightGapState(stn.id, line, dir)) return false;
-  const w = (((subwayData && subwayData.night && subwayData.night[stn.id]) || {})[line] || {})[dir];
-  const T = w && w[subSched(today)];
-  if (!T || T.to == null || today.mins > T.to + 20 || today.mins < T.to - 90) return false;
-  const key = `${today.date}|${stn.id}|${line}|${dir}|win`;
-  if (morningReached.has(key)) return false;
-  const day = here.filter((g) => g.route === line && g.dir === dir && (g.svc || 'local') === svc)
-    .flatMap((g) => g.trains).filter((t) => t.time >= nowS - 30 && !lateNightTrain(stn.id, line, dir, t.time, t.code));
-  if (!day.length) return false;
-  const first = Math.min(...day.map((t) => t.time));
-  if (first - nowS < 30 || (morningWatch.has(key) && nowS > morningWatch.get(key) + 30)) { morningReached.add(key); return false; }
-  if (!morningWatch.has(key)) morningWatch.set(key, first);
-  return true;
-}
 function firstMorningGone(here, line, dir, svc, untilMins, nowS) {
   if (untilMins == null) return false;
   const due = minsToEpoch(untilMins);
@@ -1497,7 +1476,7 @@ const rowMax = new Map();
 let rowMaxKey = '', rowMaxAt = 0;
 function holdHeights(root) {
   if (!root) return;
-  const key = `${innerWidth}x${innerHeight}|${document.body.className}|${subwayStyle}|${flipMode}`;
+  const key = `${innerWidth}|${document.body.className}|${subwayStyle}|${flipMode}`; // (not the height: Safari's toolbar changes it all the time)
   if (key !== rowMaxKey || Date.now() - rowMaxAt > 15 * 60000) { rowMax.clear(); rowMaxKey = key; rowMaxAt = Date.now(); }
   const els = [...root.querySelectorAll('[data-k]')];
   for (const el of els) { const m = rowMax.get(el.dataset.k); if (m) el.style.minHeight = `${m}px`; }
@@ -1564,7 +1543,6 @@ function renderSubway() {
         g = nightGapState(stn.id, line, dir);
       }
       if (g && g.phase === 'morning' && g.svc === svc) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${lineName(line)}.</b></span></p>`;
-      if (!g && windowMorning(stn, line, dir, svc, here, nowS)) return `<p class="svc-line">${ICON.sun}<span><b>Daytime service has started on the ${lineName(line)}.</b></span></p>`;
       // "The last C train leaves at 10:34 PM, in 25 min." / "The last downtown 3 train..."
       // The last train running late: keep counting down until it has left.
       const lateLast = g && g.phase === 'night' && g.svc === svc
@@ -4086,7 +4064,7 @@ function fitSubZoom() {
     if (!WIDE.matches || b.classList.contains('side-main')) { plats.style.zoom = ''; plats.dataset.sized = ''; return; }
     // (Sized once per window size and layout; a data refresh changes nothing
     // unless the platforms stop fitting, then one step smaller. No flashing.)
-    const key = `${innerWidth}x${innerHeight}|${b.className}`;
+    const key = `${innerWidth}|${b.className}`;
     const fits = () => Math.max(...[...plats.querySelectorAll('.stn')].map((x) => x.getBoundingClientRect().bottom), 0) + window.scrollY <= innerHeight - 12;
     let z = parseFloat(plats.style.zoom) || 1;
     if (plats.dataset.sized !== key) { plats.dataset.sized = key; z = 1; plats.style.zoom = '1'; }
@@ -4103,8 +4081,8 @@ function fitSubZoom() {
   // A data refresh: keep the size unless the lines no longer fit (then step down).
   // A new layout or window size: the largest size that fits, from the top.
   let z = parseFloat(el.style.zoom) || 1;
-  if (!el.dataset.sized || el.dataset.sized !== `${innerWidth}x${innerHeight}|${b.className}`) {
-    el.dataset.sized = `${innerWidth}x${innerHeight}|${b.className}`;
+  if (!el.dataset.sized || el.dataset.sized !== `${innerWidth}|${b.className}`) {
+    el.dataset.sized = `${innerWidth}|${b.className}`;
     // Start no larger than lets every column fit across.
     const n = parseInt(getComputedStyle(b).getPropertyValue('--sub-cols'), 10) || 1;
     z = merge ? 1 : Math.min(1, (box.clientWidth - 2.2 * rem + rem) / (n * 25 * rem));
@@ -4397,14 +4375,10 @@ function tick() {
 // Tick on the second, so the seconds never skip or stall.
 function everySecond() { setTimeout(() => { tick(); everySecond(); }, 1000 - (Date.now() % 1000) + 5); }
 setPressed('.chips', 'carrier', carrier);
-// (The redraws that can change heights above the reader, kept anchored.)
-renderSubway = keepAnchor(((f) => function () { const out = f.apply(this, arguments); fitSubZoom(); return out; })(renderSubway));
-renderRail = keepAnchor(renderRail);
-renderPath = keepAnchor(renderPath);
-renderEvents = keepAnchor(renderEvents);
-renderElevators = keepAnchor(renderElevators);
-renderHubBuses = keepAnchor(renderHubBuses);
-renderBuses = keepAnchor(renderBuses);
+// (Redraws used to be wrapped in keepAnchor() to hold the reader's place in
+// Safari. Row and section heights are now held instead (holdHeights), and the
+// scroll adjustment itself moved the page on iPad, so only the fit remains.)
+renderSubway = ((f) => function () { const out = f.apply(this, arguments); fitSubZoom(); return out; })(renderSubway);
 // A reload (tapping the station name, or the browser's refresh) comes back to
 // the same tab and the same place on the page (owner, Nov 26: "jumping back to
 // the top on each refresh"). The board fills in after the page loads, so the

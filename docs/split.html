@@ -184,7 +184,14 @@ function start() {
   if (!BIG.matches) { panes.innerHTML = ''; return; }
   build();
 }
-addEventListener('resize', () => { if (BIG.matches) fit(); });
+// (Safari on iPad resizes the page by a few pixels as its toolbar shows and
+// hides; re-fitting the boards for that made them jump. Only a real change.)
+let fitW = innerWidth, fitH = innerHeight;
+addEventListener('resize', () => {
+  if (!BIG.matches) return;
+  if (innerWidth === fitW && Math.abs(innerHeight - fitH) < 120) return;
+  fitW = innerWidth; fitH = innerHeight; fit();
+});
 BIG.addEventListener('change', start);
 start();
 </script>
