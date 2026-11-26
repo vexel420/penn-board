@@ -961,3 +961,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 ## Event alerts minimize; side panel opens on Subway (Nov 26)
 - City event alerts (the parade) have a – button: minimized to one slim line with "Show". Remembered per event in localStorage `eventsMin` (all boards share it); `renderEvents()` re-renders.
 - The side panel always opens on Subway (owner: "default view to be subway not busses"). The old remembered `sidePanel` choice is removed on load and no longer saved.
+- Elevator/escalator alerts minimize the same way (ids `ene-<equipment>` in the same `eventsMin` set; `renderElevators()` re-renders).

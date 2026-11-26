@@ -3495,6 +3495,8 @@ function eneWhen(x) {
   return `about ${time} ${d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}`;
 }
 const ENE_ICON = '<svg class="ic ene-ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="4" r="2" fill="currentColor"/><path d="M19 13v-2c-1.5 0-3-.6-4-1.6l-1.3-1.4c-.4-.4-1-.7-1.6-.7-1.1 0-2 .9-2 2v5.7c0 1.1.9 2 2 2h5v5h2v-5.5c0-1.1-.9-2-2-2h-3v-3.5c1.3 1.1 3 1.9 4.9 2zM12.1 19a3 3 0 0 1-5.8-1 3 3 0 0 1 2.3-2.9v-2.1A5 5 0 1 0 14.1 19z" fill="currentColor"/></svg>';
+// Alerts minimized to one line (event and elevator alerts), remembered on this device.
+const evMin = new Set((() => { try { return JSON.parse(localStorage.getItem('eventsMin') || '[]'); } catch { return []; } })());
 function elevatorsHtml() {
   return eneOut.map((x) => {
     const info = eneInfo[x.equipment] || {};
@@ -3504,7 +3506,10 @@ function elevatorsHtml() {
     // The MTA's advice, without its own status line ("out of service for replacement"), which may be older than the outage.
     const advice = String(info.alt || '').replace(/^[^.]*out of service[^.]*\.\s*/i, '');
     const alt = advice ? `<details class="ene-alt" data-k="ene-${esc(x.equipment || '')}"><summary>What to do instead</summary><p>${esc(advice)}</p></details>` : '';
-    return `<div class="ene-note">${ENE_ICON}<div><p><b>${kind} out</b>${x.trainno ? ` at the ${esc(x.trainno)} station` : ''}: ${esc(what)}.${back ? ` Back in service by ${esc(back)} (MTA estimate).` : ''}</p>${alt}</div></div>`;
+    // Minimizes like the event alerts (owner, Nov 26: "same with the elevator alert").
+    const id = `ene-${x.equipment || what}`;
+    if (evMin.has(id)) return `<button type="button" class="ene-note ev-min" data-evmin="${esc(id)}" aria-expanded="false">${ENE_ICON}<span><b>${kind} out</b>: ${esc(what)}</span><span class="ev-open">Show</span></button>`;
+    return `<div class="ene-note">${ENE_ICON}<div><p><b>${kind} out</b>${x.trainno ? ` at the ${esc(x.trainno)} station` : ''}: ${esc(what)}.${back ? ` Back in service by ${esc(back)} (MTA estimate).` : ''}</p>${alt}</div><button type="button" class="ev-hide" data-evmin="${esc(id)}" aria-expanded="true" aria-label="Minimize the ${kind.toLowerCase()} alert" title="Minimize">–</button></div>`;
   }).join('');
 }
 function renderElevators() {
@@ -3636,13 +3641,12 @@ function dayTime(t, nowS = Date.now() / 1000) {
   return `${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(t * 1000))} ${time}`;
 }
 const cityEventsNow = (nowS) => cityEvents.filter((e) => nowS >= e.fromS && nowS <= e.endS + 2 * 3600);
-const evMin = new Set((() => { try { return JSON.parse(localStorage.getItem('eventsMin') || '[]'); } catch { return []; } })());
 document.addEventListener('click', (ev) => {
   const b = ev.target.closest('[data-evmin]'); if (!b) return;
   const id = b.dataset.evmin;
   evMin.has(id) ? evMin.delete(id) : evMin.add(id);
   try { localStorage.setItem('eventsMin', JSON.stringify([...evMin])); } catch {}
-  renderEvents();
+  if (id.startsWith('ene-')) renderElevators(); else renderEvents();
   document.querySelector(`[data-evmin="${CSS.escape(id)}"]`)?.focus();
 });
 function cityEventsHtml(nowS) {
