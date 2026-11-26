@@ -608,6 +608,20 @@ const morningReached = new Set(); // date|station|line|dir once the first daytim
 // and the earliest one listed now is 8+ min after it. (A board opened after it
 // passed never saw it show "now"; owner, Nov 26: the C banner stayed at Times
 // Square after Penn's had cleared.) A late first train (under 8 min) still counts as coming.
+// The train this board first saw coming while the banner was up, per banner:
+// once its time has passed, it has arrived (the board refreshes every 30 s and
+// can miss its "now"; owner, Nov 26: the banners must go once the first
+// daytime express arrives, on every board).
+const morningWatch = new Map();
+function morningArrived(key, here, line, dir, svc, nowS) {
+  const times = here.filter((g) => g.route === line && g.dir === dir && (!svc || (g.svc || 'local') === svc))
+    .flatMap((g) => g.trains.map((t) => t.time)).filter((t) => t >= nowS - 30);
+  if (times.some((t) => t - nowS < 30)) return true; // showing "now"
+  const seen = morningWatch.get(key);
+  if (seen != null && nowS > seen + 30) return true;
+  if (seen == null && times.length) morningWatch.set(key, Math.min(...times));
+  return false;
+}
 function firstMorningGone(here, line, dir, svc, untilMins, nowS) {
   if (untilMins == null) return false;
   const due = minsToEpoch(untilMins);
@@ -1478,7 +1492,7 @@ function renderSubway() {
     const switching = stn.lines.map((line) => ({ line, st: switchState(stn.id, line, dir) })).filter((x) => x.st);
     for (const x of switching) {
       // The first daytime express showing "now" at Penn ends the morning.
-      if (x.st.phase === 'morning' && (here.some((g) => g.route === x.line && g.dir === dir && g.svc === 'express' && g.trains.some((t) => t.time - nowS < 30)) || firstMorningGone(here, x.line, dir, 'express', x.st.until, nowS))) {
+      if (x.st.phase === 'morning' && (morningArrived(x.st.key, here, x.line, dir, 'express', nowS) || firstMorningGone(here, x.line, dir, 'express', x.st.until, nowS))) {
         morningReached.add(x.st.key);
         x.st = switchState(stn.id, x.line, dir);
       }
@@ -1496,7 +1510,7 @@ function renderSubway() {
       if (away !== null) return away;
       let g = nightGapState(stn.id, line, dir);
       // The first morning train showing "now" at Penn ends "Daytime service has started".
-      if (g && g.phase === 'morning' && (here.some((x) => x.route === line && x.dir === dir && x.trains.some((t) => t.time - nowS < 30)) || firstMorningGone(here, line, dir, g.svc, g.until, nowS))) {
+      if (g && g.phase === 'morning' && (morningArrived(g.key, here, line, dir, null, nowS) || firstMorningGone(here, line, dir, g.svc, g.until, nowS))) {
         morningReached.add(g.key);
         g = nightGapState(stn.id, line, dir);
       }
