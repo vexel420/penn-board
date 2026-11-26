@@ -3933,7 +3933,14 @@ function applyDeskLayout() {
   const onSide = sideMain ? mainName() : sideName();
   if (swap) { swap.setAttribute('aria-pressed', String(sideMain)); swap.title = sideMain ? `Put ${mainName()} back as the main board` : `Make ${sideName()} the main board (double-click its tab for full screen)`; swap.querySelector('span').textContent = sideMain ? `${mainName()} to main` : 'Make main'; }
   if (hide) { hide.title = `Hide ${onSide} for a full-width ${sideMain ? sideName() : mainName()}`; hide.querySelector('span').textContent = `Hide ${onSide}`; }
-  if (back) { back.hidden = !panelOff; back.querySelector('span').textContent = `Show ${onSide}`; }
+  if (back) {
+    back.hidden = !panelOff; back.querySelector('span').textContent = `Show ${onSide}`;
+    // Not floating over the board (owner, Nov 26: it covered the PATH times):
+    // with the side panel as the main board, next to its other buttons; with the
+    // trains full width, in the row with "Side by side".
+    const home = sideMain ? document.querySelector('.panel-tools') : (document.querySelector('.trip-bar') || document.querySelector('.layout'));
+    if (home && back.parentElement !== home) home.append(back);
+  }
   // The bus map and lists size themselves to their box.
   setTimeout(() => window.dispatchEvent(new Event('resize')), 50);
 }

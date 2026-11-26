@@ -1005,9 +1005,8 @@ button.ene-note.ev-min b { color: var(--late); }
   body.panel-off:not(.side-main) .layout > aside.subway { display: none; }
   body.panel-off.side-main .layout > .rail { display: none; }
   body.panel-off.side-main .chips, body.panel-off.side-main .style-bar { display: none; }
-  .panel-back:not([hidden]) { display: inline-flex; position: fixed; right: 0; top: 40%; z-index: 40; border-radius: 10px 0 0 10px; border-right: 0;
-    background: var(--enamel-2); color: var(--ivory); padding: .7rem .6rem; writing-mode: vertical-rl; box-shadow: -4px 0 16px rgba(0, 0, 0, .35); }
-  .panel-back .ic { transform: rotate(90deg); }
+  .panel-back:not([hidden]) { display: inline-flex; color: var(--ivory); }
+  .trip-bar .panel-back { font-size: .9rem; padding: .4rem .85rem; }
   html.split-big body.side-main .layout { grid-template-columns: minmax(0, 1fr) 22rem; }
   body.panel-off .pt-hide { display: none; }
 }
@@ -1018,7 +1017,7 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 /* Subway as the main board: the Subway/Buses switch and the tools share one row (room for every line on screen). */
 @media (min-width: 961px) {
   body.side-main aside.subway { position: relative; }
-  body.side-main aside.subway > .panel-tools { position: absolute; top: 1rem; right: 1.1rem; margin: 0; }
+  body.side-main.panel-off aside.subway > .panel-tools { position: absolute; top: 1rem; right: 1.1rem; margin: 0; }
   body.side-main:not(.merge-side) aside.subway > .side-switch { max-width: 22rem; }
   body.merge-side.side-main aside.subway > .sub-part { margin-top: .2rem; }
 }
@@ -1042,3 +1041,5 @@ body.in-split, html:has(body.in-split) { overscroll-behavior: contain; }
 }
 
 @media (min-width: 961px) { body.stack-dirs { --track: 24rem; } }
+
+.panel-back[hidden] { display: none !important; }
