@@ -23,7 +23,7 @@ Rebuild it when the MTA publishes a new timetable (a few times a year):
     python3 scripts/build-subway-data.py gtfs_subway.zip
 """
 import csv, io, json, re, sys, zipfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from pathlib import Path
 
 OUT = Path(__file__).resolve().parent.parent / 'docs' / 'subway-data.json'
@@ -220,6 +220,21 @@ def night_window(trips_at_penn):
         if t >= 3 * 60 and t - prev < NIGHT_HEADWAY:
             to = t
             break
+    # Late nights some lines also run a shorter route (the 3: trips start at
+    # Penn, not New Lots Av). The first morning trip on the line's usual daytime
+    # route ends the night there, even while trains are still 15+ min apart
+    # (owner, Nov 26: the uptown 3 kept the late-night pill on its 9:05, which
+    # runs the full route on a Sunday morning's spacing).
+    routes = Counter((t[4], t[5]) for t in trips_at_penn if len(t) > 5 and 10 * 60 <= t[0] < 19 * 60)
+    if routes:
+        usual = routes.most_common(1)[0][0]
+        # (Only where the night really runs another route: the first usual-route
+        # trip that follows a trip on a different one. A line on its usual
+        # route all night, like the 1, keeps the spacing rule.)
+        seq = sorted((t[0], (t[4], t[5])) for t in trips_at_penn if len(t) > 5 and t[0] < 12 * 60)
+        day_first = next((m for (pm, pr), (m, r) in zip(seq, seq[1:]) if m >= 3 * 60 and r == usual and pr != usual), None)
+        if day_first is not None and day_first < to:
+            to = day_first
     # The night runs on into the small hours, which the timetable may list as
     # early-morning times (01:29) rather than 25:29: join them on, up to 'to'.
     if not evening:
@@ -319,7 +334,7 @@ def main(zip_path):
                 # timetable's trip id carries the same number.
                 code = re.search(r'_(\d{6})_', tid)
                 ends[(trip_line[tid], c[2])][names[-1]] += 1
-                at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express, code.group(1) if code else ''))
+                at_penn[(c[1], trip_line[tid], c[2], day)].append((minutes(c[3]), minutes(cs[0][3]), express, code.group(1) if code else '', names[0], names[-1]))
     switches, gaps, nights = {}, {}, {}
     for (station, line, d, day), ts in at_penn.items():
         w = night_window(ts) if not night_gap(ts) else None
