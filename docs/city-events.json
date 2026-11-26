@@ -1,0 +1,20 @@
+{
+  "note": "Big street events that close streets and change bus and subway service (owner, Nov 26). Every hub shows an event when it is within radiusKm of the route, or when the event's bus routes or subway lines include the hub's own. busRoutes and lines are the MTA's own lists (its service alerts); the board's live MTA bus and subway alerts add the details as the MTA posts them.",
+  "events": [
+    {
+      "id": "macys-parade-2026",
+      "title": "Macy’s Thanksgiving Day Parade",
+      "note": "Postponed from Thanksgiving Day because of the storm.",
+      "start": "2026-11-28T08:30:00-05:00",
+      "end": "2026-11-28T12:00:00-05:00",
+      "showFrom": "2026-11-25T12:00:00-05:00",
+      "routeText": "Central Park West from W 77 St, Central Park South, 6 Av down to 34 St, then 34 St to Macy’s Herald Square",
+      "closures": "Streets along the route close in the early morning and reopen when police clear them.",
+      "route": [[40.7794, -73.9741], [40.7680, -73.9819], [40.7660, -73.9794], [40.7648, -73.9765], [40.7497, -73.9877], [40.7505, -73.9896]],
+      "radiusKm": 1.2,
+      "busRoutes": ["BXM10", "BXM11", "BXM2", "BXM3", "BXM4", "BXM6", "BXM7", "BXM8", "BXM9", "M1", "M10", "M104", "M11", "M12", "M2", "M20", "M3", "M31", "M34-SBS", "M34A-SBS", "M4", "M42", "M5", "M50", "M55", "M57", "M66", "M7", "M72", "M79-SBS", "M86-SBS", "Q32", "QM2", "QM4", "QM5", "QM6", "SIM1C", "SIM23", "SIM24", "SIM33C", "SIM3C", "SIM4C", "X27", "X28"],
+      "lines": ["B", "C"],
+      "source": { "label": "MTA holiday service", "url": "https://www.mta.info/article/mta-service-thanksgiving-2026-0" }
+    }
+  ]
+}

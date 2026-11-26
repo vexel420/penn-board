@@ -3387,11 +3387,146 @@ function eventText(e, nowS) {
 const EVENT_ICON = '<svg class="ic ev-ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm-8 0a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 2c-2.3 0-7 1.2-7 3.5V19h14v-2.5C15 14.2 10.3 13 8 13zm8 0c-.3 0-.6 0-1 .1 1.2.8 2 2 2 3.4V19h6v-2.5c0-2.3-4.7-3.5-7-3.5z" fill="currentColor"/></svg>';
 function eventsHtml() {
   const nowS = Date.now() / 1000;
-  return eventsNow(nowS).map((e) => `<div class="ev-note">${EVENT_ICON}<p>${eventText(e, nowS)}</p></div>`).join('');
+  return cityEventsHtml(nowS) + eventsNow(nowS).map((e) => `<div class="ev-note">${EVENT_ICON}<p>${eventText(e, nowS)}</p></div>`).join('');
+}
+
+// ---------- city events: parades, marathons, street closures (owner, Nov 26) ----------
+// docs/city-events.json lists each event once, with its route and the MTA's own
+// lists of affected bus routes and subway lines. Every hub, now or added later,
+// works out for itself whether it's affected: within the event's radiusKm of
+// the route, or sharing a bus route or subway line with it. The live MTA bus
+// and subway alerts below add the details as the MTA posts them.
+let cityEvents = [];
+const HUB_BUS_LINES = [...new Set((HUB.busStops || []).flatMap((b) => b.lines))];
+const HUB_SUB_LINES = [...new Set(HUB.stations.flatMap((s) => s.lines))];
+function kmToRoute(ll, route) {
+  const kx = 111.32 * Math.cos(ll[0] * Math.PI / 180), ky = 110.57;
+  let best = Infinity;
+  for (let i = 0; i + 1 < route.length; i++) {
+    const ax = (route[i][1] - ll[1]) * kx, ay = (route[i][0] - ll[0]) * ky, bx = (route[i + 1][1] - ll[1]) * kx, by = (route[i + 1][0] - ll[0]) * ky;
+    const dx = bx - ax, dy = by - ay, l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+    best = Math.min(best, Math.hypot(ax + t * dx, ay + t * dy));
+  }
+  return best;
+}
+function loadCityEvents() {
+  fetch('city-events.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+    cityEvents = ((d && d.events) || []).map((e) => {
+      const near = e.route && e.route.length > 1 ? kmToRoute(HUB.ll, e.route) : Infinity;
+      return { ...e, startS: Date.parse(e.start) / 1000, endS: Date.parse(e.end) / 1000, fromS: Date.parse(e.showFrom || e.start) / 1000 - (e.showFrom ? 0 : 48 * 3600),
+        near: near <= (e.radiusKm || 1), buses: HUB_BUS_LINES.filter((l) => (e.busRoutes || []).includes(l)), lines: HUB_SUB_LINES.filter((l) => (e.lines || []).includes(l)) };
+    }).filter((e) => e.near || e.buses.length || e.lines.length);
+    renderEvents();
+  });
+}
+// "today 8:30 AM", "tomorrow", "Sat Nov 28 8:30 AM".
+function dayTime(t, nowS = Date.now() / 1000) {
+  const c = clock(t), time = `${c.hm} ${c.ap}`.replace(':00 ', ' ');
+  const d = nyDayAt(t).date, today = nyDayAt(nowS).date, tmrw = nyDayAt(nowS + 86400).date;
+  if (d === today) return `today ${time}`;
+  if (d === tmrw) return `tomorrow ${time}`;
+  return `${new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(t * 1000))} ${time}`;
+}
+const cityEventsNow = (nowS) => cityEvents.filter((e) => nowS >= e.fromS && nowS <= e.endS + 2 * 3600);
+function cityEventsHtml(nowS) {
+  return cityEventsNow(nowS).map((e) => {
+    const c = clock(e.endS), end = c.hm === '12:00' ? (c.ap === 'PM' ? 'noon' : 'midnight') : `${c.hm} ${c.ap}`;
+    const when = nowS < e.startS ? `${dayTime(e.startS, nowS)} to about ${end}` : nowS < e.endS ? `happening now, until about ${end}` : 'just ended; streets are reopening';
+    const here = e.near ? `Expect closed streets and crowds near ${esc(HUB.name)}. ` : '';
+    const buses = e.buses.length ? `<span class="ev-sub">Buses here with changes: ${e.buses.map(busBadge).join(' ')}</span>` : '';
+    const lines = e.lines.length ? `<span class="ev-sub">Subway: ${e.lines.map((l) => bulletHtml(l, 'tiny')).join(' ')} service changes</span>` : '';
+    const more = `<span class="ev-sub"><button type="button" class="al-map" data-cityevent="${esc(e.id)}">Route map</button>${e.source ? ` <a class="alt-map" href="${esc(e.source.url)}" target="_blank" rel="noopener">${esc(e.source.label)}&nbsp;↗&#xFE0E;</a>` : ''}</span>`;
+    // One short line, the rest folded (it sits above the trains on a phone).
+    const which = [e.buses.length ? 'buses' : '', e.lines.length ? 'subway' : ''].filter(Boolean).join(', ');
+    return `<div class="ev-note city">${EVENT_ICON}<div><p><b>${esc(e.title)}</b>, ${when}. ${here}</p><details class="ev-more" data-k="ev-${esc(e.id)}"><summary>Details${which ? `, ${which}` : ''} and route map</summary><p>${e.note ? `${esc(e.note)} ` : ''}${e.routeText ? `Route: ${esc(e.routeText)}. ` : ''}${esc(e.closures || '')}${buses}${lines}${more}</p></details></div></div>`;
+  }).join('');
+}
+async function openCityEvent(id) {
+  const e = cityEvents.find((x) => x.id === id);
+  if (!e) return;
+  changeOpen = { id: `city-${id}`, view: 1 };
+  $('chg-kind').textContent = `Near ${HUB.short}`;
+  $('chg-h').textContent = e.title;
+  $('chg-top').innerHTML = `<p class="cm-sum">${esc(e.routeText || '')}. The star is ${esc(HUB.name)}.</p>`;
+  $('chg-below').innerHTML = e.buses.length ? `<p class="cm-sum">Buses at ${esc(HUB.short)} with changes: ${e.buses.map(busBadge).join(' ')}</p>` : '';
+  openSheet();
+  const box = $('chg-map');
+  box.hidden = false;
+  try {
+    const Lf = await loadLeaflet();
+    if (!changeOpen || changeOpen.id !== `city-${id}`) return;
+    if (changeMap) changeMap.remove();
+    changeMap = Lf.map(box, { zoomSnap: 0.25, scrollWheelZoom: false });
+    Lf.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, className: 'cm-tiles', attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors' }).addTo(changeMap);
+    Lf.polyline(e.route, { color: '#d4512b', weight: 7, opacity: 0.85 }).addTo(changeMap);
+    Lf.marker(HUB.ll, { interactive: false, icon: Lf.divIcon({ className: '', iconSize: [0, 0], html: '<div class="hub-star" aria-label="This station">★</div>' }) }).addTo(changeMap);
+    changeMap.fitBounds(Lf.latLngBounds([HUB.ll, ...e.route]).pad(0.15));
+  } catch { box.hidden = true; }
+}
+document.addEventListener('click', (ev) => { const b = ev.target.closest('[data-cityevent]'); if (b) openCityEvent(b.dataset.cityevent); });
+loadCityEvents();
+setInterval(loadCityEvents, 30 * 60000);
+
+// ---------- live MTA bus alerts for the hub's bus routes (owner, Nov 26) ----------
+// The MTA's bus service alerts (detours, closed stops, parades), for the routes
+// in the hub's bus panel: in effect now, or starting within 48 hours.
+const BUS_ALERTS_URL = 'https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fbus-alerts.json';
+let busAlerts = [];
+const busRouteName = (id) => String(id).replace(/\+$/, '-SBS'); // the MTA's "M34+" is the M34-SBS
+const alertText = (t) => { const tr = (t && t.translation) || []; return (tr.find((x) => x.language === 'en') || tr.find((x) => !/html/.test(x.language || '')) || {}).text || ''; };
+// Corners a text names: "3rd Ave at E 42nd St", "9th Ave/W 40th St", "W 34 St at 8 Av".
+const AVE = /\b(?:(\d+)(?:st|nd|rd|th)?|([a-z]+))\s+av(?:e|enue)?\b|\b(broadway)\b/gi;
+const STREET = /\b(?:[EW]\.?\s+)?(?:(\d+)(?:st|nd|rd|th)?|([A-Z][a-z]+))\s+[Ss]t(?:reet)?\b/g;
+const cornersIn = (text) => ({ aves: [...String(text).matchAll(AVE)].map((m) => (m[1] || m[2] || m[3]).toLowerCase()), sts: [...String(text).matchAll(STREET)].map((m) => (m[1] ? +m[1] : m[2].toLowerCase())) });
+// An alert about particular stops ("stop on 3rd Ave at E 42nd St has been
+// moved") counts only when it names one of the hub's own stops (same avenue,
+// within a block); route-wide ones (detours, schedules, the parade) always do.
+function aboutHubStop(head) {
+  if (!/\bstops?\b/i.test(head)) return true;
+  const c = cornersIn(head);
+  if (!c.aves.length && !c.sts.length) return true; // names no place: about the route
+  const near = (x, y) => (typeof x === 'number' && typeof y === 'number' ? Math.abs(x - y) <= 1 : x === y);
+  return (HUB.busStops || []).some((b) => { const h = cornersIn(b.where); return h.aves.some((a) => c.aves.includes(a)) && h.sts.some((x) => c.sts.some((y) => near(x, y))); });
+}
+function loadBusAlerts() {
+  if (!HUB_BUS_LINES.length) return;
+  fetch(BUS_ALERTS_URL).then((r) => (r.ok ? r.json() : null)).catch(() => null).then((d) => {
+    if (!d) return;
+    const nowS = Date.now() / 1000;
+    busAlerts = (d.entity || []).map((x) => {
+      const a = x.alert || {};
+      const routes = [...new Set((a.informed_entity || []).map((ie) => ie.route_id && busRouteName(ie.route_id)).filter(Boolean))];
+      const mine = HUB_BUS_LINES.filter((l) => routes.includes(l));
+      const per = (a.active_period || []).map((p) => ({ start: +p.start || 0, end: +p.end || Infinity })).filter((p) => p.end > nowS).sort((p, q) => p.start - q.start)[0];
+      return { id: x.id, mine, start: per && per.start, end: per && per.end, head: alertText(a.header_text), desc: alertText(a.description_text) };
+    }).filter((a) => a.mine.length && a.start !== undefined && a.start <= nowS + 48 * 3600 && a.head && aboutHubStop(a.head))
+      .sort((p, q) => (p.start > nowS) - (q.start > nowS) || p.start - q.start);
+    renderHubBuses();
+    if (board && board.notices) renderAlertsTab();
+  });
+}
+function busAlertWhen(a, nowS = Date.now() / 1000) {
+  const open = !isFinite(a.end) || a.end - nowS > 90 * 86400; // the MTA's far-off placeholder end dates
+  const until = open ? 'until further notice' : `until ${dayTime(a.end, nowS)}`;
+  if (open && a.start > nowS) return `From ${dayTime(a.start, nowS)}`;
+  return a.start <= nowS ? `Now, ${until}` : `${dayTime(a.start, nowS)} ${isFinite(a.end) ? `to ${dayTime(a.end, nowS)}` : 'on'}`;
+}
+function busAlertsHtml(cls = 'bus-al') {
+  return busAlerts.map((a) => `<details class="${cls}" data-k="bal-${esc(a.id)}"><summary><span class="bus-al-lines">${a.mine.map(busBadge).join(' ')}</span><span class="bus-al-h">${esc(a.head)}<small>${esc(busAlertWhen(a))}</small></span></summary>${a.desc ? `<p>${esc(a.desc).replace(/\n+/g, '<br>')}</p>` : ''}</details>`).join('');
+}
+const busChanged = (ln, nowS = Date.now() / 1000) => busAlerts.some((a) => a.start <= nowS && a.mine.includes(ln));
+loadBusAlerts();
+setInterval(loadBusAlerts, 5 * 60000);
+// Redraws keep folded sections the reader opened (data-k) open.
+function setKeepOpen(el, html) {
+  const open = new Set([...el.querySelectorAll('details[open][data-k]')].map((d) => d.dataset.k));
+  el.innerHTML = html;
+  if (open.size) el.querySelectorAll('details[data-k]').forEach((d) => { if (open.has(d.dataset.k)) d.open = true; });
 }
 function renderEvents() {
   const el = $('events-note');
-  if (el) el.innerHTML = eventsHtml();
+  if (el) setKeepOpen(el, eventsHtml());
   if (board && board.notices) renderAlertsTab();
 }
 loadEvents();
@@ -3410,11 +3545,12 @@ function renderAlertsTab() {
   const ev = eventsHtml();
   const lifts = elevatorsHtml();
   const railNames = HUB.rails.map((c) => CARRIERS[c]);
-  $('alerts').innerHTML = (ev ? `<h2 class="al-h">Events</h2>${ev}` : '') + lirrAltHtml() + njtAltHtml() + group(`Trains at ${HUB.short}`, rail, `No notices for ${railNames.slice(0, -1).join(', ')}${railNames.length > 2 ? ',' : ''} or ${railNames[railNames.length - 1]} right now.`)
+  setKeepOpen($('alerts'), (ev ? `<h2 class="al-h">Events</h2>${ev}` : '') + lirrAltHtml() + njtAltHtml() + group(`Trains at ${HUB.short}`, rail, `No notices for ${railNames.slice(0, -1).join(', ')}${railNames.length > 2 ? ',' : ''} or ${railNames[railNames.length - 1]} right now.`)
     + group('Subway', subway, `No subway notices for the lines at ${HUB.short} right now.`)
     + (HUB.path ? group('PATH', board.notices.path || [], 'No PATH alerts right now.') : '')
-    + `<h2 class="al-h">Elevators and escalators</h2>${lifts || `<p class="al-none">All elevators and escalators at ${esc(HUB.elevatorStations.join(' and '))} are working, per the MTA.</p>`}`;
-  const n = rail.length + subway.length + (board.notices.path || []).length + eventsNow(Date.now() / 1000).length + eneOut.length;
+    + (HUB_BUS_LINES.length ? `<h2 class="al-h">Buses</h2>${busAlerts.length ? busAlertsHtml('bus-al al-bus') : `<p class="al-none">No MTA alerts for the buses at ${esc(HUB.short)} right now.</p>`}` : '')
+    + `<h2 class="al-h">Elevators and escalators</h2>${lifts || `<p class="al-none">All elevators and escalators at ${esc(HUB.elevatorStations.join(' and '))} are working, per the MTA.</p>`}`);
+  const n = rail.length + subway.length + (board.notices.path || []).length + eventsNow(Date.now() / 1000).length + cityEventsNow(Date.now() / 1000).length + busAlerts.length + eneOut.length;
   $('alerts-count').textContent = n ? String(n) : '';
 }
 document.addEventListener('toggle', (e) => {
@@ -3712,9 +3848,12 @@ function renderHubBuses() {
     const times = (hubBuses.get(b.stop) || []).filter((x) => String(x.line).toUpperCase() === ln && x.at && Date.parse(x.at) >= t - 30000 && Date.parse(x.at) <= t + 90 * 60000)
       .map((x) => Date.parse(x.at) / 1000).sort((a, c) => a - c).slice(0, 3);
     const when = times.length ? mins(times) : `<span class="sb-dim">${hubBuses.has(b.stop) ? 'none due soon' : 'no live times'}</span>`;
-    return `<div class="sline">${busBadge(ln)}<span class="sdest"><span class="dname">${esc(b.label)}</span> <small>${esc(b.where)}</small></span><span class="smins">${when}</span></div>`;
+    const chg = busChanged(ln) ? '<span class="bus-chg">Service change</span>' : '';
+    return `<div class="sline">${busBadge(ln)}<span class="sdest"><span class="dname">${esc(b.label)}</span> <small>${esc(b.where)}</small>${chg}</span><span class="smins">${when}</span></div>`;
   }));
-  el.innerHTML = `<section class="stn">${rows.join('')}</section><button type="button" class="al-map bus-map-btn" data-busmap>Map of the stops</button>`;
+  // The MTA's alerts for these routes, folded under one line; the rows they touch say "Service change".
+  const al = busAlerts.length ? `<details class="bus-al-all" data-k="bal-all"><summary>${busAlerts.length} MTA alert${busAlerts.length > 1 ? 's' : ''} for these buses</summary>${busAlertsHtml()}</details>` : '';
+  setKeepOpen(el, `${al}<section class="stn">${rows.join('')}</section><button type="button" class="al-map bus-map-btn" data-busmap>Map of the stops</button>`);
 }
 // The stops on a map, each labeled with its routes and direction.
 async function openBusMap() {
