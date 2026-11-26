@@ -2694,21 +2694,38 @@ function hiddenDelayMin(r) {
 }
 const njtHiddenDelay = (r) => hiddenDelayMin(r) !== null;
 const NJT_SYSTEMWIDE = /\bNJ ?TRANSIT (rail )?(service|trains)\b|\ball (NJ ?TRANSIT )?(rail )?(service|trains)\b|\b(into and out of|to and from|in and out of) (Penn Station New York|PSNY|New York Penn|Penn Station)\b/i;
+// The trains a railroad notice names ("The 9:11pm train from Babylon to Penn
+// Station is operating 30-35 minutes late"): [{ hm: '9:11', ap: 'PM', from, to }].
+const NAMED_TRAIN = /\b(\d{1,2}:\d{2})\s*([ap])\.?\s?m\.?\s+train\s+from\s+(.+?)\s+(?:to|due(?:\s+(?:in|at))?)\s+(.+?)(?=\s+(?:is|was|will|has|have|are|and|due|at|which)\b|[.,;:(<]|$)/gi;
+function namedTrains(n) {
+  const text = String(n.text || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  return [...text.matchAll(NAMED_TRAIN)].map((m) => ({ hm: m[1], ap: m[2].toUpperCase() + 'M', from: m[3], to: m[4] }));
+}
+const HUB_NAME = IS_PENN ? /\bpenn\b/i : /grand central/i;
+// A notice naming trains belongs only on those trains leaving this hub (owner,
+// Nov 26: an inbound train running late shouldn't show on every train out).
+// null: it names no train (then the branch rule decides).
+function namedTrainFits(n, r) {
+  const refs = namedTrains(n);
+  if (!refs.length) return null;
+  const at = clock(r.sched || r.time);
+  return refs.some((t) => HUB_NAME.test(t.from) && t.hm === at.hm && t.ap === at.ap);
+}
 function rowNotices(r) {
   const all = (board && board.notices && board.notices.rail) || [];
   if (r.carrier === 'lirr' && lirrData) {
     const id = lirrRouteFor(r.line);
     // A notice covering (nearly) every branch is about the LIRR as a whole: only
     // on trains actually running late whose status doesn't say so, like NJ Transit's.
-    return id ? all.filter((n) => n.carrier === 'lirr' && isDelayNotice(n) && (n.lines || []).includes(id)
-      && ((n.lines || []).length < 8 || hiddenDelayMin(r) !== null)) : [];
+    return id ? all.filter((n) => n.carrier === 'lirr' && isDelayNotice(n) && (namedTrainFits(n, r) ?? ((n.lines || []).includes(id)
+      && ((n.lines || []).length < 8 || hiddenDelayMin(r) !== null)))) : [];
   }
   if (r.carrier === 'mnr') {
     // Metro-North: notices naming the train's line (its route id); one about
     // (nearly) every line only on trains actually running late.
     const id = Object.keys(MNR_ROUTE_NAMES).find((k) => `${MNR_ROUTE_NAMES[k][0]} Line` === r.line);
-    return id ? all.filter((n) => n.carrier === 'mnr' && isDelayNotice(n) && (n.lines || []).includes(id)
-      && ((n.lines || []).length < 4 || hiddenDelayMin(r) !== null)) : [];
+    return id ? all.filter((n) => n.carrier === 'mnr' && isDelayNotice(n) && (namedTrainFits(n, r) ?? ((n.lines || []).includes(id)
+      && ((n.lines || []).length < 4 || hiddenDelayMin(r) !== null)))) : [];
   }
   if (r.carrier === 'njt') {
     return all.filter((n) => {
