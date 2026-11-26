@@ -809,13 +809,21 @@ function parsePathAlerts(list) {
     const k = m.ebid || m.messageid;
     if (!latest.has(k) || latest.get(k).at < at) latest.set(k, { ...m, at });
   }
-  return [...latest.values()].filter((m) => String(m.state || '').toLowerCase() === 'open')
+  // Open incidents; and a delay or suspension sent in the last 90 minutes
+  // whose latest message isn't PATH's all-clear, even if PATH has already
+  // marked it Closed (owner, Nov 26: delays that stopped service got no pill;
+  // PATH's feed marks some alerts Closed while they still apply).
+  const nowMs = Date.now();
+  const live = (m) => String(m.state || '').toLowerCase() === 'open'
+    || (nowMs - m.at < 90 * 60000 && /delay|suspend|no service|not running|stopped|problem|failure/i.test(`${m.Subject} ${m.SentMessage}`)
+      && !/final update|resum|restored|normal service|once again/i.test(`${m.Subject} ${m.SentMessage}`));
+  return [...latest.values()].filter(live)
     .sort((a, b) => b.at - a.at)
     .map((m) => {
       const text = String(m.SentMessage || m.Subject || '').replace(/^\s*\d{1,2}:\d{2}\s*[AP]M:\s*/i, '').replace(/\s+/g, ' ').trim();
       // A short label like the MTA's ("Delays", "Elevator"); PATH's own words follow.
       const what = `${m.Subject} ${m.TemplateName}`;
-      const type = /elevator|escalator/i.test(what) ? 'Elevator' : /suspend/i.test(what) ? 'Suspended' : /delay|mechanical|problem|signal/i.test(what) ? 'Delays' : 'Service notice';
+      const type = /elevator|escalator/i.test(what) ? 'Elevator' : /suspend/i.test(what) ? 'Suspended' : /delay|mechanical|problem|signal|failure|disabled/i.test(`${what} ${text}`) ? 'Delays' : 'Service notice';
       return { id: `path-${m.ebid || m.messageid}`, carrier: 'path', type, urgent: URGENT.test(`${m.Subject} ${text}`) || /delay|suspend|out of service/i.test(text), lines: [], text };
     });
 }

@@ -2716,14 +2716,11 @@ function pathTrouble(dest, epoch) {
   const ns = pathModels().filter((m) => ids.some((id) => m.state[id] === 'off' || m.state[id] === 'delay')).map((m) => m.n);
   if (worst === 'off') return dropPill(`path|${dest}|off`, 'Suspended', 'warn', ns);
   if (worst === 'delay') return dropPill(`path|${dest}|delay`, 'Delays', 'warn', ns);
-  // An elevator out, or a station closed or skipped, where this train stops
-  // (owner, Nov 26: these PATH alerts got no pill).
+  // A station closed or skipped where this train stops. (Elevators get no
+  // pill: owner, Nov 26. They stay in the PATH alerts.)
   const stops = new Set(PATH_LINES.filter((ln) => ids.includes(ln.id)).flatMap((ln) => ln.stops)); // (via Hoboken: both lines' stops)
-  const at = pathModels().filter((m) => m.issue && m.flagged.some((c) => stops.has(c)));
-  if (at.length) {
-    const closed = at.some((m) => /closed|skip/i.test(m.issue));
-    return dropPill(`path|${dest}|${closed ? 'closed' : 'elev'}`, closed ? 'Station closed' : 'Elevator out', 'warn', at.map((m) => m.n));
-  }
+  const at = pathModels().filter((m) => m.issue && /closed|skip/i.test(m.issue) && m.flagged.some((c) => stops.has(c)));
+  if (at.length) return dropPill(`path|${dest}|closed`, 'Station closed', 'warn', at.map((m) => m.n));
   // "All late trains" (the subway panel's toggle): a train 5+ min behind.
   if (allLatePills && epoch) {
     const late = pathLateBy(dest, epoch);
