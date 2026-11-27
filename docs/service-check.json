@@ -1,14 +1,14 @@
 {
- "checked": 1795690715,
+ "checked": 1795776947,
  "until": 1795885200,
  "sources": {
   "MTA subway": {
    "ok": true,
-   "notices": 213
+   "notices": 208
   },
   "MTA bus": {
    "ok": true,
-   "notices": 165
+   "notices": 200
   },
   "LIRR": {
    "ok": true,
@@ -16,11 +16,11 @@
   },
   "Metro-North": {
    "ok": true,
-   "notices": 14
+   "notices": 15
   },
   "NJ Transit": {
    "ok": true,
-   "notices": 19
+   "notices": 6
   },
   "PATH": {
    "ok": true,
@@ -28,11 +28,11 @@
   },
   "TrainTime (Penn)": {
    "ok": true,
-   "notices": 3
+   "notices": 1
   },
   "TrainTime (Grand Central)": {
    "ok": true,
-   "notices": 3
+   "notices": 1
   }
  },
  "events": {
@@ -40,8 +40,9 @@
    {
     "agency": "MTA subway",
     "id": "lmm:planned_work:36813",
-    "head": "Expect service changes on [B][C] trains in Manhattan due to the rescheduled Macy's Thanksgiving Day Parade",
+    "head": "Expect service changes on [A][C][B] trains in Manhattan due to the rescheduled Macy's Thanksgiving Day Parade",
     "routes": [
+     "A",
      "B",
      "C"
     ],
@@ -50,56 +51,143 @@
    },
    {
     "agency": "MTA bus",
-    "id": "lmm:planned_work:36814",
-    "head": "Expect service changes in Manhattan due to the rescheduled Macy’s Thanksgiving Day Parade",
+    "id": "lmm:planned_work:36828",
+    "head": "Brooklyn-bound BM5 buses will be detoured along Lexington Ave from E 57th St to E 34th St",
+    "routes": [
+     "BM5"
+    ],
+    "start": 1795849200,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36827",
+    "head": "Brooklyn-bound BM1/BM2/BM3/BM4 buses will be detoured along Lexington Ave from E 57th St to E 23rd St",
+    "routes": [
+     "BM1",
+     "BM2",
+     "BM3",
+     "BM4"
+    ],
+    "start": 1795849200,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36826",
+    "head": "Queens-bound QM15/QM16/QM17/QM18 buses will be detoured along Madison Ave from E 34th St to E 57th St",
+    "routes": [
+     "QM15",
+     "QM16",
+     "QM17",
+     "QM18"
+    ],
+    "start": 1795849200,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36824",
+    "head": "Brooklyn-bound BM5 buses are detoured due to Macy's Thanksgiving day parade on 5th Ave from E 57th St/to E 42th St.",
+    "routes": [
+     "BM5"
+    ],
+    "start": 1795892400,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36823",
+    "head": "Queens-bound QM15 buses are detoured due to the Macy's Thanksgiving Day Parade.",
+    "routes": [
+     "QM15"
+    ],
+    "start": 1795849200,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36822",
+    "head": "Brooklyn-bound BM1, BM2, BM3 and BM4 buses are detoured due to Macy's Thanksgiving day parade on 5th Ave from E 57th St/to E 42th St.",
+    "routes": [
+     "BM1",
+     "BM2",
+     "BM3",
+     "BM4"
+    ],
+    "start": 1795892400,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36804",
+    "head": "No BxM2 service 7th Ave at W 34th St and W 81st St at Central Park West",
+    "routes": [
+     "BXM2"
+    ],
+    "start": 1795582800,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36799",
+    "head": "No BxM2 service between 7th Ave at W 34th St and W 81st St at Central Park West",
+    "routes": [
+     "BXM2"
+    ],
+    "start": 1795849200,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36795",
+    "head": "Southbound BxM3, BxM4, BxM6, BxM7, BxM8, BxM9, BxM10, BxM11 stops on 5th Ave from E 78th St to W 34th St will be closed",
     "routes": [
      "BXM10",
      "BXM11",
-     "BXM2",
      "BXM3",
      "BXM4",
      "BXM6",
      "BXM7",
      "BXM8",
-     "BXM9",
-     "M1",
-     "M10",
-     "M104",
-     "M11",
-     "M12",
-     "M2",
-     "M20",
-     "M3",
-     "M31",
-     "M34+",
-     "M34A+",
-     "M4",
-     "M42",
-     "M5",
-     "M50",
-     "M55",
-     "M57",
-     "M66",
-     "M7",
-     "M72",
-     "M79+",
-     "M86+",
-     "Q32",
+     "BXM9"
+    ],
+    "start": 1795849200,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36765",
+    "head": "Q32  buses will be detoured between 5th Ave at E 50th St and Madison Ave at E 32nd St",
+    "routes": [
+     "Q32"
+    ],
+    "start": 1795849200,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36760",
+    "head": "QM2, QM4, QM5 and QM6 stops on W 34th St at 5th Ave, 6th Ave from W 35th St to W 55th St and on E 57th St at Madison Ave will be closed",
+    "routes": [
      "QM2",
      "QM4",
      "QM5",
-     "QM6",
-     "SIM1C",
-     "SIM23",
-     "SIM24",
-     "SIM33C",
-     "SIM3C",
-     "SIM4C",
-     "X27",
-     "X28"
+     "QM6"
     ],
-    "start": 1795755600,
-    "end": 1795928340
+    "start": 1795849200,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36730",
+    "head": "Southbound SIM4C and SIM33C stops above W 23rd St will be closed;\nThe temporary last northbound and first southbound stop will be E 57th St/Madison Ave",
+    "routes": [
+     "SIM33C",
+     "SIM4C"
+    ],
+    "start": 1795842000,
+    "end": 1795908600
    },
    {
     "agency": "MTA bus",
@@ -108,8 +196,182 @@
     "routes": [
      "M79+"
     ],
-    "start": 1795698000,
-    "end": 1795730400
+    "start": 1795870800,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36687",
+    "head": "M79-SBS buses will detour to 86th St Transverse in both directions",
+    "routes": [
+     "M79+"
+    ],
+    "start": 1795604400,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36681",
+    "head": "M86-SBS buses will detour to 97th St Transverse in both directions;\nEastbound via 10th and 5th Ave, Westbound via Madison and Columbus Ave",
+    "routes": [
+     "M86+"
+    ],
+    "start": 1795870800,
+    "end": 1795881600
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36678",
+    "head": "SIM4C and SIM33C stops above W 23rd St will be closed;\nThe temporary first southbound and last northbound stop will be E 57th St/Madison Ave",
+    "routes": [
+     "SIM33C",
+     "SIM4C"
+    ],
+    "start": 1795842000,
+    "end": 1795908600
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36677",
+    "head": "SIM1C and SIM3C stops above W 23rd St will be closed;\nThe temporary first southbound and last northbound stop will be E 57th St/Madison Ave",
+    "routes": [
+     "SIM1C",
+     "SIM3C"
+    ],
+    "start": 1795842000,
+    "end": 1795908600
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36676",
+    "head": "No M12 service east of 11th Ave in both directions;\nThe temporary first southbound and last northbound stop will be 11th Ave/W 57th St",
+    "routes": [
+     "M12"
+    ],
+    "start": 1795863600,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36673",
+    "head": "X27 and X28 stops on E 57th St at Madison Ave and southbound stops on 5th Ave from W 52nd St to W 30th will be closed",
+    "routes": [
+     "X27",
+     "X28"
+    ],
+    "start": 1795870800,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36670",
+    "head": "M34A-SBS buses will detour to 23rd St in both directions;\nThe temporary last westbound stop will be 9th Ave/W 42nd St",
+    "routes": [
+     "M34A+"
+    ],
+    "start": 1795849200,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36669",
+    "head": "M34-SBS buses will detour to 23rd St in both directions",
+    "routes": [
+     "M34+"
+    ],
+    "start": 1795849200,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36668",
+    "head": "M42 buses will detour to 23rd St in both directions",
+    "routes": [
+     "M42"
+    ],
+    "start": 1795860000,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36625",
+    "head": "M10 stops below W 86th St will be closed;\nThe temporary first northbound and last southbound stop will be 10th Ave/W 55th St",
+    "routes": [
+     "M10"
+    ],
+    "start": 1795590000,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36620",
+    "head": "M66 buses will detour to 97th Transverse in both directions",
+    "routes": [
+     "M66"
+    ],
+    "start": 1795863600,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36619",
+    "head": "No M55 service north of W 23rd St in both directions",
+    "routes": [
+     "M55"
+    ],
+    "start": 1795842000,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36618",
+    "head": "M50 buses will detour to 23rd St in both directions",
+    "routes": [
+     "M50"
+    ],
+    "start": 1795860000,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36617",
+    "head": "M31 and M57 buses will detour to 23rd St in both directions",
+    "routes": [
+     "M31",
+     "M57"
+    ],
+    "start": 1795863600,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36616",
+    "head": "The temporary first northbound and last southbound M104 stop will be W 42nd St/9th Ave;\nNorthbound operates via 10th Ave, Southbound via 9th Ave",
+    "routes": [
+     "M104"
+    ],
+    "start": 1795827600,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36605",
+    "head": "M7 buses detour via W 23rd St in both directions;\nNorthbound to 8th Ave and 10th Ave, Southbound from 9th Ave",
+    "routes": [
+     "M7"
+    ],
+    "start": 1795849200,
+    "end": 1795896000
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36603",
+    "head": "No regular M7 service on W 57th St, W 58th St, Central Park South, and Broadway, in both directions",
+    "routes": [
+     "M7"
+    ],
+    "start": 1795834800,
+    "end": 1795849200
    },
    {
     "agency": "MTA bus",
@@ -118,147 +380,94 @@
     "routes": [
      "M72"
     ],
-    "start": 1795690800,
-    "end": 1795737600
+    "start": 1795863600,
+    "end": 1795910400
    },
    {
-    "agency": "LIRR",
-    "id": "lmm:planned_work:36459",
-    "head": "Extra trains are running",
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36601",
+    "head": "M72 buses will detour away from W 72nd St;\nEastbound via Columbus Ave to 65th St Tranverse, Westbound via 65th St Tranverse to Broadway",
     "routes": [
-     "1",
-     "10",
-     "4"
+     "M72"
     ],
-    "start": 1795691700,
-    "end": 1795717800
+    "start": 1795590000,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36600",
+    "head": "No M20 service above W 23rd St in both directions",
+    "routes": [
+     "M20"
+    ],
+    "start": 1795849200,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36599",
+    "head": "No regular M20 service above W 57th St;\nThe temporary first southbound and last northbound stop will be Columbus Ave/W 63rd St",
+    "routes": [
+     "M20"
+    ],
+    "start": 1795590000,
+    "end": 1795903200
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36588",
+    "head": "No M5 service between W 31st St at 6th Ave and Broadway at W 69th St",
+    "routes": [
+     "M5"
+    ],
+    "start": 1795834800,
+    "end": 1795910400
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36587",
+    "head": "Southbound M1, M2, M3 , and M4 stops along 5th Ave from E 72nd St to W 44th St are closed.",
+    "routes": [
+     "M1",
+     "M2",
+     "M3",
+     "M4"
+    ],
+    "start": 1795849200,
+    "end": 1795896000
+   },
+   {
+    "agency": "MTA bus",
+    "id": "lmm:planned_work:36583",
+    "head": "Southbound M7 and M11 buses will bypass stops on Columbus Ave from W 80th St to W 72nd St;\nUse the stops at W 84th St or W 69th St instead",
+    "routes": [
+     "M11",
+     "M7"
+    ],
+    "start": 1795798800,
+    "end": 1795834800
    },
    {
     "agency": "Metro-North",
     "id": "lmm:planned_work:36815",
-    "head": "Added Service on the Hudson, Harlem, and New Haven lines",
+    "head": "Added Service on the Hudson, Harlem, and New Haven Lines",
     "routes": [
      "1",
      "2",
      "3"
     ],
-    "start": 1795842000,
+    "start": 1795860000,
     "end": 1795899600
-   },
-   {
-    "agency": "Metro-North",
-    "id": "lmm:planned_work:36352",
-    "head": "The Hudson, Harlem, and New Haven lines run on a special schedule on Thanksgiving Day",
-    "routes": [
-     "1",
-     "2",
-     "3",
-     "4",
-     "5",
-     "wassaic"
-    ],
-    "start": 1795683600,
-    "end": 1795762800
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-0",
-    "head": "M &amp; E extra service train #8908, the 6:40 AM departure from Dover, scheduled to arrive in PSNY at 8:09 AM, will not operate due to the postponement of the Thanksgiving Day parade."
    },
    {
     "agency": "NJ Transit",
     "id": "njt-1",
-    "head": "M &amp; E extra service train #8910, the 6:54 AM departure from Dover, scheduled to arrive in PSNY at 8:23 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+    "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy?s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
    },
    {
     "agency": "NJ Transit",
     "id": "njt-2",
-    "head": "M &amp; E extra service train #8912, the 7:40 AM departure from Dover, scheduled to arrive in PSNY at 9:00 AM, will not operate due to the postponement of the Thanksgiving Day parade."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-3",
-    "head": "M &amp; E extra service train #8921, the 11:39 AM departure from PSNY, scheduled to arrive in Dover at 1:13 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-4",
-    "head": "M &amp; E extra service train #8923, the 11:52 AM departure from PSNY, scheduled to arrive in Dover at 1:27 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-5",
-    "head": "M &amp; E extra service train #8925, the 12:57 PM departure from PSNY, scheduled to arrive in Dover at 2:31 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-6",
-    "head": "NEC extra service train #8800, the 5:47 AM departure from Trenton, scheduled to arrive in PSNY at 7:09 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-7",
-    "head": "NEC extra service train #8806, the 6:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 8:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-8",
-    "head": "NEC extra service train #8810, the 6:43 AM departure from Trenton, scheduled to arrive in PSNY at 8:07 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-9",
-    "head": "NEC extra service train #8812, the 7:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 9:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-10",
-    "head": "NEC extra service train #8829, the 11:44 AM departure from PSNY, scheduled to arrive in Trenton at 1:09 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-11",
-    "head": "NEC extra service train #8833, the 12:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 1:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-12",
-    "head": "NEC extra service train #8835, the 12:52 PM departure from PSNY, scheduled to arrive in Trenton at 2:23 PM, will note operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-13",
-    "head": "NEC extra service train #8837, the 1:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 2:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-14",
-    "head": "NJ TRANSIT is tracking a storm system bringing periods of heavy rain and gusty winds to New Jersey Thursday and into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus on Thursday, November 26 and Friday, November 27, 2026. Due to the postponement of the Macy's Thanksgiving Day Parade, select NJ TRANSIT trains originally scheduled to provide additional service for the event on Thursday, November 26, will not operate. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-15",
-    "head": "NJCL extra service train #8216, the 7:38 AM departure from Long Branch, scheduled to arrive in PSNY at 9:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-16",
-    "head": "NJCL extra service train #8223, the 1:41 PM departure from PSNY, scheduled to arrive in Long Branch at 3:13 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-17",
-    "head": "NJCL extra service train #8314, the 6:03 AM departure from Bay Head, scheduled to arrive in PSNY at 8:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-   },
-   {
-    "agency": "NJ Transit",
-    "id": "njt-18",
-    "head": "NJCL extra service train #8321, the 12:41 PM departure from PSNY, scheduled to arrive in Bay Head at 2:49 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-   },
-   {
-    "agency": "TrainTime",
-    "id": "tt-NYK-74473468",
-    "head": "    Please note:  The Thanksgiving Day Parade has been rescheduled to Saturday because of the weather.    Plan your trip on our TrainTime app or at  mta.info/schedules  .  "
+    "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy’s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
    }
   ]
  },
@@ -266,8 +475,9 @@
   {
    "agency": "MTA subway",
    "id": "lmm:planned_work:36813",
-   "head": "Expect service changes on [B][C] trains in Manhattan due to the rescheduled Macy's Thanksgiving Day Parade",
+   "head": "Expect service changes on [A][C][B] trains in Manhattan due to the rescheduled Macy's Thanksgiving Day Parade",
    "routes": [
+    "A",
     "B",
     "C"
    ],
@@ -275,128 +485,14 @@
    "end": 1795881600
   },
   {
-   "agency": "MTA subway",
-   "id": "lmm:planned_work:36632",
-   "head": "[SIR] Staten Island Railway operates on a Sunday schedule for Thanksgiving Day",
-   "routes": [
-    "SI"
-   ],
-   "start": 1795669200,
-   "end": 1795755540
-  },
-  {
-   "agency": "MTA subway",
-   "id": "lmm:planned_work:36630",
-   "head": "[B] trains are not operating because subways are running on a Sunday schedule for Thanksgiving Day",
-   "routes": [
-    "B"
-   ],
-   "start": 1795688100,
-   "end": 1795750200
-  },
-  {
-   "agency": "MTA subway",
-   "id": "lmm:planned_work:36629",
-   "head": "[W] trains are not operating because subways are running on a Sunday schedule for Thanksgiving Day",
-   "routes": [
-    "W"
-   ],
-   "start": 1795690800,
-   "end": 1795753800
-  },
-  {
-   "agency": "MTA subway",
-   "id": "lmm:planned_work:36627",
-   "head": "[Z] trains are not operating because subways are running on a Sunday schedule for Thanksgiving Day",
-   "routes": [
-    "Z"
-   ],
-   "start": 1795694400,
-   "end": 1795755540
-  },
-  {
-   "agency": "MTA subway",
-   "id": "lmm:planned_work:36604",
-   "head": "Subways operate on a Sunday schedule for Thanksgiving Day",
-   "routes": [
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "A",
-    "C",
-    "D",
-    "E",
-    "F",
-    "FS",
-    "G",
-    "GS",
-    "H",
-    "J",
-    "L",
-    "M",
-    "N",
-    "Q",
-    "R"
-   ],
-   "start": 1795669200,
-   "end": 1795755540
-  },
-  {
    "agency": "MTA bus",
-   "id": "lmm:planned_work:36814",
-   "head": "Expect service changes in Manhattan due to the rescheduled Macy’s Thanksgiving Day Parade",
+   "id": "lmm:planned_work:36823",
+   "head": "Queens-bound QM15 buses are detoured due to the Macy's Thanksgiving Day Parade.",
    "routes": [
-    "BXM10",
-    "BXM11",
-    "BXM2",
-    "BXM3",
-    "BXM4",
-    "BXM6",
-    "BXM7",
-    "BXM8",
-    "BXM9",
-    "M1",
-    "M10",
-    "M104",
-    "M11",
-    "M12",
-    "M2",
-    "M20",
-    "M3",
-    "M31",
-    "M34+",
-    "M34A+",
-    "M4",
-    "M42",
-    "M5",
-    "M50",
-    "M55",
-    "M57",
-    "M66",
-    "M7",
-    "M72",
-    "M79+",
-    "M86+",
-    "Q32",
-    "QM2",
-    "QM4",
-    "QM5",
-    "QM6",
-    "SIM1C",
-    "SIM23",
-    "SIM24",
-    "SIM33C",
-    "SIM3C",
-    "SIM4C",
-    "X27",
-    "X28"
+    "QM15"
    ],
-   "start": 1795755600,
-   "end": 1795928340
+   "start": 1795849200,
+   "end": 1795910400
   },
   {
    "agency": "MTA bus",
@@ -501,369 +597,16 @@
    "end": 1795820400
   },
   {
-   "agency": "MTA bus",
-   "id": "lmm:planned_work:36449",
-   "head": "Buses operate on a Sunday schedule for Thanksgiving Day",
-   "routes": [
-    "B1",
-    "B100",
-    "B103",
-    "B11",
-    "B12",
-    "B13",
-    "B14",
-    "B15",
-    "B16",
-    "B17",
-    "B2",
-    "B20",
-    "B24",
-    "B25",
-    "B26",
-    "B3",
-    "B31",
-    "B32",
-    "B35",
-    "B36",
-    "B37",
-    "B38",
-    "B39",
-    "B4",
-    "B41",
-    "B42",
-    "B43",
-    "B44",
-    "B44+",
-    "B45",
-    "B46",
-    "B46+",
-    "B47",
-    "B48",
-    "B49",
-    "B52",
-    "B54",
-    "B57",
-    "B6",
-    "B60",
-    "B61",
-    "B62",
-    "B63",
-    "B64",
-    "B65",
-    "B67",
-    "B68",
-    "B69",
-    "B7",
-    "B70",
-    "B74",
-    "B8",
-    "B82",
-    "B82+",
-    "B83",
-    "B84",
-    "B9",
-    "BM1",
-    "BM2",
-    "BM3",
-    "BM4",
-    "BM5",
-    "BX1",
-    "BX10",
-    "BX11",
-    "BX12",
-    "BX12+",
-    "BX13",
-    "BX15",
-    "BX16",
-    "BX17",
-    "BX18A",
-    "BX18B",
-    "BX19",
-    "BX2",
-    "BX20",
-    "BX21",
-    "BX22",
-    "BX23",
-    "BX24",
-    "BX25",
-    "BX26",
-    "BX27",
-    "BX28",
-    "BX29",
-    "BX3",
-    "BX30",
-    "BX31",
-    "BX32",
-    "BX33",
-    "BX34",
-    "BX35",
-    "BX36",
-    "BX38",
-    "BX39",
-    "BX4",
-    "BX40",
-    "BX41",
-    "BX41+",
-    "BX42",
-    "BX46",
-    "BX4A",
-    "BX5",
-    "BX6",
-    "BX6+",
-    "BX7",
-    "BX8",
-    "BX9",
-    "BXM1",
-    "BXM10",
-    "BXM11",
-    "BXM18",
-    "BXM2",
-    "BXM3",
-    "BXM4",
-    "BXM6",
-    "BXM7",
-    "BXM8",
-    "BXM9",
-    "M1",
-    "M10",
-    "M100",
-    "M101",
-    "M102",
-    "M103",
-    "M104",
-    "M106",
-    "M11",
-    "M116",
-    "M12",
-    "M125",
-    "M14A+",
-    "M14D+",
-    "M15",
-    "M15+",
-    "M2",
-    "M20",
-    "M21",
-    "M22",
-    "M23+",
-    "M3",
-    "M31",
-    "M34+",
-    "M34A+",
-    "M35",
-    "M4",
-    "M42",
-    "M5",
-    "M50",
-    "M55",
-    "M57",
-    "M60+",
-    "M66",
-    "M7",
-    "M72",
-    "M79+",
-    "M8",
-    "M86+",
-    "M9",
-    "M90",
-    "M96",
-    "M98",
-    "Q06",
-    "Q07",
-    "Q08",
-    "Q09",
-    "Q1",
-    "Q10",
-    "Q100",
-    "Q101",
-    "Q102",
-    "Q103",
-    "Q104",
-    "Q11",
-    "Q110",
-    "Q111",
-    "Q112",
-    "Q113",
-    "Q114",
-    "Q115",
-    "Q12",
-    "Q13",
-    "Q14",
-    "Q15",
-    "Q16",
-    "Q17",
-    "Q18",
-    "Q19",
-    "Q2",
-    "Q20",
-    "Q22",
-    "Q23",
-    "Q24",
-    "Q25",
-    "Q26",
-    "Q27",
-    "Q28",
-    "Q29",
-    "Q3",
-    "Q30",
-    "Q31",
-    "Q32",
-    "Q33",
-    "Q35",
-    "Q36",
-    "Q37",
-    "Q38",
-    "Q39",
-    "Q4",
-    "Q40",
-    "Q41",
-    "Q42",
-    "Q43",
-    "Q44+",
-    "Q45",
-    "Q46",
-    "Q47",
-    "Q48",
-    "Q49",
-    "Q5",
-    "Q50",
-    "Q51",
-    "Q52+",
-    "Q53+",
-    "Q54",
-    "Q55",
-    "Q56",
-    "Q58",
-    "Q59",
-    "Q60",
-    "Q61",
-    "Q63",
-    "Q64",
-    "Q65",
-    "Q66",
-    "Q67",
-    "Q69",
-    "Q70+",
-    "Q72",
-    "Q74",
-    "Q75",
-    "Q76",
-    "Q77",
-    "Q82",
-    "Q83",
-    "Q84",
-    "Q85",
-    "Q86",
-    "Q87",
-    "Q88",
-    "Q89",
-    "Q90",
-    "QM1",
-    "QM10",
-    "QM11",
-    "QM12",
-    "QM15",
-    "QM16",
-    "QM17",
-    "QM18",
-    "QM2",
-    "QM20",
-    "QM21",
-    "QM24",
-    "QM25",
-    "QM31",
-    "QM32",
-    "QM34",
-    "QM35",
-    "QM36",
-    "QM4",
-    "QM40",
-    "QM42",
-    "QM44",
-    "QM5",
-    "QM6",
-    "QM63",
-    "QM64",
-    "QM65",
-    "QM68",
-    "QM7",
-    "QM8",
-    "S40",
-    "S42",
-    "S44",
-    "S46",
-    "S48",
-    "S51",
-    "S52",
-    "S53",
-    "S54",
-    "S55",
-    "S56",
-    "S57",
-    "S59",
-    "S61",
-    "S62",
-    "S66",
-    "S74",
-    "S76",
-    "S78",
-    "S79+",
-    "S81",
-    "S84",
-    "S86",
-    "S89",
-    "S90",
-    "S91",
-    "S92",
-    "S93",
-    "S94",
-    "S96",
-    "S98",
-    "SIM1",
-    "SIM10",
-    "SIM11",
-    "SIM15",
-    "SIM1C",
-    "SIM2",
-    "SIM22",
-    "SIM23",
-    "SIM24",
-    "SIM25",
-    "SIM26",
-    "SIM3",
-    "SIM30",
-    "SIM31",
-    "SIM32",
-    "SIM33",
-    "SIM33C",
-    "SIM34",
-    "SIM35",
-    "SIM3C",
-    "SIM4",
-    "SIM4C",
-    "SIM5",
-    "SIM6",
-    "SIM7",
-    "SIM8",
-    "SIM9",
-    "X27",
-    "X28",
-    "X37",
-    "X38"
-   ],
-   "start": 1795669200,
-   "end": 1795755540
-  },
-  {
    "agency": "LIRR",
-   "id": "lmm:planned_work:36459",
+   "id": "lmm:planned_work:36825",
    "head": "Extra trains are running",
    "routes": [
     "1",
     "10",
     "4"
    ],
-   "start": 1795691700,
-   "end": 1795717800
+   "start": 1795864500,
+   "end": 1795890600
   },
   {
    "agency": "LIRR",
@@ -887,27 +630,6 @@
    "end": 1795841940
   },
   {
-   "agency": "LIRR",
-   "id": "lmm:planned_work:36457",
-   "head": "LIRR trains run on a weekend schedule on Thanksgiving Day",
-   "routes": [
-    "1",
-    "10",
-    "12",
-    "13",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9"
-   ],
-   "start": 1795669200,
-   "end": 1795755540
-  },
-  {
    "agency": "Metro-North",
    "id": "lmm:planned_work:36356",
    "head": "The Port Jervis Line runs on a weekend schedule on the day after Thanksgiving, with three extra trains",
@@ -916,16 +638,6 @@
    ],
    "start": 1795770000,
    "end": 1795849200
-  },
-  {
-   "agency": "Metro-North",
-   "id": "lmm:planned_work:36355",
-   "head": "The Port Jervis Line runs on a weekend schedule on Thanksgiving Day",
-   "routes": [
-    "51"
-   ],
-   "start": 1795683600,
-   "end": 1795762800
   },
   {
    "agency": "Metro-North",
@@ -953,124 +665,14 @@
    "end": 1795849200
   },
   {
-   "agency": "Metro-North",
-   "id": "lmm:planned_work:36352",
-   "head": "The Hudson, Harlem, and New Haven lines run on a special schedule on Thanksgiving Day",
-   "routes": [
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "wassaic"
-   ],
-   "start": 1795683600,
-   "end": 1795762800
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-0",
-   "head": "M &amp; E extra service train #8908, the 6:40 AM departure from Dover, scheduled to arrive in PSNY at 8:09 AM, will not operate due to the postponement of the Thanksgiving Day parade."
-  },
-  {
    "agency": "NJ Transit",
    "id": "njt-1",
-   "head": "M &amp; E extra service train #8910, the 6:54 AM departure from Dover, scheduled to arrive in PSNY at 8:23 AM, will not operate due to the postponement of the Thanksgiving Day parade."
+   "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy?s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
   },
   {
    "agency": "NJ Transit",
    "id": "njt-2",
-   "head": "M &amp; E extra service train #8912, the 7:40 AM departure from Dover, scheduled to arrive in PSNY at 9:00 AM, will not operate due to the postponement of the Thanksgiving Day parade."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-3",
-   "head": "M &amp; E extra service train #8921, the 11:39 AM departure from PSNY, scheduled to arrive in Dover at 1:13 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-4",
-   "head": "M &amp; E extra service train #8923, the 11:52 AM departure from PSNY, scheduled to arrive in Dover at 1:27 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-5",
-   "head": "M &amp; E extra service train #8925, the 12:57 PM departure from PSNY, scheduled to arrive in Dover at 2:31 PM, will not operate due to the postponement of the Thanksgiving Day parade. Customers should continue to monitor alerts for latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-6",
-   "head": "NEC extra service train #8800, the 5:47 AM departure from Trenton, scheduled to arrive in PSNY at 7:09 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-7",
-   "head": "NEC extra service train #8806, the 6:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 8:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-8",
-   "head": "NEC extra service train #8810, the 6:43 AM departure from Trenton, scheduled to arrive in PSNY at 8:07 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-9",
-   "head": "NEC extra service train #8812, the 7:59 AM departure from New Brunswick, scheduled to arrive in PSNY at 9:04 AM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-10",
-   "head": "NEC extra service train #8829, the 11:44 AM departure from PSNY, scheduled to arrive in Trenton at 1:09 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-11",
-   "head": "NEC extra service train #8833, the 12:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 1:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-12",
-   "head": "NEC extra service train #8835, the 12:52 PM departure from PSNY, scheduled to arrive in Trenton at 2:23 PM, will note operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-13",
-   "head": "NEC extra service train #8837, the 1:29 PM departure from PSNY, scheduled to arrive in New Brunswick at 2:28 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-14",
-   "head": "NJ TRANSIT is tracking a storm system bringing periods of heavy rain and gusty winds to New Jersey Thursday and into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus on Thursday, November 26 and Friday, November 27, 2026. Due to the postponement of the Macy's Thanksgiving Day Parade, select NJ TRANSIT trains originally scheduled to provide additional service for the event on Thursday, November 26, will not operate. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-15",
-   "head": "NJCL extra service train #8216, the 7:38 AM departure from Long Branch, scheduled to arrive in PSNY at 9:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-16",
-   "head": "NJCL extra service train #8223, the 1:41 PM departure from PSNY, scheduled to arrive in Long Branch at 3:13 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-17",
-   "head": "NJCL extra service train #8314, the 6:03 AM departure from Bay Head, scheduled to arrive in PSNY at 8:14 AM, will not operate due to the postponement of the Thanksgiving Day Parade."
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-18",
-   "head": "NJCL extra service train #8321, the 12:41 PM departure from PSNY, scheduled to arrive in Bay Head at 2:49 PM, will not operate due to the postponement of the Thanksgiving Day Parade. Customers should continue to monitor alerts for the latest information."
-  },
-  {
-   "agency": "PATH",
-   "id": "path-106681",
-   "head": "Thanksgiving Service Schedule"
-  },
-  {
-   "agency": "TrainTime",
-   "id": "tt-NYK-74473468",
-   "head": "    Please note:  The Thanksgiving Day Parade has been rescheduled to Saturday because of the weather.    Plan your trip on our TrainTime app or at  mta.info/schedules  .  "
+   "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy’s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
   }
  ]
 }
