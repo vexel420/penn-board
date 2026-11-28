@@ -95,7 +95,15 @@
       "lines": [
         "B",
         "C",
-        "A"
+        "A",
+        "1",
+        "2",
+        "3",
+        "D",
+        "F",
+        "N",
+        "Q",
+        "R"
       ],
       "source": {
         "label": "MTA holiday service",

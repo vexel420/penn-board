@@ -1,30 +1,30 @@
 {
- "checked": 1795776947,
+ "checked": 1795863161,
  "until": 1795885200,
  "sources": {
   "MTA subway": {
    "ok": true,
-   "notices": 208
+   "notices": 211
   },
   "MTA bus": {
    "ok": true,
-   "notices": 200
+   "notices": 185
   },
   "LIRR": {
    "ok": true,
-   "notices": 11
+   "notices": 9
   },
   "Metro-North": {
    "ok": true,
-   "notices": 15
+   "notices": 11
   },
   "NJ Transit": {
    "ok": true,
-   "notices": 6
+   "notices": 3
   },
   "PATH": {
    "ok": true,
-   "notices": 8
+   "notices": 4
   },
   "TrainTime (Penn)": {
    "ok": true,
@@ -39,14 +39,51 @@
   "macys-parade-2026": [
    {
     "agency": "MTA subway",
-    "id": "lmm:planned_work:36813",
-    "head": "Expect service changes on [A][C][B] trains in Manhattan due to the rescheduled Macy's Thanksgiving Day Parade",
+    "id": "lmm:planned_work:36834",
+    "head": "In Manhattan, [A] local skips 81 St-Museum of Natural History in both directions due to the rescheduled Thanksgiving Day Parade",
     "routes": [
+     "A"
+    ],
+    "start": 1795836600,
+    "end": 1795866300
+   },
+   {
+    "agency": "MTA subway",
+    "id": "lmm:planned_work:36748",
+    "head": "Some entrances/exits at 34 St-Penn Station [1][2][3], 59 St-Columbus Circle [A][C][D][1], 72 St [C], and [D][F][N][Q][R] stations along 6 Av will be closed",
+    "routes": [
+     "1",
+     "2",
+     "3",
      "A",
-     "B",
+     "C",
+     "D",
+     "F",
+     "N",
+     "Q",
+     "R"
+    ],
+    "start": 1795863600,
+    "end": 1795885230
+   },
+   {
+    "agency": "MTA subway",
+    "id": "lmm:planned_work:36640",
+    "head": "In Manhattan, [F] skips 57 St in both directions due to the rescheduled Thanksgiving Day Parade",
+    "routes": [
+     "F"
+    ],
+    "start": 1795856400,
+    "end": 1795881600
+   },
+   {
+    "agency": "MTA subway",
+    "id": "lmm:planned_work:36639",
+    "head": "In Manhattan, [C] skips 81 St-Museum of Natural History in both directions due to the rescheduled Thanksgiving Day Parade",
+    "routes": [
      "C"
     ],
-    "start": 1795784400,
+    "start": 1795862700,
     "end": 1795881600
    },
    {
@@ -137,23 +174,6 @@
     ],
     "start": 1795849200,
     "end": 1795910400
-   },
-   {
-    "agency": "MTA bus",
-    "id": "lmm:planned_work:36795",
-    "head": "Southbound BxM3, BxM4, BxM6, BxM7, BxM8, BxM9, BxM10, BxM11 stops on 5th Ave from E 78th St to W 34th St will be closed",
-    "routes": [
-     "BXM10",
-     "BXM11",
-     "BXM3",
-     "BXM4",
-     "BXM6",
-     "BXM7",
-     "BXM8",
-     "BXM9"
-    ],
-    "start": 1795849200,
-    "end": 1795903200
    },
    {
     "agency": "MTA bus",
@@ -309,7 +329,7 @@
     "routes": [
      "M66"
     ],
-    "start": 1795863600,
+    "start": 1795824000,
     "end": 1795910400
    },
    {
@@ -365,22 +385,12 @@
    },
    {
     "agency": "MTA bus",
-    "id": "lmm:planned_work:36603",
-    "head": "No regular M7 service on W 57th St, W 58th St, Central Park South, and Broadway, in both directions",
-    "routes": [
-     "M7"
-    ],
-    "start": 1795834800,
-    "end": 1795849200
-   },
-   {
-    "agency": "MTA bus",
     "id": "lmm:planned_work:36602",
     "head": "M72 buses will detour to 97th St Transverse in both directions",
     "routes": [
      "M72"
     ],
-    "start": 1795863600,
+    "start": 1795824000,
     "end": 1795910400
    },
    {
@@ -400,7 +410,7 @@
     "routes": [
      "M20"
     ],
-    "start": 1795849200,
+    "start": 1795824000,
     "end": 1795903200
    },
    {
@@ -437,17 +447,6 @@
     "end": 1795896000
    },
    {
-    "agency": "MTA bus",
-    "id": "lmm:planned_work:36583",
-    "head": "Southbound M7 and M11 buses will bypass stops on Columbus Ave from W 80th St to W 72nd St;\nUse the stops at W 84th St or W 69th St instead",
-    "routes": [
-     "M11",
-     "M7"
-    ],
-    "start": 1795798800,
-    "end": 1795834800
-   },
-   {
     "agency": "Metro-North",
     "id": "lmm:planned_work:36815",
     "head": "Added Service on the Hudson, Harlem, and New Haven Lines",
@@ -456,32 +455,45 @@
      "2",
      "3"
     ],
-    "start": 1795860000,
+    "start": 1795859100,
     "end": 1795899600
    },
    {
     "agency": "NJ Transit",
-    "id": "njt-1",
-    "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy?s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
-   },
-   {
-    "agency": "NJ Transit",
     "id": "njt-2",
-    "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy’s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
+    "head": "Saturday Macy?s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
    }
   ]
  },
  "schedule": [
   {
    "agency": "MTA subway",
-   "id": "lmm:planned_work:36813",
-   "head": "Expect service changes on [A][C][B] trains in Manhattan due to the rescheduled Macy's Thanksgiving Day Parade",
+   "id": "lmm:planned_work:36834",
+   "head": "In Manhattan, [A] local skips 81 St-Museum of Natural History in both directions due to the rescheduled Thanksgiving Day Parade",
    "routes": [
-    "A",
-    "B",
+    "A"
+   ],
+   "start": 1795836600,
+   "end": 1795866300
+  },
+  {
+   "agency": "MTA subway",
+   "id": "lmm:planned_work:36640",
+   "head": "In Manhattan, [F] skips 57 St in both directions due to the rescheduled Thanksgiving Day Parade",
+   "routes": [
+    "F"
+   ],
+   "start": 1795856400,
+   "end": 1795881600
+  },
+  {
+   "agency": "MTA subway",
+   "id": "lmm:planned_work:36639",
+   "head": "In Manhattan, [C] skips 81 St-Museum of Natural History in both directions due to the rescheduled Thanksgiving Day Parade",
+   "routes": [
     "C"
    ],
-   "start": 1795784400,
+   "start": 1795862700,
    "end": 1795881600
   },
   {
@@ -493,108 +505,6 @@
    ],
    "start": 1795849200,
    "end": 1795910400
-  },
-  {
-   "agency": "MTA bus",
-   "id": "lmm:planned_work:36666",
-   "head": "All BxM1 buses operate on a special schedule via Inwood, Manhattan, and will not run on the Major Deegan Expwy",
-   "routes": [
-    "BXM1"
-   ],
-   "start": 1795779900,
-   "end": 1795845480
-  },
-  {
-   "agency": "MTA bus",
-   "id": "lmm:planned_work:36533",
-   "head": "Special schedule is in effect for express bus routes on the day after Thanksgiving",
-   "routes": [
-    "BXM1",
-    "BXM10",
-    "BXM11",
-    "BXM18",
-    "BXM2",
-    "BXM3",
-    "BXM4",
-    "BXM6",
-    "BXM7",
-    "BXM8",
-    "BXM9"
-   ],
-   "start": 1795755600,
-   "end": 1795841940
-  },
-  {
-   "agency": "MTA bus",
-   "id": "lmm:planned_work:36530",
-   "head": "Buses operate on a reduced weekday schedule",
-   "routes": [
-    "BM5",
-    "QM1",
-    "QM10",
-    "QM11",
-    "QM12",
-    "QM15",
-    "QM16",
-    "QM17",
-    "QM18",
-    "QM2",
-    "QM21",
-    "QM24",
-    "QM25",
-    "QM4",
-    "QM5",
-    "QM6",
-    "QM63",
-    "QM64",
-    "QM65",
-    "QM68",
-    "QM7",
-    "QM8",
-    "S40",
-    "S42",
-    "S52",
-    "S53",
-    "S54",
-    "S55",
-    "S56",
-    "S57",
-    "S59",
-    "S66",
-    "S78",
-    "S79+",
-    "S89",
-    "S90",
-    "S93",
-    "X27",
-    "X28",
-    "X37",
-    "X38"
-   ],
-   "start": 1795755600,
-   "end": 1795841940
-  },
-  {
-   "agency": "MTA bus",
-   "id": "lmm:planned_work:36517",
-   "head": "QM8 Super Express service will not operate today; service is operating on a special schedule",
-   "routes": [
-    "QM8"
-   ],
-   "start": 1795780800,
-   "end": 1795820400
-  },
-  {
-   "agency": "MTA bus",
-   "id": "lmm:planned_work:36516",
-   "head": "QM2, QM5 and QM20 Super Express service will not operate today; service is operating on a special schedule",
-   "routes": [
-    "QM2",
-    "QM20",
-    "QM5"
-   ],
-   "start": 1795816800,
-   "end": 1795820400
   },
   {
    "agency": "LIRR",
@@ -609,70 +519,9 @@
    "end": 1795890600
   },
   {
-   "agency": "LIRR",
-   "id": "lmm:planned_work:36458",
-   "head": "LIRR trains run on a weekday schedule on the day after Thanksgiving, with off-peak tickets accepted on all trains",
-   "routes": [
-    "1",
-    "10",
-    "12",
-    "13",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9"
-   ],
-   "start": 1795755600,
-   "end": 1795841940
-  },
-  {
-   "agency": "Metro-North",
-   "id": "lmm:planned_work:36356",
-   "head": "The Port Jervis Line runs on a weekend schedule on the day after Thanksgiving, with three extra trains",
-   "routes": [
-    "51"
-   ],
-   "start": 1795770000,
-   "end": 1795849200
-  },
-  {
-   "agency": "Metro-North",
-   "id": "lmm:planned_work:36354",
-   "head": "The Pascack Valley Line runs on a weekend schedule on Thanksgiving and the day after",
-   "routes": [
-    "50"
-   ],
-   "start": 1795683600,
-   "end": 1795849200
-  },
-  {
-   "agency": "Metro-North",
-   "id": "lmm:planned_work:36353",
-   "head": "The Hudson, Harlem, and New Haven lines run on a Saturday schedule on the day after Thanksgiving, with extra trains in the morning and afternoon",
-   "routes": [
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "wassaic"
-   ],
-   "start": 1795770000,
-   "end": 1795849200
-  },
-  {
-   "agency": "NJ Transit",
-   "id": "njt-1",
-   "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy?s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
-  },
-  {
    "agency": "NJ Transit",
    "id": "njt-2",
-   "head": "NJ TRANSIT has tracked a storm system that brought periods of heavy rain and gusty winds to New Jersey, Thursday into Friday. NJ TRANSIT rail tickets and passes will be cross honored by NJ TRANSIT Bus through Friday, November 27, 2026. Saturday Macy’s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
+   "head": "Saturday Macy?s Thanksgiving Day Parade schedules are available. Please monitor njtransit.com and the NJ TRANSIT mobile app for updates."
   }
  ]
 }
