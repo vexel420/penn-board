@@ -1525,6 +1525,8 @@ function holdHeights(root) {
   const els = [...root.querySelectorAll('[data-k]')];
   for (const el of els) { const m = rowMax.get(el.dataset.k); if (m) el.style.minHeight = `${m}px`; }
   for (const el of els) {
+    // (A row or section with a notice opened under a pill isn't held at that size.)
+    if (el.querySelector('[data-drop][aria-expanded="true"]')) { el.style.minHeight = ''; continue; }
     const h = el.offsetHeight, m = rowMax.get(el.dataset.k) || 0;
     if (h > m) { rowMax.set(el.dataset.k, h); el.style.minHeight = `${h}px`; }
   }
@@ -4326,6 +4328,11 @@ document.addEventListener('click', (e) => {
   if (d) {
     e.preventDefault(); e.stopPropagation();
     const k = d.dataset.drop;
+    // Opening or closing a pill's notice changes its row's height on purpose:
+    // let go of the heights held for that row, its section and the page, so
+    // closing it doesn't leave the opened size behind as empty space (owner, Nov 28).
+    for (let el = d.closest('[data-k]'); el; el = el.parentElement && el.parentElement.closest('[data-k]')) { rowMax.delete(el.dataset.k); el.style.minHeight = ''; }
+    pageMax = 0; document.body.style.minHeight = '';
     if (openDrops.has(k)) openDrops.delete(k); else openDrops.add(k);
     renderRail(); slideStarted = -Infinity; renderSubway(); renderPath(); renderHubBuses();
     return;
