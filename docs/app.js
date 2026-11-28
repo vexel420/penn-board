@@ -414,11 +414,15 @@ function viaHtml(r) {
 // filling up; nothing for empty or half-empty. NJ Transit buses for now
 // (its departure screens give a load level); trains and MTA buses: next week.
 function crowdHtml(r) {
-  const l = r.load || '';
-  if (!l || /^(EMPTY|HALF_EMPTY|MANY_SEATS|FEW_SEATS_?)?$/.test(l) && l !== 'FEW_SEATS') return '';
-  const full = /FULL|CRUSH|NOT_ACCEPT/.test(l) && !/HALF/.test(l);
-  if (!full && !/STAND|FEW_SEATS|NEAR/.test(l)) return '';
-  return `<div class="pills"><span class="late-pill warn-pill">${full ? 'Full' : 'Getting full'}</span></div>`;
+  // Said in plain words, from NJ Transit's own load level (owner, Nov 28:
+  // explain what "full" means). Nothing for empty, half empty or no data.
+  const l = String(r.load || '').toUpperCase();
+  const say = /CRUSH|NOT_ACCEPT/.test(l) ? 'Full: may not pick up more riders'
+    : /^FULL/.test(l) ? 'Full: standing room may be gone'
+      : /STAND/.test(l) ? 'Standing room only'
+        : /FEW_SEATS|NEAR/.test(l) ? 'Few seats left' : '';
+  if (!say) return '';
+  return `<div class="pills"><span class="late-pill warn-pill" title="How full the bus is, from NJ Transit">${say}</span></div>`;
 }
 function rowHtml(r) {
   const shown = shownStatus(r, view);
