@@ -1777,7 +1777,8 @@ function renderSubwayTags(states) {
   // other transitions like weekend service"): its tag once daytime service has
   // started, both tags while some lines are still on late nights.
   const day = nyNow().day;
-  const weekend = !holiday && (day === 'saturday' || day === 'sunday') && !subwayHoliday(nyNow().date) && started;
+  // (Not just after midnight Saturday: that's still Friday night's service.)
+  const weekend = !holiday && ((day === 'saturday' && nyNow().mins >= 4 * 60) || day === 'sunday') && !subwayHoliday(nyNow().date) && started;
   if (allNight || ((holiday || weekend) && someNight)) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
   if (holiday) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
   else if (weekend) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
