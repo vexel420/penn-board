@@ -1779,7 +1779,8 @@ function renderSubwayTags(states) {
   const day = nyNow().day;
   // (Not just after midnight Saturday: that's still Friday night's service.)
   const weekend = !holiday && ((day === 'saturday' && nyNow().mins >= 4 * 60) || day === 'sunday') && !subwayHoliday(nyNow().date) && started;
-  if (allNight || ((holiday || weekend) && someNight)) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
+  const fridayNight = day === 'saturday' && nyNow().mins < 4 * 60;
+  if (allNight || ((holiday || weekend || fridayNight) && someNight)) tags.push(`<span class="tag night">${ICON.moon}Late-night service</span>`);
   if (holiday) tags.push(`<span class="tag hol">${ICON.star}Holiday service</span>`);
   else if (weekend) tags.push(`<span class="tag wknd">${ICON.cal}Weekend service</span>`);
   if (weatherNotice()) tags.push(`<span class="tag wx">${ICON.snow}Severe weather service</span>`);
