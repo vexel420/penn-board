@@ -4334,7 +4334,20 @@ document.addEventListener('click', (e) => {
     for (let el = d.closest('[data-k]'); el; el = el.parentElement && el.parentElement.closest('[data-k]')) { rowMax.delete(el.dataset.k); el.style.minHeight = ''; }
     pageMax = 0; document.body.style.minHeight = '';
     if (openDrops.has(k)) openDrops.delete(k); else openDrops.add(k);
+    // Keep the tapped pill where the finger is: the redraw replaces it, and
+    // iPhone Safari jumped to the top of the page (owner, Nov 28).
+    const before = d.getBoundingClientRect().top, y = window.scrollY;
     renderRail(); slideStarted = -Infinity; renderSubway(); renderPath(); renderHubBuses();
+    const sel = `[data-drop="${CSS.escape(k)}"]`;
+    const fix = () => {
+      const now = document.querySelector(sel);
+      if (!now) { if (Math.abs(window.scrollY - y) > 2) window.scrollTo(0, y); return; }
+      const dy = now.getBoundingClientRect().top - before;
+      if (Math.abs(dy) > 1) window.scrollBy(0, dy);
+    };
+    const now = document.querySelector(sel);
+    if (now) now.focus({ preventScroll: true });
+    fix(); requestAnimationFrame(fix); setTimeout(fix, 150); setTimeout(fix, 400);
     return;
   }
   const g = e.target.closest('[data-goto]');
