@@ -48,6 +48,13 @@ wait for next week. Add to this list instead of building them now.
   is not in track order; `subwayShapes` loads only when a map opens. Check with the map zoomed to
   Lower Manhattan.
 
+- [ ] **Rotate every map to Manhattan's grid, like the MTA subway map** (owner, Nov 28): avenues run
+  up the screen (Manhattan's grid is about 29° east of true north). Applies to all maps: reroute /
+  service-change maps, the bus stop maps, PATH maps, airport/walk maps. Leaflet has no built-in
+  rotation: options are the leaflet-rotate plugin (pinned version from cdnjs/jsDelivr) or rotating
+  the map container with CSS and counter-rotating labels/markers; check labels, tooltips, taps and
+  zoom still line up. Keep north-up as a fallback if a map spans beyond NYC (e.g. EWR, Islip).
+
 **Bugs still open going into next week**
 - [ ] **MAJOR: scrolling on the owner's iPad AND iPhone (Safari), worst at Times Square** (owner, Nov 26–28; Nov 28: "jumping down and up on iPhone too"; emulated iPhone in Chromium: page height steady, no movement):
   the page scrolls/jumps on its own, sometimes to the top. Can't be reproduced in Chromium (this
