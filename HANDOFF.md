@@ -37,6 +37,17 @@ wait for next week. Add to this list instead of building them now.
   route and stops from the timetable (Port Authority, Bryant Park/42 St, Grand Central, EWR
   terminals) with scheduled times.
 
+- [ ] **Reroute map for "runs via another line" is confusing** (owner, Nov 28, 96 St-bound Q via the R
+  from DeKalb Av to Canal St). Diagnosis: `changeModel` uses the notice's `affected` stations as
+  `closed`, but for a via-reroute those are the stations on the TEMPORARY route (Whitehall,
+  Rector, Cortlandt, City Hall), so the "No Q trains" label lands on the temporary route; and the
+  bypassed normal stretch (Manhattan Bridge, DeKalb→Canal) has no stations, so it stays solid
+  "running". Also the via notice names the R's platforms (R30 DeKalb, R23 Canal) while the Q's
+  Canal is Q01. Tried (reverted, not verified): mark segments along the Q's track between the
+  points nearest v.from/v.to as closed and put the label there. Note `subwayData.routes[r].normal`
+  is not in track order; `subwayShapes` loads only when a map opens. Check with the map zoomed to
+  Lower Manhattan.
+
 **Bugs still open going into next week**
 - [ ] **MAJOR: scrolling on the owner's iPad AND iPhone (Safari), worst at Times Square** (owner, Nov 26–28; Nov 28: "jumping down and up on iPhone too"; emulated iPhone in Chromium: page height steady, no movement):
   the page scrolls/jumps on its own, sometimes to the top. Can't be reproduced in Chromium (this
