@@ -676,7 +676,8 @@ function busTerminalRows(live, tt) {
     rows.push({ id: `njtbus-${x.internal_trip_number}`, carrier: 'njtbus', bus: true, group: 'njtbus', plate: x.public_route, plateClass: 'p-njt',
       time: at, leaves: at, sched, place: tc(dest), meta: `NJ Transit${via ? ` via ${tc(via)}` : ''}`,
       track: x.lanegate && x.lanegate !== 'EMPTY' ? String(x.lanegate).replace(/_\d+$/, '') : '', live: true,
-      status: cancelled ? 'Cancelled' : !tracked ? 'Scheduled' : isLate ? `${late} min late` : 'On time', tone: cancelled ? 'stop' : isLate ? 'late' : 'ok', lateMin: isLate ? late : 0 });
+      status: cancelled ? 'Cancelled' : !tracked ? 'Scheduled' : isLate ? `${late} min late` : 'On time', tone: cancelled ? 'stop' : isLate ? 'late' : 'ok', lateMin: isLate ? late : 0,
+      load: String(x.passload || '').toUpperCase() }); // NJ Transit's own load level (EMPTY, HALF_EMPTY, FULL…)
   }
   if (tt && tt.days) {
     for (const k of [-1, 0, 1]) {

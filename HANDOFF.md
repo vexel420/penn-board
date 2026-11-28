@@ -28,6 +28,8 @@ wait for next week. Add to this list instead of building them now.
   Grand Central/Metro-North); a Port Authority MyTerminal data request (offered).
 - [ ] A name for the app.
 
+- [ ] **Crowding on trains and MTA buses** (owner, Nov 28; only show when a vehicle is getting full). Done: NJ Transit buses at Port Authority ("Getting full" / "Full" pills from NJ Transit's `passload`). To do: MTA buses (Bus Time SIRI may carry occupancy for some routes), LIRR/Metro-North (TrainTime has car loads on some trains), NJ Transit rail (check whether the rail API gives a load). Subway has no public crowding feed.
+
 **Bugs still open going into next week**
 - [ ] **MAJOR: scrolling on the owner's iPad AND iPhone (Safari), worst at Times Square** (owner, Nov 26–28; Nov 28: "jumping down and up on iPhone too"; emulated iPhone in Chromium: page height steady, no movement):
   the page scrolls/jumps on its own, sometimes to the top. Can't be reproduced in Chromium (this
@@ -1081,3 +1083,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - The railroad/bus filter chip choice is per board (`carrier:<hub>`; old shared `carrier` key removed on load), and a saved choice that isn't one of this board's chips falls back to All. It was shared: Penn's "NJ Transit" (njt) made Port Authority show "No NJ Transit departures" with no chip pressed, and Port Authority's bus filters emptied Penn's train list (owner screenshots, Nov 26).
 - Nov 28: weekend pills skip Friday's late trips between midnight and 4 AM Saturday (they're still Friday's schedule; owner saw "Weekend schedule" at 12:09 AM). Take turns / All destinations and Delay pills buttons keep their place on the screen after the redraw (`keepToggles`), and switching them no longer resets the held heights (owner: the page jumped to the top).
 - Header "Weekend service" tag not between midnight and 4 AM Saturday (Friday night), like the train pills. Owner, Nov 28: asked whether late nights differ on weekends; yes, weekend late-night service lasts longer into the morning (e.g. uptown A at Penn to 6:41 Sat vs 6:15 weekdays), so the Late-night tag stays.
+- Nov 28: NJ Transit bus rows carry `load` (passload); `crowdHtml` shows "Getting full" (standing room / few seats) or "Full", nothing otherwise (EMPTY, HALF_EMPTY, "no data", N/A).

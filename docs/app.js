@@ -410,6 +410,16 @@ function viaHtml(r) {
   return `<details class="via" data-id="${esc(r.id)}"${open ? ' open' : ''}><summary>${r.where ? `${esc(r.where)}, ` : ''}${esc(r.line)}, train ${esc(r.train)}, <u>${r.via.length} stop${r.via.length === 1 ? '' : 's'}</u>${where}${fareTag(r)}</summary><p>${names}${tail}</p><p class="last-stop">Last stop: <b>${esc(last)}</b></p>${checking}</details>`;
 }
 
+// Getting full (owner, Nov 28): only when the operator says a vehicle is
+// filling up; nothing for empty or half-empty. NJ Transit buses for now
+// (its departure screens give a load level); trains and MTA buses: next week.
+function crowdHtml(r) {
+  const l = r.load || '';
+  if (!l || /^(EMPTY|HALF_EMPTY|MANY_SEATS|FEW_SEATS_?)?$/.test(l) && l !== 'FEW_SEATS') return '';
+  const full = /FULL|CRUSH|NOT_ACCEPT/.test(l) && !/HALF/.test(l);
+  if (!full && !/STAND|FEW_SEATS|NEAR/.test(l)) return '';
+  return `<div class="pills"><span class="late-pill warn-pill">${full ? 'Full' : 'Getting full'}</span></div>`;
+}
 function rowHtml(r) {
   const shown = shownStatus(r, view);
   r = { ...r, status: shown.status, tone: shown.tone };
@@ -440,7 +450,7 @@ function rowHtml(r) {
   return `<li class="row ${r.tone}${fading ? ' gone' : ''}">
     <div class="time"><b>${flipText(`${r.id}|t`, t.hm)}<small>${t.ap}</small></b><span>${due ? 'due' : r.tone === 'final' ? finalLeft(r) : left === 'gone' ? '' : left}</span></div>
     <div class="carrier"><span class="plate ${r.plateClass || r.carrier}">${esc(r.plate || CARRIERS[r.carrier])}</span></div>
-    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${railHolidayHtml(r)}${rowAlertHtml(r)}</div>
+    <div class="dest"><div class="place">${flipText(`${r.id}|p`, r.place)}</div>${via}${njtLastHtml(r)}${railHolidayHtml(r)}${crowdHtml(r)}${rowAlertHtml(r)}</div>
     <div class="status ${r.tone}">${flipText(`${r.id}|s`, r.status)}${sched}</div>
     ${trackCell(r, r.tone === 'final' ? ' ring' : '')}
   </li>`;
