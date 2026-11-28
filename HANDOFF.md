@@ -29,7 +29,7 @@ wait for next week. Add to this list instead of building them now.
 - [ ] A name for the app.
 
 **Bugs still open going into next week**
-- [ ] **MAJOR: scrolling on the owner's iPad (Safari), mostly Times Square** (owner, Nov 26–28):
+- [ ] **MAJOR: scrolling on the owner's iPad AND iPhone (Safari), worst at Times Square** (owner, Nov 26–28; Nov 28: "jumping down and up on iPhone too"; emulated iPhone in Chromium: page height steady, no movement):
   the page scrolls/jumps on its own, sometimes to the top. Can't be reproduced in Chromium (this
   environment has no WebKit; `playwright install` isn't allowed). Already done: rows/sections/page
   hold their tallest height (`holdHeights`, body min-height), no keepAnchor scroll adjustments,
