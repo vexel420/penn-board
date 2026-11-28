@@ -1013,7 +1013,10 @@ function specialPills(epoch, late) {
   const wx = weatherNotice() ? WX_PILL : '';
   if (late) return wx;
   const day = nyDayAt(epoch).day;
-  const sched = holidayOn(epoch) ? HOLIDAY_PILL : (day === 'saturday' || day === 'sunday') ? WKND_PILL : '';
+  // (Just after midnight Saturday the trains are still Friday's trips: weekend
+  // service starts with Saturday morning's. Owner, Nov 28: weekend pills showed at 12:09 AM.)
+  const fridayLate = day === 'saturday' && nyDayAt(epoch).mins < 4 * 60;
+  const sched = holidayOn(epoch) ? HOLIDAY_PILL : ((day === 'saturday' && !fridayLate) || day === 'sunday') ? WKND_PILL : '';
   // (The holiday/weekend pill is wrapped: shown only while the hub is changing
   // over to or from late nights; see renderSubway.)
   return (sched ? `<span class="sp-pills">${sched}</span>` : '') + wx;
@@ -1453,15 +1456,28 @@ $('sub-toggles').addEventListener('click', (e) => {
   if (lp) {
     allLatePills = lp.dataset.latepills === 'all';
     try { localStorage.setItem('subwayLatePills', allLatePills ? 'all' : 'advisory'); } catch {}
-    slideStarted = -Infinity; renderSubway(); renderPath();
+    keepToggles(lp.dataset.latepills, () => { slideStarted = -Infinity; renderSubway(); renderPath(); });
     return;
   }
   const b = e.target.closest('[data-sstyle]');
   if (!b) return;
   subwayStyle = b.dataset.sstyle;
   try { localStorage.setItem('subwayStyle', subwayStyle); } catch {}
-  bShown.clear(); slideStarted = -Infinity; renderSubway();
+  keepToggles(b.dataset.sstyle, () => { bShown.clear(); slideStarted = -Infinity; renderSubway(); });
 });
+// The display choices redraw the section they sit in: afterwards, scroll so
+// they're exactly where the finger was (owner, Nov 26: switching Take turns /
+// All destinations jumped the page to the top on the iPad).
+function keepToggles(value, redraw) {
+  const box = $('sub-toggles');
+  const before = box ? box.getBoundingClientRect().top : null;
+  redraw();
+  const btn = document.querySelector(`#sub-toggles [data-sstyle="${value}"], #sub-toggles [data-latepills="${value}"]`);
+  if (btn) btn.focus({ preventScroll: true });
+  if (before == null) return;
+  const fix = () => { const after = $('sub-toggles').getBoundingClientRect().top; if (Math.abs(after - before) > 1) window.scrollBy(0, after - before); };
+  fix(); requestAnimationFrame(fix); setTimeout(fix, 120);
+}
 const subwayStyleHtml = () => `<div class="sub-style"><span>Rows with more than one destination</span><div class="style-seg">
   <button type="button" data-sstyle="turns" aria-pressed="${subwayStyle === 'turns'}">Take turns</button><button type="button" data-sstyle="b" aria-pressed="${subwayStyle === 'b'}">All destinations</button></div></div>
   <div class="sub-style"><span>Delay pills</span><div class="style-seg">
@@ -1483,7 +1499,7 @@ const rowMax = new Map();
 let rowMaxKey = '', rowMaxAt = 0, pageMax = 0;
 function holdHeights(root) {
   if (!root) return;
-  const key = `${innerWidth}|${document.body.className}|${subwayStyle}|${flipMode}`; // (not the height: Safari's toolbar changes it all the time)
+  const key = `${innerWidth}|${document.body.className}|${flipMode}`; // (not the height: Safari's toolbar changes it all the time; not the subway style: switching it mustn't collapse the page)
   if (key !== rowMaxKey || Date.now() - rowMaxAt > 15 * 60000) {
     rowMax.clear(); rowMaxKey = key; rowMaxAt = Date.now();
     document.querySelectorAll('#subway, #path').forEach((x) => { x.style.minHeight = ''; });

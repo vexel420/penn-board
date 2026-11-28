@@ -29,6 +29,16 @@ wait for next week. Add to this list instead of building them now.
 - [ ] A name for the app.
 
 **Bugs still open going into next week**
+- [ ] **MAJOR: scrolling on the owner's iPad (Safari), mostly Times Square** (owner, Nov 26–28):
+  the page scrolls/jumps on its own, sometimes to the top. Can't be reproduced in Chromium (this
+  environment has no WebKit; `playwright install` isn't allowed). Already done: rows/sections/page
+  hold their tallest height (`holdHeights`, body min-height), no keepAnchor scroll adjustments,
+  one-shot reload restore, no Times Square zoom, width-only layout keys, split.html ignores
+  height-only resizes, a blank subway refresh keeps the trains, the toggles keep their place.
+  Next step: have the owner open `split.html?debug=scroll` (or `tsq.html?debug=scroll`) on the
+  iPad and screenshot the green log box after a jump — it names the redraw (or "no redraw") and
+  the page-height change behind each jump. Then fix that cause. If it's "no redraw", suspect
+  Safari itself (iframe scrolling in split view; try the board on its own page to compare).
 - [ ] Times Square "jumping" in the 4-board view: not reproducible in Chromium.
   Fixes shipped Nov 26 for Safari (keepAnchor, locked split page); waiting on the
   owner's device and browser if it still happens.
@@ -1069,3 +1079,4 @@ Subway notices that close or reroute part of a line ("Planned - Part Suspended",
 - NJ Transit disruption banner: third button "By bus from Port Authority" (owner, Nov 26: the bus option planned for cancellations was missing) → `openBusFinder()`: computers show the side panel's Buses (un-hiding/un-swapping it), phones the Buses tab, scrolled to and focused on "Choose your station". Also in a cancelled NJT train's "Other options". When an NJT notice says rail tickets are cross-honored on buses (`njtBusHonored`), the banner adds "NJ Transit says rail tickets and passes are accepted on NJ Transit buses now." Live Nov 26: banner on (3 cancelled parade extras), cross-honoring line shown.
 - Removed the unused `.dir-lines` (line bullets inside each direction heading, left from the per-direction column layout): the rule hiding them only applied at computer width, so phone-size boards (4-board view) showed the logos twice, stacked (owner screenshot, Nov 26).
 - The railroad/bus filter chip choice is per board (`carrier:<hub>`; old shared `carrier` key removed on load), and a saved choice that isn't one of this board's chips falls back to All. It was shared: Penn's "NJ Transit" (njt) made Port Authority show "No NJ Transit departures" with no chip pressed, and Port Authority's bus filters emptied Penn's train list (owner screenshots, Nov 26).
+- Nov 28: weekend pills skip Friday's late trips between midnight and 4 AM Saturday (they're still Friday's schedule; owner saw "Weekend schedule" at 12:09 AM). Take turns / All destinations and Delay pills buttons keep their place on the screen after the redraw (`keepToggles`), and switching them no longer resets the held heights (owner: the page jumped to the top).
