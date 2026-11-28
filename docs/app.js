@@ -719,8 +719,15 @@ function lateNightTrain(stationId, route, dir, epoch, code) {
   if (code) {
     const T = sched(day), Y = sched(nyDayAt(epoch - 86400));
     const inT = !!(T && T.trips && T.trips.includes(code));
-    if (m >= 12 * 60) return inT;
-    return (inT && code < '144000') || !!(Y && Y.trips && Y.trips.includes(code) && code >= '144000');
+    const exact = m >= 12 * 60 ? inT : (inT && code < '144000') || !!(Y && Y.trips && Y.trips.includes(code) && code >= '144000');
+    if (exact) return true;
+    // The live feed's id can be a few minutes off the timetable's (owner, Nov
+    // 28: the 4:34 AM uptown 7 was 027150, its late-night trip 027650, and got
+    // the weekend pill). Within 5 minutes of a late-night trip, and inside the
+    // late-night hours by the clock: late night.
+    const near = (x) => !!(x && x.trips && x.trips.some((c) => Math.abs(+c - +code) <= 500));
+    const fuzzy = m >= 12 * 60 ? near(T) : (code < '144000' ? near(T) : near(Y));
+    if (!fuzzy) return false;
   }
   if (m >= 12 * 60) { const T = sched(day); return !!T && T.from >= 12 * 60 && m >= T.from; }
   // After midnight: the night began the evening before (or just after midnight).
