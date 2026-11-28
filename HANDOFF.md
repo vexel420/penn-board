@@ -30,6 +30,13 @@ wait for next week. Add to this list instead of building them now.
 
 - [ ] **Crowding on trains and MTA buses** (owner, Nov 28; only show when a vehicle is getting full). Done: NJ Transit buses at Port Authority ("Getting full" / "Full" pills from NJ Transit's `passload`). To do: MTA buses (Bus Time SIRI may carry occupancy for some routes), LIRR/Metro-North (TrainTime has car loads on some trains), NJ Transit rail (check whether the rail API gives a load). Subway has no public crowding feed.
 
+- [ ] **Newark Airport Express: where it is** (owner, Nov 28; tabled until Monday). Show where the bus
+  is and where it stops (likely a map, like the MTA bus stop map). First check for a live vehicle
+  location source (Coach USA / Newark Airport Express publishes a GTFS timetable via Trillium; look
+  for GTFS-realtime vehicle positions or a public tracker API before building). If none, show the
+  route and stops from the timetable (Port Authority, Bryant Park/42 St, Grand Central, EWR
+  terminals) with scheduled times.
+
 **Bugs still open going into next week**
 - [ ] **MAJOR: scrolling on the owner's iPad AND iPhone (Safari), worst at Times Square** (owner, Nov 26–28; Nov 28: "jumping down and up on iPhone too"; emulated iPhone in Chromium: page height steady, no movement):
   the page scrolls/jumps on its own, sometimes to the top. Can't be reproduced in Chromium (this
