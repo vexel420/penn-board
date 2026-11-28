@@ -4337,15 +4337,25 @@ document.addEventListener('click', (e) => {
     // Keep the tapped pill where the finger is: the redraw replaces it, and
     // iPhone Safari jumped to the top of the page (owner, Nov 28).
     const before = d.getBoundingClientRect().top, y = window.scrollY;
+    const rowKey = d.closest('[data-k]') && d.closest('[data-k]').dataset.k;
     renderRail(); slideStarted = -Infinity; renderSubway(); renderPath(); renderHubBuses();
-    const sel = `[data-drop="${CSS.escape(k)}"]`;
+    // The same pill can be in more than one place (the alerts list too): the one
+    // in the row that was tapped, else the visible copy nearest the finger.
+    const find = () => {
+      const sel = `[data-drop="${CSS.escape(k)}"]`;
+      const inRow = rowKey && document.querySelector(`[data-k="${CSS.escape(rowKey)}"] ${sel}`);
+      if (inRow) return inRow;
+      return [...document.querySelectorAll(sel)].filter((x) => x.offsetParent)
+        .sort((a, b) => Math.abs(a.getBoundingClientRect().top - before) - Math.abs(b.getBoundingClientRect().top - before))[0];
+    };
     const fix = () => {
-      const now = document.querySelector(sel);
-      if (!now) { if (Math.abs(window.scrollY - y) > 2) window.scrollTo(0, y); return; }
-      const dy = now.getBoundingClientRect().top - before;
+      const now = find();
+      const dy = now ? now.getBoundingClientRect().top - before : 0;
+      // (Never more than a screen: anything bigger is the wrong copy; stay put.)
+      if (!now || Math.abs(dy) > innerHeight) { if (Math.abs(window.scrollY - y) > 2) window.scrollTo(0, y); return; }
       if (Math.abs(dy) > 1) window.scrollBy(0, dy);
     };
-    const now = document.querySelector(sel);
+    const now = find();
     if (now) now.focus({ preventScroll: true });
     fix(); requestAnimationFrame(fix); setTimeout(fix, 150); setTimeout(fix, 400);
     return;
